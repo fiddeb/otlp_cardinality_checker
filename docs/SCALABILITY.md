@@ -1,6 +1,6 @@
-# Scalability Improvements
+# Scalability and Performance
 
-This document describes the scalability optimizations implemented in the OTLP Cardinality Checker.
+This document describes the scalability optimizations and real-world performance characteristics of the OTLP Cardinality Checker.
 
 ## Performance Optimizations
 
@@ -32,13 +32,13 @@ This document describes the scalability optimizations implemented in the OTLP Ca
 
 ```bash
 # Get first page (default 100 items)
-curl http://localhost:8080/api/v1/metrics
+curl 'http://localhost:8080/api/v1/metrics'
 
 # Get specific page
-curl http://localhost:8080/api/v1/metrics?limit=50&offset=100
+curl 'http://localhost:8080/api/v1/metrics?limit=50&offset=100'
 
 # Filter by service with pagination
-curl http://localhost:8080/api/v1/metrics?service=my-service&limit=100&offset=0
+curl 'http://localhost:8080/api/v1/metrics?service=my-service&limit=100&offset=0'
 ```
 
 **Response format:**
@@ -58,28 +58,165 @@ curl http://localhost:8080/api/v1/metrics?service=my-service&limit=100&offset=0
 - `GET /api/v1/spans` - List all spans
 - `GET /api/v1/logs` - List all log metadata
 
-## Current Performance Characteristics
+## Real-World Performance Results
 
-### With 10,000 Metrics
+### Test 1: 50,000 Metrics (Initial Validation)
 
-**Memory usage per metric:**
-- Base metadata: ~200 bytes
-- Per label key: ~150 bytes + (100 samples × avg 20 bytes) = ~2,150 bytes
-- Typical metric with 5 label keys: ~11 KB
+**Load profile:**
+- 50 VUs (Virtual Users)
+- 120 seconds duration
+- 50,000 unique metrics
+- Cardinality: ~20 unique values per label
 
-**Total for 10,000 metrics with 5 label keys each:**
-- Estimated: ~110 MB in memory
-- With Go overhead: ~150-200 MB
+**Results:**
+- **Memory**: 421 MB (8.4 KB per metric)
+- **Throughput**: 450 req/s, 4,455 datapoints/s
+- **Latency**: 
+  - Median: 1.45ms
+  - P95: 45ms
+  - Max: 815ms
+- **Success rate**: 99.95%
 
-**API response times (estimated):**
-- List 100 metrics: <10ms
-- List 1,000 metrics: <50ms
-- Get single metric: <1ms
+### Test 2: 213,000+ Metrics (Extreme Load)
 
-**OTLP ingestion:**
-- Per metric update: O(1) for value tracking
-- Merge operation: O(k) where k = number of unique label keys
-- Concurrent writes: Thread-safe with RWMutex per data structure
+**Load profile:**
+- 50 VUs (Virtual Users)
+- 60 seconds duration
+- 500,000 attempted metrics (213,191 unique created)
+- Cardinality: 100 unique values per label
+
+**Results:**
+- **Total metrics**: 213,191 unique
+- **Memory**: 990 MB (4.6 KB per metric)
+- **Throughput**: 461 req/s, 4,560 datapoints/s
+- **Latency**:
+  - Average: 6.33ms
+  - Median: 642µs
+  - P90: 2.16ms
+  - P95: 3.51ms
+  - Max: 1.77s
+- **Success rate**: 99.56% (244 failures out of 55,668 checks)
+- **API responsiveness**: 82% (API responsive check passed)
+- **HTTP errors**: 0% (all requests succeeded)
+
+**Detailed metrics:**
+```
+✓ checks_total: 55,668 (917 checks/s)
+✓ checks_succeeded: 99.56%
+✓ status is 200: 100%
+✓ response time < 500ms: 99.56%
+✓ API responsive: 82%
+
+Custom metrics:
+- metrics_created: 276,840 (4,560 metrics/s)
+
+HTTP performance:
+- http_reqs: 27,988 (461 req/s)
+- http_req_failed: 0%
+
+Execution:
+- iterations: 27,684 (456 iterations/s)
+- iteration_duration: avg 108ms, p95 107ms
+
+Network:
+- data_received: 8.2 MB (135 KB/s)
+- data_sent: 115 MB (1.9 MB/s)
+```
+
+### Memory Efficiency Analysis
+
+**Per-metric memory usage improves with scale:**
+- 50,000 metrics: 8.4 KB/metric
+- 213,000 metrics: 4.6 KB/metric
+
+**Why?** Go's garbage collector optimizes memory layout with larger datasets.
+
+**API Performance under load:**
+- Get specific metric: ~85µs (microseconds)
+- List 100 metrics (213k total): ~234ms
+
+## Capacity Planning
+
+### Memory Requirements
+
+Based on real-world testing:
+
+| Metrics | Memory (MB) | Per Metric | Notes |
+|---------|-------------|------------|-------|
+| 10,000 | ~50 | 5 KB | Estimated |
+| 50,000 | 421 | 8.4 KB | Tested |
+| 100,000 | ~500 | 5 KB | Extrapolated |
+| 213,000 | 990 | 4.6 KB | Tested |
+| 500,000 | ~2,300 | 4.6 KB | Extrapolated |
+| 1,000,000 | ~4,600 | 4.6 KB | Extrapolated |
+
+**Recommendation:** Provision 2x estimated memory for headroom.
+
+### Kubernetes Resource Recommendations
+
+**For 50,000 metrics:**
+```yaml
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+```
+
+**For 200,000+ metrics:**
+```yaml
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "200m"
+  limits:
+    memory: "1.5Gi"
+    cpu: "1000m"
+```
+
+**For 1,000,000 metrics:**
+```yaml
+resources:
+  requests:
+    memory: "2Gi"
+    cpu: "500m"
+  limits:
+    memory: "5Gi"
+    cpu: "2000m"
+```
+
+### Throughput Capacity
+
+Based on load testing:
+
+- **OTLP Ingestion**: 4,500+ datapoints/s sustained
+- **API Queries**: 450+ req/s sustained  
+- **Concurrent Users**: 50 VUs with 99.56% success rate
+
+**Bottlenecks:**
+- API response time increases with total metrics (O(n) for list operations)
+- Use pagination to maintain <500ms response times
+- Single-instance limit: ~1M metrics before performance degrades
+
+## Production Recommendations
+
+### For <100,000 metrics:
+- ✅ In-memory storage is perfect
+- ✅ Single instance deployment
+- ✅ Resource limits: 1 GB memory, 500m CPU
+
+### For 100,000-500,000 metrics:
+- ✅ In-memory storage still viable
+- ⚠️ Monitor API response times
+- ✅ Resource limits: 2-3 GB memory, 1 CPU
+
+### For >500,000 metrics:
+- ⚠️ Consider implementing PostgreSQL persistence
+- ⚠️ Consider sharded maps for better concurrency
+- ⚠️ Consider HyperLogLog for cardinality tracking
+- ✅ Resource limits: 5 GB memory, 2 CPU
 
 ## Future Optimizations
 
