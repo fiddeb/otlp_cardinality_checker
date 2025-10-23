@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
@@ -17,6 +18,85 @@ type Server struct {
 	store  *memory.Store
 	router *chi.Mux
 	server *http.Server
+}
+
+// PaginationParams contains pagination parameters from query string.
+type PaginationParams struct {
+	Limit  int
+	Offset int
+}
+
+// PaginatedResponse wraps a paginated response with metadata.
+type PaginatedResponse struct {
+	Data       interface{} `json:"data"`
+	Total      int         `json:"total"`
+	Limit      int         `json:"limit"`
+	Offset     int         `json:"offset"`
+	HasMore    bool        `json:"has_more"`
+}
+
+// parsePaginationParams extracts pagination parameters from request.
+// Defaults: limit=100, offset=0, max_limit=1000
+func parsePaginationParams(r *http.Request) PaginationParams {
+	const (
+		defaultLimit = 100
+		maxLimit     = 1000
+	)
+
+	limit := defaultLimit
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+			if limit > maxLimit {
+				limit = maxLimit
+			}
+		}
+	}
+
+	offset := 0
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if parsed, err := strconv.Atoi(offsetStr); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	return PaginationParams{
+		Limit:  limit,
+		Offset: offset,
+	}
+}
+
+// paginateSlice applies pagination to a slice.
+func paginateSlice[T any](items []T, params PaginationParams) ([]T, PaginatedResponse) {
+	total := len(items)
+	start := params.Offset
+	end := start + params.Limit
+
+	// Bounds check
+	if start >= total {
+		return []T{}, PaginatedResponse{
+			Data:    []T{},
+			Total:   total,
+			Limit:   params.Limit,
+			Offset:  params.Offset,
+			HasMore: false,
+		}
+	}
+
+	if end > total {
+		end = total
+	}
+
+	page := items[start:end]
+	hasMore := end < total
+
+	return page, PaginatedResponse{
+		Data:    page,
+		Total:   total,
+		Limit:   params.Limit,
+		Offset:  params.Offset,
+		HasMore: hasMore,
+	}
 }
 
 // NewServer creates a new API server.
@@ -62,9 +142,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 // listMetrics returns all metrics, optionally filtered by service.
+// Supports pagination via ?limit=N&offset=M query parameters.
 func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	serviceName := r.URL.Query().Get("service")
+	params := parsePaginationParams(r)
 
 	metrics, err := s.store.ListMetrics(ctx, serviceName)
 	if err != nil {
@@ -72,7 +154,9 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, metrics)
+	// Apply pagination
+	_, response := paginateSlice(metrics, params)
+	s.respondJSON(w, http.StatusOK, response)
 }
 
 // getMetric returns a specific metric by name.
@@ -94,9 +178,11 @@ func (s *Server) getMetric(w http.ResponseWriter, r *http.Request) {
 }
 
 // listSpans returns all spans, optionally filtered by service.
+// Supports pagination via ?limit=N&offset=M query parameters.
 func (s *Server) listSpans(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	serviceName := r.URL.Query().Get("service")
+	params := parsePaginationParams(r)
 
 	spans, err := s.store.ListSpans(ctx, serviceName)
 	if err != nil {
@@ -104,7 +190,9 @@ func (s *Server) listSpans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, spans)
+	// Apply pagination
+	_, response := paginateSlice(spans, params)
+	s.respondJSON(w, http.StatusOK, response)
 }
 
 // getSpan returns a specific span by name.
@@ -126,9 +214,11 @@ func (s *Server) getSpan(w http.ResponseWriter, r *http.Request) {
 }
 
 // listLogs returns all log metadata, optionally filtered by service.
+// Supports pagination via ?limit=N&offset=M query parameters.
 func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	serviceName := r.URL.Query().Get("service")
+	params := parsePaginationParams(r)
 
 	logs, err := s.store.ListLogs(ctx, serviceName)
 	if err != nil {
@@ -136,10 +226,12 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, logs)
+	// Apply pagination
+	_, response := paginateSlice(logs, params)
+	s.respondJSON(w, http.StatusOK, response)
 }
 
-// getLog returns log metadata for a specific severity.
+// getLog returns a specific log metadata by severity.
 func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	severity := chi.URLParam(r, "severity")

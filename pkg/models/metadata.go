@@ -5,6 +5,7 @@
 package models
 
 import (
+	"encoding/json"
 	"sort"
 	"sync"
 	"time"
@@ -199,17 +200,43 @@ func (k *KeyMetadata) AddValue(value string) {
 	k.LastSeen = time.Now()
 
 	// Add to sample set if not full
-	if len(k.valueSampleSet) < k.MaxSamples {
-		if _, exists := k.valueSampleSet[value]; !exists {
+	if _, exists := k.valueSampleSet[value]; !exists {
+		if len(k.valueSampleSet) < k.MaxSamples {
 			k.valueSampleSet[value] = struct{}{}
 			k.ValueSamples = append(k.ValueSamples, value)
-			sort.Strings(k.ValueSamples) // Keep sorted for consistency
 		}
+		// Update estimated cardinality (includes values beyond MaxSamples)
+		k.EstimatedCardinality++
 	}
+}
 
-	// Update estimated cardinality
-	// TODO: Implement HyperLogLog for better estimation at scale
-	k.EstimatedCardinality = int64(len(k.valueSampleSet))
+// GetSortedSamples returns the value samples in sorted order.
+// This is only called when serializing to JSON, not on every insert.
+func (k *KeyMetadata) GetSortedSamples() []string {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
+	samples := make([]string, len(k.ValueSamples))
+	copy(samples, k.ValueSamples)
+	sort.Strings(samples)
+	return samples
+}
+
+// MarshalJSON implements custom JSON marshaling for KeyMetadata.
+// This ensures value_samples are sorted in the output without affecting internal state.
+func (k *KeyMetadata) MarshalJSON() ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
+	// Create a temporary struct with sorted samples
+	type Alias KeyMetadata
+	return json.Marshal(&struct {
+		ValueSamples []string `json:"value_samples,omitempty"`
+		*Alias
+	}{
+		ValueSamples: k.GetSortedSamples(),
+		Alias:        (*Alias)(k),
+	})
 }
 
 // UpdatePercentage updates the percentage field based on total samples.
@@ -242,18 +269,22 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	// Merge label keys
 	for key, otherKeyMeta := range other.LabelKeys {
 		if existing, exists := m.LabelKeys[key]; exists {
+			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
 			existing.LastSeen = otherKeyMeta.LastSeen
+			
 			// Merge value samples
 			for _, sample := range otherKeyMeta.ValueSamples {
-				if len(existing.valueSampleSet) < existing.MaxSamples {
-					if _, exists := existing.valueSampleSet[sample]; !exists {
+				if _, exists := existing.valueSampleSet[sample]; !exists {
+					if len(existing.valueSampleSet) < existing.MaxSamples {
 						existing.valueSampleSet[sample] = struct{}{}
 						existing.ValueSamples = append(existing.ValueSamples, sample)
 					}
+					// Always update cardinality count (even beyond MaxSamples)
+					existing.EstimatedCardinality++
 				}
 			}
-			existing.EstimatedCardinality = int64(len(existing.valueSampleSet))
+			existing.mu.Unlock()
 		} else {
 			m.LabelKeys[key] = otherKeyMeta
 		}
