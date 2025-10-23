@@ -54,7 +54,11 @@ function generateMetricBatch(vu, iter) {
     const batchSize = 10;
     
     for (let i = 0; i < batchSize; i++) {
-        const metricNum = Math.floor(Math.random() * NUM_METRICS);
+        // Hybrid approach: sequential base + small random offset
+        // This ensures better coverage while maintaining some randomness
+        const baseMetric = (iter * batchSize + i);
+        const randomOffset = Math.floor(Math.random() * 100);
+        const metricNum = (baseMetric + randomOffset) % NUM_METRICS;
         const labelValue = Math.floor(Math.random() * CARDINALITY);
         
         metrics.push({
