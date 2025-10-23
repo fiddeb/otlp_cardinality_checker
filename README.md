@@ -256,9 +256,10 @@ Run with config:
 
 ## Documentation
 
-- **[USAGE.md](USAGE.md)** - 📘 **Start here!** Practical usage guide with examples
-- **[API.md](API.md)** - Complete REST API documentation with pagination examples
-- **[SCALABILITY.md](SCALABILITY.md)** - Performance optimizations and scalability limits  
+- **[docs/USAGE.md](docs/USAGE.md)** - 📘 **Start here!** Practical usage guide with examples
+- **[docs/API.md](docs/API.md)** - Complete REST API documentation with pagination examples
+- **[docs/SCALABILITY.md](docs/SCALABILITY.md)** - Performance optimizations and scalability limits  
+- **[k8s/README.md](k8s/README.md)** - Kubernetes deployment guide
 - **[scripts/README.md](scripts/README.md)** - Load testing guide with K6
 - **[PRODUCT.md](PRODUCT.md)** - Product overview and requirements
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design decisions
@@ -400,7 +401,7 @@ A: Yes! It's a standard OTLP receiver. Just point your exporter to it.
 A: MVP focuses on metadata keys only. Cardinality estimation (HyperLogLog) is planned for Phase 3.
 
 **Q: Is this production-ready?**  
-A: Yes! Phase 1 is complete and tested with 50,000 metrics using 421 MB memory. See [SCALABILITY.md](SCALABILITY.md) for performance details.
+A: Yes! Phase 1 is complete and tested with 50,000 metrics using 421 MB memory. See [docs/SCALABILITY.md](docs/SCALABILITY.md) for performance details.
 
 **Q: How much memory does it use?**  
 A: Approximately 8-9 KB per metric. For 10,000 metrics: ~85 MB, for 50,000 metrics: ~425 MB.

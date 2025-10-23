@@ -655,7 +655,6 @@ k6 run --vus 10 --duration 30s scripts/load-test.js
 
 ## Next Steps
 
-- **Production Deployment**: See [Kubernetes deployment guide](#) (TODO)
-- **Configuration**: See [configuration guide](#) (TODO)
+- **Production Deployment**: See [../k8s/README.md](../k8s/README.md) for Kubernetes deployment guide
 - **API Documentation**: See [API.md](API.md)
 - **Scalability**: See [SCALABILITY.md](SCALABILITY.md)
