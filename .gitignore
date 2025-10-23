@@ -7,6 +7,10 @@
 otlp-cardinality-checker
 otlp_cardinality_checker
 
+# OpenTelemetry Collector binary
+collector/otelcol
+collector/otelcol-*
+
 # Test binary, built with `go test -c`
 *.test
 
