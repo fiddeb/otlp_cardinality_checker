@@ -235,8 +235,10 @@ Run with config:
 
 ## Documentation
 
+- **[USAGE.md](USAGE.md)** - 📘 **Start here!** Practical usage guide with examples
 - **[API.md](API.md)** - Complete REST API documentation with pagination examples
-- **[SCALABILITY.md](SCALABILITY.md)** - Performance optimizations and scalability limits
+- **[SCALABILITY.md](SCALABILITY.md)** - Performance optimizations and scalability limits  
+- **[scripts/README.md](scripts/README.md)** - Load testing guide with K6
 - **[PRODUCT.md](PRODUCT.md)** - Product overview and requirements
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design decisions
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
