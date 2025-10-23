@@ -3,6 +3,7 @@ package receiver
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,19 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// decompressGzip decompresses gzip-encoded data
+func decompressGzip(r io.Reader) (io.ReadCloser, error) {
+	return gzip.NewReader(r)
+}
 
 // HTTPReceiver handles OTLP HTTP requests.
 type HTTPReceiver struct {
@@ -69,8 +83,20 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
+	// Handle compression
+	reader := req.Body
+	if req.Header.Get("Content-Encoding") == "gzip" {
+		var err error
+		reader, err = decompressGzip(req.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to decompress: %v", err), http.StatusBadRequest)
+			return
+		}
+		defer reader.Close()
+	}
+
 	// Read request body
-	body, err := io.ReadAll(req.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
@@ -80,41 +106,52 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 	// Parse request based on Content-Type
 	var exportReq colmetricspb.ExportMetricsServiceRequest
 	contentType := req.Header.Get("Content-Type")
+	
+	// Log for debugging
+	fmt.Printf("Received metrics request: Content-Type=%s, Content-Encoding=%s, Body length=%d\n", 
+		contentType, req.Header.Get("Content-Encoding"), len(body))
 
-	switch contentType {
-	case "application/json":
-		if err := protojson.Unmarshal(body, &exportReq); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse JSON: %v", err), http.StatusBadRequest)
+	// Always try protobuf first (default for OTLP), then fallback to JSON
+	if err := proto.Unmarshal(body, &exportReq); err != nil {
+		// If protobuf fails, try JSON
+		unmarshaler := protojson.UnmarshalOptions{
+			DiscardUnknown: true,
+		}
+		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
+			fmt.Printf("Failed to parse as both protobuf and JSON\n")
+			fmt.Printf("Protobuf error: %v\n", err)
+			fmt.Printf("JSON error: %v\n", jsonErr)
+			fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
 			return
 		}
-	case "application/x-protobuf", "":
-		if err := proto.Unmarshal(body, &exportReq); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse protobuf: %v", err), http.StatusBadRequest)
-			return
-		}
-	default:
-		http.Error(w, "Unsupported Content-Type", http.StatusUnsupportedMediaType)
-		return
+		fmt.Println("Parsed as JSON")
+	} else {
+		fmt.Println("Parsed as protobuf")
 	}
 
 	// Analyze metrics
 	metricsMetadata, err := r.metricsAnalyzer.Analyze(&exportReq)
 	if err != nil {
+		fmt.Printf("Analysis error: %v\n", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze metrics: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	fmt.Printf("Successfully analyzed %d metrics\n", len(metricsMetadata))
+
 	// Store metadata
 	for _, metadata := range metricsMetadata {
 		if err := r.store.StoreMetric(ctx, metadata); err != nil {
+			fmt.Printf("Storage error: %v\n", err)
 			http.Error(w, fmt.Sprintf("Failed to store metric: %v", err), http.StatusInternalServerError)
 			return
 		}
 	}
 
-	// Return success response
+	// Return success response (always protobuf for OTLP)
 	resp := &colmetricspb.ExportMetricsServiceResponse{}
-	r.writeResponse(w, resp, contentType)
+	r.writeResponse(w, resp)
 }
 
 // handleTraces handles OTLP traces export requests.
@@ -126,32 +163,34 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
+	// Handle compression
+	reader := req.Body
+	if req.Header.Get("Content-Encoding") == "gzip" {
+		var err error
+		reader, err = decompressGzip(req.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to decompress: %v", err), http.StatusBadRequest)
+			return
+		}
+		defer reader.Close()
+	}
+
 	// Read request body
-	body, err := io.ReadAll(req.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}
 	defer req.Body.Close()
 
-	// Parse request based on Content-Type
+	// Parse request - try protobuf first, then JSON
 	var exportReq coltracepb.ExportTraceServiceRequest
-	contentType := req.Header.Get("Content-Type")
-
-	switch contentType {
-	case "application/json":
-		if err := protojson.Unmarshal(body, &exportReq); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse JSON: %v", err), http.StatusBadRequest)
+	if err := proto.Unmarshal(body, &exportReq); err != nil {
+		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to parse: %v", err), http.StatusBadRequest)
 			return
 		}
-	case "application/x-protobuf", "":
-		if err := proto.Unmarshal(body, &exportReq); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse protobuf: %v", err), http.StatusBadRequest)
-			return
-		}
-	default:
-		http.Error(w, "Unsupported Content-Type", http.StatusUnsupportedMediaType)
-		return
 	}
 
 	// Analyze traces
@@ -169,9 +208,9 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Return success response
+	// Return success response (always protobuf for OTLP)
 	resp := &coltracepb.ExportTraceServiceResponse{}
-	r.writeResponse(w, resp, contentType)
+	r.writeResponse(w, resp)
 }
 
 // handleLogs handles OTLP logs export requests.
@@ -183,32 +222,34 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
+	// Handle compression
+	reader := req.Body
+	if req.Header.Get("Content-Encoding") == "gzip" {
+		var err error
+		reader, err = decompressGzip(req.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to decompress: %v", err), http.StatusBadRequest)
+			return
+		}
+		defer reader.Close()
+	}
+
 	// Read request body
-	body, err := io.ReadAll(req.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}
 	defer req.Body.Close()
 
-	// Parse request based on Content-Type
+	// Parse request - try protobuf first, then JSON
 	var exportReq collogspb.ExportLogsServiceRequest
-	contentType := req.Header.Get("Content-Type")
-
-	switch contentType {
-	case "application/json":
-		if err := protojson.Unmarshal(body, &exportReq); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse JSON: %v", err), http.StatusBadRequest)
+	if err := proto.Unmarshal(body, &exportReq); err != nil {
+		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to parse: %v", err), http.StatusBadRequest)
 			return
 		}
-	case "application/x-protobuf", "":
-		if err := proto.Unmarshal(body, &exportReq); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse protobuf: %v", err), http.StatusBadRequest)
-			return
-		}
-	default:
-		http.Error(w, "Unsupported Content-Type", http.StatusUnsupportedMediaType)
-		return
 	}
 
 	// Analyze logs
@@ -226,9 +267,9 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Return success response
+	// Return success response (always protobuf for OTLP)
 	resp := &collogspb.ExportLogsServiceResponse{}
-	r.writeResponse(w, resp, contentType)
+	r.writeResponse(w, resp)
 }
 
 // handleHealth handles health check requests.
@@ -237,25 +278,16 @@ func (r *HTTPReceiver) handleHealth(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-// writeResponse writes a protobuf response based on Content-Type.
-func (r *HTTPReceiver) writeResponse(w http.ResponseWriter, resp proto.Message, contentType string) {
-	var respBytes []byte
-	var err error
-
-	switch contentType {
-	case "application/json":
-		respBytes, err = protojson.Marshal(resp)
-		w.Header().Set("Content-Type", "application/json")
-	default:
-		respBytes, err = proto.Marshal(resp)
-		w.Header().Set("Content-Type", "application/x-protobuf")
-	}
-
+// writeResponse writes a protobuf response.
+// OTLP always uses protobuf for responses.
+func (r *HTTPReceiver) writeResponse(w http.ResponseWriter, resp proto.Message) {
+	respBytes, err := proto.Marshal(resp)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to marshal response: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/x-protobuf")
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, bytes.NewReader(respBytes))
 }
