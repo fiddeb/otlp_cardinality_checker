@@ -189,10 +189,11 @@ Run the checker in your CI/CD pipeline to validate instrumentation:
 go test ./...
 
 # Query metadata
-curl http://localhost:8080/api/v1/summary > metadata-report.json
+curl 'http://localhost:8080/api/v1/metrics' | jq '.' > metadata-report.json
 
-# Validate no high-cardinality labels
-./scripts/validate-metadata.sh metadata-report.json
+# Check for high cardinality (example)
+curl -s 'http://localhost:8080/api/v1/metrics' | \
+  jq -r '.data[] | select(.label_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
 ```
 
 ### 2. Cost Analysis
@@ -201,10 +202,14 @@ Understand what's driving your observability costs:
 
 ```bash
 # Run in staging for 24 hours
-./otlp-cardinality-checker --config staging-config.yaml
+./otlp-cardinality-checker
 
-# Export metadata
-curl http://localhost:8080/api/v1/metrics?export=csv > metrics.csv
+# Export metadata to JSON
+curl -s 'http://localhost:8080/api/v1/metrics' | jq '.' > metrics.json
+
+# Or use jq to create CSV format
+curl -s 'http://localhost:8080/api/v1/metrics' | \
+  jq -r '.data[] | [.name, .type, (.label_keys | length), .sample_count] | @csv' > metrics.csv
 
 # Analyze in Excel/SQL
 ```
