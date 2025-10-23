@@ -60,10 +60,11 @@ OTLP Cardinality Checker är ett lightweight analysverktyg skrivet i Go som:
 
 ## Key Features
 
-### 1. OTLP-Kompatibel Receiver
-- Stödjer både **gRPC** (port 4317) och **HTTP** (port 4318)
-- Fullt kompatibel med OpenTelemetry SDK:er
-- Fungerar som drop-in replacement för testing
+### 1. OTLP-Kompatibel HTTP Receiver
+- **HTTP** support (port 4318) ✅ **IMPLEMENTED**
+- **gRPC** (port 4317) 🔜 **PLANNED FOR PHASE 2**
+- Fullt kompatibel med OpenTelemetry Collector OTLP HTTP exporter
+- Fungerar som analysverktyg mellan Collector och backend
 
 ### 2. Metadata Extraction
 - Real-time parsing av OTLP protobuf

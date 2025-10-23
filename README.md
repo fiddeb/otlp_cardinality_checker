@@ -2,9 +2,9 @@
 
 > A lightweight metadata analysis tool for OpenTelemetry Protocol (OTLP) telemetry
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Planning-yellow)](https://github.com/yourusername/otlp_cardinality_checker)
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-green)](https://github.com/fiddeb/otlp_cardinality_checker)
 
 ## What is this?
 
@@ -42,13 +42,13 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 │  OpenTelemetry Collector         │
 │  • Receivers (various)           │
 │  • Processors                    │
-│  • OTLP Exporters                │
+│  • OTLP HTTP Exporter            │
 └──────────┬───────────────────────┘
-           │ OTLP (gRPC/HTTP)
+           │ OTLP/HTTP
            ↓
 ┌──────────────────────────────────┐
 │  OTLP Cardinality Checker        │
-│  • OTLP Endpoints (4317/4318)    │
+│  • OTLP HTTP Endpoint (4318)     │
 │  • Metadata Extraction           │
 │  • Cardinality Analysis          │
 └──────────┬───────────────────────┘
@@ -62,18 +62,21 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 
 ## Features
 
-**Current:**
-- **OTLP Endpoint Destination** - Receives data from OpenTelemetry Collector
-- **Source Agnostic** - Works with any Collector receiver (Kafka, Redis, Prometheus, etc.)
-- **Metadata Extraction** - Analyzes metrics, traces, and logs
-- **Cardinality Tracking** - Estimates unique value counts per key
-- **In-Memory Storage** - Fast, zero dependencies
-- **Optional Persistence** - PostgreSQL for historical tracking
-- **REST API** - Query metadata programmatically
-- **Service-Level Filtering** - View telemetry by service.name
+**Current (Phase 1 - Complete):**
+- ✅ **OTLP HTTP Endpoint** - Receives data from OpenTelemetry Collector (port 4318)
+- ✅ **Source Agnostic** - Works with any Collector receiver (Kafka, Redis, Prometheus, etc.)
+- ✅ **Metadata Extraction** - Analyzes metrics, traces, and logs
+- ✅ **Cardinality Tracking** - Estimates unique value counts per label
+- ✅ **In-Memory Storage** - Fast, handles 50,000+ metrics
+- ✅ **REST API** - Query metadata with pagination support
+- ✅ **Service-Level Filtering** - View telemetry by service.name
+- ✅ **Docker & Kubernetes** - Production-ready deployment manifests
 
-**Planned:**
-- **Web UI** - Coming soon  
+**Planned (Phase 2):**
+- **OTLP gRPC Endpoint** - Port 4317 support
+- **Web UI** - Visual exploration of metadata
+- **PostgreSQL Persistence** - Optional historical tracking
+- **Alerting** - Notify on cardinality thresholds  
 
 ## Quick Start
 
@@ -220,31 +223,20 @@ curl "http://localhost:8080/api/v1/metrics?service=payment-service"
 
 ## Configuration
 
-Create a `config.yaml`:
+The server uses environment variables for configuration:
 
-```yaml
-server:
-  grpc:
-    enabled: true
-    address: "0.0.0.0:4317"
-  http:
-    enabled: true
-    address: "0.0.0.0:4318"
+```bash
+# OTLP HTTP endpoint address (default: 0.0.0.0:4318)
+export OTLP_HTTP_ADDR="0.0.0.0:4318"
 
-api:
-  address: "0.0.0.0:8080"
+# REST API address (default: 0.0.0.0:8080)
+export API_ADDR="0.0.0.0:8080"
 
-storage:
-  type: "memory"  # or "postgres"
-  
-  postgres:
-    enabled: false
-    host: "localhost"
-    port: 5432
-    database: "otlp_cardinality"
-    
-logging:
-  level: "info"
+# Run the server
+./otlp-cardinality-checker
+```
+
+**Note:** Configuration file support (YAML) is planned for Phase 2.
   format: "json"
 ```
 
@@ -270,45 +262,42 @@ Run with config:
 
 � **Status**: Phase 1 Complete - Production Ready
 
-### Phase 1: MVP ✅ **COMPLETED**
-- [x] Product specification
-- [x] Architecture design
+### Phase 1: MVP ✅ **COMPLETE**
 - [x] OTLP HTTP receiver implementation (port 4318)
-- [x] Metadata extractors (metrics, traces, logs)
+- [x] Metadata extraction for metrics, traces, and logs  
 - [x] In-memory storage with cardinality tracking
 - [x] REST API with pagination support
-- [x] Integration tests
-- [x] Performance optimizations
-- [x] Tested with real OpenTelemetry Collector
+- [x] Docker and Kubernetes deployment
+- [x] Load testing (validated with 50,000 metrics)
+- [x] Comprehensive documentation
 
-**What works now:**
-- ✅ Receive OTLP data via HTTP/protobuf or JSON
-- ✅ Extract and track all metadata keys
-- ✅ Track cardinality with value samples (max 100 per key)
-- ✅ Filter by service name
-- ✅ Paginated API responses (handles 10k+ metrics)
-- ✅ Identify high cardinality labels
-- ✅ Spot optional/missing labels
+**Performance validated:**
+- ✅ Handles 50,000 metrics using 421 MB memory (~8.4 KB per metric)
+- ✅ Throughput: 450 req/s, 4,455 datapoints/s sustained
+- ✅ Latency: P95 45ms under load, median 1.45ms
+- ✅ Success rate: 99.95%
+- ✅ See [docs/SCALABILITY.md](docs/SCALABILITY.md) for details
 
-**Performance:**
+### Phase 2: Production Hardening (Planned)
 - Handles 10,000 metrics comfortably (~150MB memory)
 - Sub-millisecond metadata updates
 - <10ms API responses for 100 items
 
-### Phase 2: Production Hardening (Next)
+### Phase 2: Production Hardening (Planned)
 - [ ] OTLP gRPC receiver (port 4317)
-- [ ] PostgreSQL persistence
-- [ ] Configuration file support
+- [ ] PostgreSQL persistence for historical tracking
+- [ ] Configuration file support (YAML)
 - [ ] Comprehensive unit tests
-- [ ] Docker support
-- [ ] Helm charts
+- [ ] Helm charts for easier Kubernetes deployment
+- [ ] HyperLogLog for >1,000 unique values per label
 
-### Phase 3: Enhanced Features
+### Phase 3: Enhanced Features (Future)
 - [ ] Web UI for visualization
 - [ ] Alerting on cardinality thresholds
 - [ ] CI/CD integrations
 - [ ] Time-series cardinality trends
 - [ ] Comparison tools
+- [ ] Multi-replica support with shared storage
 
 ## Architecture Overview
 
@@ -318,7 +307,6 @@ Run with config:
 │                                         │
 │  ┌─────────────────────────────────┐  │
 │  │  OTLP Receiver Layer            │  │
-│  │  ├─ gRPC Server (port 4317)     │  │
 │  │  └─ HTTP Server (port 4318)     │  │
 │  └──────────────┬──────────────────┘  │
 │                 │                      │

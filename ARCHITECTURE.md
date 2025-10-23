@@ -58,8 +58,8 @@ The OTLP Cardinality Checker is designed as a standalone service that acts as an
 │                                         │
 │  ┌─────────────────────────────────┐  │
 │  │  OTLP Receiver Layer            │  │
-│  │  ├─ gRPC Server (port 4317)     │  │
 │  │  └─ HTTP Server (port 4318)     │  │
+│  │     (gRPC planned for Phase 2)  │  │
 │  └──────────────┬──────────────────┘  │
 │                 │                      │
 │  ┌──────────────▼──────────────────┐  │
@@ -97,9 +97,9 @@ The OTLP Cardinality Checker is designed as a standalone service that acts as an
 
 ### 1. OTLP Endpoint Layer
 
-**Ansvar**: Ta emot OTLP data från OpenTelemetry Collector via gRPC och HTTP
+**Ansvar**: Ta emot OTLP data från OpenTelemetry Collector via HTTP (gRPC kommer i Phase 2)
 
-**Viktigt**: Vi implementerar INTE en full OpenTelemetry Collector receiver. Vi bygger enkla HTTP/gRPC servrar som förstår OTLP protobuf-format. OpenTelemetry Collector använder sina OTLP exporters för att skicka data till oss.
+**Viktigt**: Vi implementerar INTE en full OpenTelemetry Collector receiver. Vi bygger en enkel HTTP server som förstår OTLP protobuf-format. OpenTelemetry Collector använder sina OTLP HTTP exporter för att skicka data till oss.
 
 **Implementation**:
 ```go
