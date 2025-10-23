@@ -49,12 +49,48 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 ### 3. Query Metadata
 
 ```bash
-# List all metrics
-curl http://localhost:8080/api/v1/metrics
+# Check if data is arriving
+curl http://localhost:8080/api/v1/health
 
-# Get specific metric details
-curl http://localhost:8080/api/v1/metrics/http_requests_total
+# List all metrics
+curl http://localhost:8080/api/v1/metrics?limit=5
+
+# Get details for a specific metric
+curl http://localhost:8080/api/v1/metrics/your_metric_name
 ```
+
+### 4. Quick Test - Check Your Metric
+
+```bash
+# Step 1: Find a metric name
+curl -s "http://localhost:8080/api/v1/metrics?limit=5" | jq -r '.data[].name'
+
+# Step 2: Check its labels and cardinality
+curl -s "http://localhost:8080/api/v1/metrics/YOUR_METRIC_NAME" | \
+  jq '.label_keys | to_entries[] | {
+    label: .key,
+    cardinality: .value.estimated_cardinality,
+    sample_values: .value.value_samples[0:3]
+  }'
+```
+
+**Example output:**
+```json
+{
+  "label": "user_id",
+  "cardinality": 20,
+  "sample_values": ["user_1", "user_10", "user_11"]
+}
+{
+  "label": "method",
+  "cardinality": 1,
+  "sample_values": ["GET"]
+}
+```
+
+**Interpretation:**
+- `user_id` has 20 unique values → creates 20+ time series
+- `method` has 1 unique value → not contributing to cardinality
 
 ---
 
@@ -118,14 +154,16 @@ status: 8 unique values
 **Question:** Which labels have too many unique values?
 
 ```bash
-# Find labels with >100 unique values
+# Find labels with >20 unique values (adjust threshold as needed)
 curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
-  jq '.label_keys | to_entries[] | select(.value.estimated_cardinality > 100) | {
+  jq '.label_keys | to_entries[] | select(.value.estimated_cardinality > 20) | {
     label: .key,
     cardinality: .value.estimated_cardinality,
     samples: .value.value_samples[0:5]
   }'
 ```
+
+**Note:** Adjust the threshold (20, 50, 100) based on your needs. Higher cardinality = more unique values = higher cost.
 
 **Output:**
 ```json
