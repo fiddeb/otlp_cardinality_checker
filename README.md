@@ -79,27 +79,48 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 
 ### Prerequisites
 
-- Go 1.21+ (for building from source)
-- Docker (optional, for PostgreSQL)
+- Go 1.24+ (for building from source)
+- Docker (optional, for building container images)
+- Kubernetes (optional, for deployment)
 
 ### Installation
 
+#### Option 1: Build and Run Locally
+
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/otlp_cardinality_checker.git
+git clone https://github.com/fiddeb/otlp_cardinality_checker.git
 cd otlp_cardinality_checker
 
 # Build
-go build -o otlp-cardinality-checker cmd/server/main.go
+go build -o otlp-cardinality-checker ./cmd/server
 
 # Run
 ./otlp-cardinality-checker
 ```
 
+#### Option 2: Deploy to Kubernetes
+
+```bash
+# Build Docker image (on a machine with Docker)
+docker build -t otlp-cardinality-checker:latest .
+
+# Tag and push to your registry
+docker tag otlp-cardinality-checker:latest your-registry/otlp-cardinality-checker:latest
+docker push your-registry/otlp-cardinality-checker:latest
+
+# Deploy to Kubernetes
+kubectl apply -f k8s/
+
+# Port-forward to access locally
+kubectl port-forward svc/otlp-cardinality-checker 8080:8080 4318:4318
+```
+
+See [k8s/README.md](k8s/README.md) for detailed Kubernetes deployment instructions.
+
 The tool will start listening on:
-- **gRPC**: `localhost:4317`
-- **HTTP**: `localhost:4318` 
-- **API**: `localhost:8080`
+- **HTTP**: `localhost:4318` (OTLP HTTP endpoint)
+- **API**: `localhost:8080` (REST API)
 
 ### Using with OpenTelemetry SDK
 
@@ -379,10 +400,34 @@ A: Yes! It's a standard OTLP receiver. Just point your exporter to it.
 A: MVP focuses on metadata keys only. Cardinality estimation (HyperLogLog) is planned for Phase 3.
 
 **Q: Is this production-ready?**  
-A: Not yet. We're in the planning phase. Use at your own risk.
+A: Yes! Phase 1 is complete and tested with 50,000 metrics using 421 MB memory. See [SCALABILITY.md](SCALABILITY.md) for performance details.
 
 **Q: How much memory does it use?**  
-A: Minimal - typically < 100MB for 10,000 unique metadata entries since we only store keys.
+A: Approximately 8-9 KB per metric. For 10,000 metrics: ~85 MB, for 50,000 metrics: ~425 MB.
+
+**Q: Can I run multiple replicas in Kubernetes?**  
+A: Each replica has independent in-memory storage. For shared state, you would need to implement distributed storage (future enhancement).
+
+## Deployment
+
+### Kubernetes
+
+See [k8s/README.md](k8s/README.md) for complete deployment instructions including:
+- Building Docker images
+- Deploying to Kubernetes
+- Configuring OpenTelemetry Collector
+- Ingress setup
+- Monitoring and troubleshooting
+
+### Docker
+
+```bash
+# Build image
+docker build -t otlp-cardinality-checker:latest .
+
+# Run container
+docker run -p 4318:4318 -p 8080:8080 otlp-cardinality-checker:latest
+```
 
 ## License
 

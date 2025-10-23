@@ -1,0 +1,27 @@
+# Binaries
+otlp-cardinality-checker
+*.exe
+
+# Test files
+*_test.go
+
+# Documentation
+*.md
+docs/
+
+# Scripts
+scripts/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# CI/CD
+.github/
+
+# Kubernetes
+k8s/

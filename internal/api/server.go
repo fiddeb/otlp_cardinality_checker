@@ -106,13 +106,20 @@ func NewServer(addr string, store *memory.Store) *Server {
 		router: chi.NewRouter(),
 	}
 
-	// Middleware
-	s.router.Use(middleware.Logger)
-	s.router.Use(middleware.Recoverer)
-	s.router.Use(middleware.RequestID)
-	s.router.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
 
-	// Routes
+	// API routes
+	r.Route("/api/v1", func(r chi.Router) {
+		// Health endpoint
+		r.Get("/health", s.HandleHealth)
+
+		// Metrics endpoints
+		r.Get("/metrics", s.HandleListMetrics)
+		r.Get("/metrics/{name}", s.HandleGetMetric)	// Routes
 	s.router.Get("/api/v1/metrics", s.listMetrics)
 	s.router.Get("/api/v1/metrics/{name}", s.getMetric)
 	s.router.Get("/api/v1/spans", s.listSpans)

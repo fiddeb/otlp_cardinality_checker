@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: otlp-cardinality-checker
+  labels:
+    app: otlp-cardinality-checker
+  annotations:
+    # Nginx ingress annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Add CORS if needed
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+    # Add rate limiting if needed
+    # nginx.ingress.kubernetes.io/limit-rps: "100"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: otlp-cardinality.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: otlp-cardinality-checker
+            port:
+              number: 8080
+  # Uncomment for TLS
+  # tls:
+  # - hosts:
+  #   - otlp-cardinality.example.com
+  #   secretName: otlp-cardinality-tls
