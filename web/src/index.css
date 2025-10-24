@@ -326,7 +326,9 @@ tr:hover {
 
 .key-badge {
   padding: 4px 8px;
-  background: #e3f2fd;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
