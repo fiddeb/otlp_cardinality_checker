@@ -178,6 +178,122 @@ Identifies services causing high cardinality or high volume.
 - To investigate memory growth
 - To find candidates for label filtering or sampling
 
+## Running All Tests
+
+### Quick Test (All Signal Types)
+Run all three load tests quickly to verify functionality:
+
+```bash
+# Terminal 1: Start server
+./otlp-cardinality-checker
+
+# Terminal 2: Run all tests
+k6 run --vus 2 --duration 5s scripts/load-test-metrics.js && \
+k6 run --vus 2 --duration 5s scripts/load-test-traces.js && \
+k6 run --vus 2 --duration 5s scripts/load-test-logs.js && \
+./scripts/find-noisy-neighbors.sh
+```
+
+### Comprehensive Test Suite
+Run a full test suite with realistic load:
+
+```bash
+# 1. Metrics test (1 minute)
+k6 run --vus 10 --duration 60s \
+  -e NUM_METRICS=1000 \
+  -e CARDINALITY=50 \
+  scripts/load-test-metrics.js
+
+# 2. Traces test (1 minute)
+k6 run --vus 10 --duration 60s \
+  -e NUM_SPANS=100 \
+  -e CARDINALITY=50 \
+  scripts/load-test-traces.js
+
+# 3. Logs test (1 minute)
+k6 run --vus 10 --duration 60s \
+  -e NUM_MODULES=100 \
+  -e CARDINALITY=50 \
+  scripts/load-test-logs.js
+
+# 4. Analyze results
+./scripts/find-noisy-neighbors.sh
+
+# 5. Check overall stats
+curl -s http://localhost:8080/api/v1/stats | jq '{metrics, spans, logs, services, memory_mb}'
+```
+
+### Automated Test Script
+Create a script to run all tests and capture results:
+
+```bash
+#!/bin/bash
+# run-all-tests.sh
+
+echo "🚀 Starting comprehensive test suite..."
+
+# Reset server (optional)
+pkill -f otlp-cardinality-checker
+sleep 1
+./otlp-cardinality-checker &
+sleep 2
+
+# Run metrics test
+echo "📊 Testing Metrics..."
+k6 run --vus 10 --duration 60s \
+  -e NUM_METRICS=1000 \
+  -e CARDINALITY=50 \
+  scripts/load-test-metrics.js
+
+# Run traces test
+echo "🔍 Testing Traces..."
+k6 run --vus 10 --duration 60s \
+  -e NUM_SPANS=100 \
+  -e CARDINALITY=50 \
+  scripts/load-test-traces.js
+
+# Run logs test
+echo "📝 Testing Logs..."
+k6 run --vus 10 --duration 60s \
+  -e NUM_MODULES=100 \
+  -e CARDINALITY=50 \
+  scripts/load-test-logs.js
+
+# Analyze results
+echo "🔎 Analyzing for noisy neighbors..."
+./scripts/find-noisy-neighbors.sh
+
+# Show final stats
+echo "📈 Final Statistics:"
+curl -s http://localhost:8080/api/v1/stats | jq '{
+  metrics_count: .metrics_count,
+  spans_count: .spans_count,
+  logs_count: .logs_count,
+  services_count: .services_count,
+  memory_mb: (.memory_bytes / 1024 / 1024 | round)
+}'
+
+echo "✅ Test suite complete!"
+```
+
+### Parallel Testing (Advanced)
+Run all tests in parallel (requires careful resource management):
+
+```bash
+# Start all tests simultaneously
+k6 run --vus 5 --duration 60s scripts/load-test-metrics.js &
+k6 run --vus 5 --duration 60s scripts/load-test-traces.js &
+k6 run --vus 5 --duration 60s scripts/load-test-logs.js &
+
+# Wait for all to complete
+wait
+
+# Analyze
+./scripts/find-noisy-neighbors.sh
+```
+
+**Note:** Parallel testing generates higher load and mixed signal types, which is more realistic for production scenarios.
+
 ## Typical Test Scenarios
 
 ### Scenario 1: Realistic Production Load
