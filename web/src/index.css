@@ -51,6 +51,20 @@ body {
   padding: 20px;
 }
 
+input[type="text"],
+select {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+input[type="text"]::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
 header {
   background: var(--bg-secondary);
   padding: 20px;
