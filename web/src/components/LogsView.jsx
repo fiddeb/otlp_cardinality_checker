@@ -102,7 +102,7 @@ function LogsView({ onViewDetails }) {
         </div>
       </div>
 
-      <p style={{ marginTop: '10px', color: '#666' }}>
+      <p style={{ marginTop: '10px' }} className="template-count-text">
         Showing {startIndex + 1}-{Math.min(endIndex, filteredPatterns.length)} of {filteredPatterns.length} patterns
         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
       </p>
@@ -137,12 +137,12 @@ function LogsView({ onViewDetails }) {
               return (
                 <tr key={i}>
                   <td>
-                    <code style={{ 
+                    <code className="template-code" style={{ 
                       fontSize: '13px',
                       wordBreak: 'break-word',
                       display: 'block',
                       padding: '8px',
-                      background: '#f5f5f5',
+                      background: 'var(--bg-tertiary)',
                       borderRadius: '4px'
                     }}>
                       {pattern.template}
@@ -166,7 +166,7 @@ function LogsView({ onViewDetails }) {
                       <div style={{ 
                         flex: '0 0 60px',
                         height: '8px',
-                        background: '#e0e0e0',
+                        background: 'var(--border-color)',
                         borderRadius: '4px',
                         overflow: 'hidden'
                       }}>
@@ -180,9 +180,7 @@ function LogsView({ onViewDetails }) {
                       <span>{pattern.percentage.toFixed(1)}%</span>
                     </div>
                   </td>
-                  <td style={{ 
-                    fontSize: '12px',
-                    color: '#666',
+                  <td className="template-count-text-small" style={{ 
                     fontStyle: 'italic',
                     maxWidth: '300px',
                     wordBreak: 'break-word'
@@ -214,7 +212,7 @@ function LogsView({ onViewDetails }) {
             Previous
           </button>
           
-          <span style={{ color: '#666' }}>
+          <span className="template-count-text">
             Page {currentPage} of {totalPages}
           </span>
           
@@ -233,7 +231,7 @@ function LogsView({ onViewDetails }) {
       )}
 
       {filteredPatterns.length === 0 && (
-        <p style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+        <p style={{ textAlign: 'center', padding: '20px' }} className="template-count-text">
           No patterns match the current filters
         </p>
       )}
