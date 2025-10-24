@@ -1,7 +1,7 @@
 // K6 Load Test for OTLP Cardinality Checker
 // Install k6: brew install k6
-// Run: k6 run scripts/load-test.js
-// Run with options: k6 run --vus 10 --duration 60s scripts/load-test.js
+// Run: k6 run scripts/load-test-metrics.js
+// Run with options: k6 run --vus 10 --duration 60s scripts/load-test-metrics.js
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';

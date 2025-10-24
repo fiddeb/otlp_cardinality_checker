@@ -667,7 +667,7 @@ See [scripts/README.md](scripts/README.md) for K6 load testing examples.
 
 Quick test:
 ```bash
-k6 run --vus 10 --duration 30s scripts/load-test.js
+k6 run --vus 10 --duration 30s scripts/load-test-metrics.js
 ```
 
 ---

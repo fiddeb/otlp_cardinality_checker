@@ -1,6 +1,6 @@
-# Load Testing with K6
+# K6 Load Tests for OTLP Cardinality Checker
 
-This directory contains K6 load testing scripts for the OTLP Cardinality Checker.
+This directory contains K6 load test scripts for testing the OTLP Cardinality Checker with **metrics**, **traces**, and **logs**.
 
 ## Installation
 
@@ -21,30 +21,91 @@ docker pull grafana/k6
 
 ## Test Scripts
 
-### 1. Load Test (`load-test.js`)
-Standard load test with configurable parameters.
+### 1. Metrics Load Test (`load-test-metrics.js`)
+Tests metric ingestion with configurable cardinality and metric count.
 
-**Run:**
+**Basic usage:**
 ```bash
-k6 run scripts/load-test.js
+k6 run scripts/load-test-metrics.js
 ```
 
-**Custom parameters:**
+**Custom configuration:**
 ```bash
-# 20 VUs for 2 minutes, 5000 unique metrics
-k6 run --vus 20 --duration 120s \
-  -e NUM_METRICS=5000 \
+k6 run --vus 50 --duration 120s \
+  -e NUM_METRICS=500000 \
   -e CARDINALITY=100 \
-  scripts/load-test.js
+  scripts/load-test-metrics.js
+```
+
+**Environment variables:**
+- `OTLP_ENDPOINT` - OTLP endpoint (default: `http://localhost:4218`)
+- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8080`)
+- `NUM_METRICS` - Number of unique metric names (default: 1000)
+- `CARDINALITY` - Number of unique values per label (default: 50)
+
+**Features:**
+- Generates realistic metric data with multiple labels
+- Tracks high cardinality labels (>40 unique values)
+- Hybrid metric ID generation for better coverage
+- Reports memory usage and metrics created
+
+### 2. Traces Load Test (`load-test-traces.js`)
+Tests trace/span ingestion with configurable span operations and cardinality.
+
+**Basic usage:**
+```bash
+k6 run scripts/load-test-traces.js
+```
+
+**Custom configuration:**
+```bash
+k6 run --vus 50 --duration 120s \
+  -e NUM_SPANS=10000 \
+  -e CARDINALITY=100 \
+  scripts/load-test-traces.js
 ```
 
 **Environment variables:**
 - `OTLP_ENDPOINT` - OTLP endpoint (default: `http://localhost:4318`)
 - `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8080`)
-- `NUM_METRICS` - Number of unique metric names (default: 1000)
-- `CARDINALITY` - Number of unique values per label (default: 50)
+- `NUM_SPANS` - Number of unique span operations (default: 100)
+- `CARDINALITY` - Number of unique values per attribute (default: 50)
 
-### 2. Stress Test (`stress-test.js`)
+**Features:**
+- Generates spans with HTTP attributes
+- Multiple span kinds (Internal, Server, Client, etc.)
+- Resource attributes tracking
+- Tracks high cardinality span attributes
+
+### 3. Logs Load Test (`load-test-logs.js`)
+Tests log ingestion with multiple severity levels and attributes.
+
+**Basic usage:**
+```bash
+k6 run scripts/load-test-logs.js
+```
+
+**Custom configuration:**
+```bash
+k6 run --vus 50 --duration 120s \
+  -e NUM_MODULES=1000 \
+  -e CARDINALITY=100 \
+  scripts/load-test-logs.js
+```
+
+**Environment variables:**
+- `OTLP_ENDPOINT` - OTLP endpoint (default: `http://localhost:4318`)
+- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8080`)
+- `NUM_MODULES` - Number of unique modules (default: 100)
+- `CARDINALITY` - Number of unique values per attribute (default: 50)
+
+**Features:**
+- Generates logs with INFO, WARN, ERROR, DEBUG severities
+- Realistic log attributes (module, trace_id, user_id)
+- Resource attributes for service tracking
+- Reports severity breakdown
+
+### 4. Stress Test (`stress-test.js`)
 Ramps up load to find breaking points.
 
 **Run:**
@@ -75,7 +136,7 @@ Simulates a medium-sized deployment with multiple services.
 k6 run --vus 10 --duration 60s \
   -e NUM_METRICS=1000 \
   -e CARDINALITY=50 \
-  scripts/load-test.js
+  scripts/load-test-metrics.js
 ```
 
 **Expected results:**
@@ -90,7 +151,7 @@ Tests behavior with high cardinality labels.
 k6 run --vus 20 --duration 120s \
   -e NUM_METRICS=500 \
   -e CARDINALITY=1000 \
-  scripts/load-test.js
+  scripts/load-test-metrics.js
 ```
 
 **Watch for:**
@@ -105,7 +166,7 @@ Tests with many unique metrics (10k+).
 k6 run --vus 50 --duration 180s \
   -e NUM_METRICS=10000 \
   -e CARDINALITY=100 \
-  scripts/load-test.js
+  scripts/load-test-metrics.js
 ```
 
 **Expected behavior:**
@@ -130,7 +191,7 @@ k6 run scripts/stress-test.js
 ### Memory Usage
 ```bash
 # Terminal 1: Run test
-k6 run scripts/load-test.js
+k6 run scripts/load-test-metrics.js
 
 # Terminal 2: Watch memory
 watch -n 1 'ps aux | grep otlp-cardinality-checker | grep -v grep | awk "{print \$6/1024 \" MB\"}"'
