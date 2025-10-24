@@ -188,21 +188,32 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 	if err := proto.Unmarshal(body, &exportReq); err != nil {
 		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
 		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse: %v", err), http.StatusBadRequest)
+			fmt.Printf("Failed to parse traces as both protobuf and JSON\n")
+			fmt.Printf("Protobuf error: %v\n", err)
+			fmt.Printf("JSON error: %v\n", jsonErr)
+			fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
 			return
 		}
+		fmt.Println("Parsed traces as JSON")
+	} else {
+		fmt.Println("Parsed traces as protobuf")
 	}
 
 	// Analyze traces
 	spansMetadata, err := r.tracesAnalyzer.Analyze(&exportReq)
 	if err != nil {
+		fmt.Printf("Trace analysis error: %v\n", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze traces: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	fmt.Printf("Successfully analyzed %d spans\n", len(spansMetadata))
+
 	// Store metadata
 	for _, metadata := range spansMetadata {
 		if err := r.store.StoreSpan(ctx, metadata); err != nil {
+			fmt.Printf("Span storage error: %v\n", err)
 			http.Error(w, fmt.Sprintf("Failed to store span: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -247,21 +258,32 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 	if err := proto.Unmarshal(body, &exportReq); err != nil {
 		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
 		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to parse: %v", err), http.StatusBadRequest)
+			fmt.Printf("Failed to parse logs as both protobuf and JSON\n")
+			fmt.Printf("Protobuf error: %v\n", err)
+			fmt.Printf("JSON error: %v\n", jsonErr)
+			fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
 			return
 		}
+		fmt.Println("Parsed logs as JSON")
+	} else {
+		fmt.Println("Parsed logs as protobuf")
 	}
 
 	// Analyze logs
 	logsMetadata, err := r.logsAnalyzer.Analyze(&exportReq)
 	if err != nil {
+		fmt.Printf("Log analysis error: %v\n", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze logs: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	fmt.Printf("Successfully analyzed %d log severities\n", len(logsMetadata))
+
 	// Store metadata
 	for _, metadata := range logsMetadata {
 		if err := r.store.StoreLog(ctx, metadata); err != nil {
+			fmt.Printf("Log storage error: %v\n", err)
 			http.Error(w, fmt.Sprintf("Failed to store log: %v", err), http.StatusInternalServerError)
 			return
 		}

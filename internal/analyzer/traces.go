@@ -41,13 +41,11 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 					spanMap[key] = models.NewSpanMetadata(span.Name, getSpanKind(span.Kind))
 					spanMap[key].ScopeInfo = scopeInfo
 
-					// Add resource keys and their values
-					for resKey, resValue := range resourceAttrs {
+					// Add resource keys
+					for resKey := range resourceAttrs {
 						if spanMap[key].ResourceKeys[resKey] == nil {
 							spanMap[key].ResourceKeys[resKey] = models.NewKeyMetadata()
 						}
-						// Resource attributes are the same for all spans with this name
-						spanMap[key].ResourceKeys[resKey].AddValue(resValue)
 					}
 				}
 
@@ -58,17 +56,22 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 				if serviceName != "" {
 					metadata.Services[serviceName]++
 				}
-
-				// Extract span attributes
-				spanAttrs := extractAttributes(span.Attributes)
-				for attrKey, attrValue := range spanAttrs {
-					if metadata.AttributeKeys[attrKey] == nil {
-						metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
-					}
-					metadata.AttributeKeys[attrKey].AddValue(attrValue)
+				
+			// Update resource key counts and values
+			for resKey, resValue := range resourceAttrs {
+				if metadata.ResourceKeys[resKey] != nil {
+					metadata.ResourceKeys[resKey].AddValue(resValue)
 				}
+			}
 
-				// Extract event names and attributes
+			// Extract span attributes
+			spanAttrs := extractAttributes(span.Attributes)
+			for attrKey, attrValue := range spanAttrs {
+				if metadata.AttributeKeys[attrKey] == nil {
+					metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+				}
+				metadata.AttributeKeys[attrKey].AddValue(attrValue)
+			}				// Extract event names and attributes
 				for _, event := range span.Events {
 					// Track event name
 					found := false
@@ -110,9 +113,23 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 		}
 	}
 
-	// Convert map to slice
+	// Convert map to slice and calculate percentages
 	results := make([]*models.SpanMetadata, 0, len(spanMap))
 	for _, metadata := range spanMap {
+		// Calculate percentages for attribute keys
+		for _, keyMeta := range metadata.AttributeKeys {
+			if metadata.SampleCount > 0 {
+				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
+			}
+		}
+		
+		// Calculate percentages for resource keys
+		for _, keyMeta := range metadata.ResourceKeys {
+			if metadata.SampleCount > 0 {
+				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
+			}
+		}
+		
 		results = append(results, metadata)
 	}
 

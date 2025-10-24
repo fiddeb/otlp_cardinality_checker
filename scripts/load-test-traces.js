@@ -93,26 +93,16 @@ function generateTraceBatch(vu, iter) {
 // Setup function - runs once before test
 export function setup() {
     console.log('='.repeat(50));
-    console.log('K6 Load Test for OTLP Traces');
+    console.log('K6 Load Test for OTLP Traces (Write-Only Mode)');
     console.log('='.repeat(50));
     console.log(`OTLP Endpoint: ${OTLP_ENDPOINT}`);
-    console.log(`API Endpoint:  ${API_ENDPOINT}`);
     console.log(`Span Names:    ${NUM_SPANS} unique operations`);
     console.log(`Cardinality:   ${CARDINALITY} values per attribute`);
     console.log('='.repeat(50));
-    
-    // Get baseline spans
-    const baseline = http.get(`${API_ENDPOINT}/api/v1/spans`);
-    if (baseline.status === 200) {
-        const data = JSON.parse(baseline.body);
-        console.log(`Baseline spans: ${data.total}`);
-        return { baselineSpans: data.total };
-    }
-    return { baselineSpans: 0 };
 }
 
 // Main test function - runs for each VU iteration
-export default function(data) {
+export default function() {
     const vu = __VU;
     const iter = __ITER;
     
@@ -132,61 +122,16 @@ export default function(data) {
     
     tracesCreated.add(10); // 10 spans per batch
     
-    // Every 100 iterations, check API responsiveness
-    if (iter % 100 === 0) {
-        const apiCheck = http.get(`${API_ENDPOINT}/api/v1/spans?limit=10`, {
-            tags: { name: 'CheckAPI' },
-        });
-        
-        check(apiCheck, {
-            'API responsive': (r) => r.status === 200,
-        });
-    }
-    
     sleep(0.1); // 100ms pause between batches
 }
 
 // Teardown function - runs once after test
-export function teardown(data) {
+export function teardown() {
     console.log('\n' + '='.repeat(50));
-    console.log('Test Complete - Collecting Statistics');
+    console.log('Test Complete');
     console.log('='.repeat(50));
-    
-    // Get final stats
-    const final = http.get(`${API_ENDPOINT}/api/v1/spans`);
-    if (final.status === 200) {
-        const stats = JSON.parse(final.body);
-        const newSpans = stats.total - data.baselineSpans;
-        
-        console.log(`Final span names: ${stats.total}`);
-        console.log(`New span names created: ${newSpans}`);
-        
-        // Get service stats
-        const services = http.get(`${API_ENDPOINT}/api/v1/services`);
-        if (services.status === 200) {
-            const serviceData = JSON.parse(services.body);
-            console.log(`Services tracked: ${serviceData.total || 'undefined'}`);
-        }
-        
-        // Check for high cardinality attributes
-        if (stats.data && stats.data.length > 0) {
-            console.log('='.repeat(50));
-            let highCardCount = 0;
-            for (const span of stats.data.slice(0, 100)) { // Check first 100 spans
-                for (const [key, meta] of Object.entries(span.attribute_keys)) {
-                    if (meta.estimated_cardinality > 40) {
-                        console.log(`⚠️  High cardinality: ${span.name}.${key} = ${meta.estimated_cardinality}`);
-                        highCardCount++;
-                        if (highCardCount >= 5) break; // Show max 5 examples
-                    }
-                }
-                if (highCardCount >= 5) break;
-            }
-            if (highCardCount > 0) {
-                console.log(`Total high cardinality attributes: ${highCardCount}`);
-            }
-        }
-    }
-    
+    console.log('Query the API manually to see results:');
+    console.log(`  curl ${API_ENDPOINT}/api/v1/spans`);
+    console.log(`  curl ${API_ENDPOINT}/api/v1/services`);
     console.log('='.repeat(50));
 }
