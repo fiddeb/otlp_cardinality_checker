@@ -14,6 +14,7 @@ go build -o otlp-cardinality-checker ./cmd/server
 ./otlp-cardinality-checker
 
 # Server starts on:
+#   OTLP gRPC: localhost:4317
 #   OTLP HTTP: http://localhost:4318
 #   REST API:  http://localhost:8080
 ```
@@ -23,20 +24,40 @@ go build -o otlp-cardinality-checker ./cmd/server
 Point your OpenTelemetry Collector or SDK to the OTLP endpoint:
 
 ```yaml
-# OpenTelemetry Collector config
+# OpenTelemetry Collector config (gRPC)
 exporters:
-  otlp:
-    endpoint: http://localhost:4318
-    compression: none  # or gzip
+  otlp/cardinality:
+    endpoint: localhost:4317
+    tls:
+      insecure: true
     
 service:
   pipelines:
     metrics:
-      exporters: [otlp]
+      exporters: [otlp/cardinality]
     traces:
-      exporters: [otlp]
+      exporters: [otlp/cardinality]
     logs:
-      exporters: [otlp]
+      exporters: [otlp/cardinality]
+```
+
+Or use HTTP protocol:
+
+```yaml
+# OpenTelemetry Collector config (HTTP)
+exporters:
+  otlphttp/cardinality:
+    endpoint: http://localhost:4318
+    compression: gzip
+    
+service:
+  pipelines:
+    metrics:
+      exporters: [otlphttp/cardinality]
+    traces:
+      exporters: [otlphttp/cardinality]
+    logs:
+      exporters: [otlphttp/cardinality]
 ```
 
 Or from your application:

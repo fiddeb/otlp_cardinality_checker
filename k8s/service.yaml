@@ -7,6 +7,10 @@ metadata:
 spec:
   type: ClusterIP
   ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: otlp-grpc
+    protocol: TCP
   - name: otlp-http
     port: 4318
     targetPort: otlp-http

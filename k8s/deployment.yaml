@@ -19,6 +19,9 @@ spec:
         image: otlp-cardinality-checker:latest
         imagePullPolicy: IfNotPresent
         ports:
+        - name: otlp-grpc
+          containerPort: 4317
+          protocol: TCP
         - name: otlp-http
           containerPort: 4318
           protocol: TCP
