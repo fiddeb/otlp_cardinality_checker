@@ -1,6 +1,6 @@
 #!/bin/bash
 # Find Noisy Neighbors - Services causing high cardinality or high volume
-# Usage: ./scripts/find-noisy-neighbors.sh [API_ENDPOINT]
+# Usage: ./scripts/find-noisy-neighbors.sh [API_ENDPOINT] [THRESHOLD]
 
 API_ENDPOINT=${1:-"http://localhost:8080"}
 THRESHOLD=${2:-30}  # Cardinality threshold
@@ -13,85 +13,263 @@ echo "API Endpoint: $API_ENDPOINT"
 echo "Cardinality Threshold: $THRESHOLD"
 echo ""
 
+# Get overall stats by counting items from endpoints
+METRICS_COUNT=$(curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" 2>/dev/null | jq -r '.total // 0')
+SPANS_COUNT=$(curl -s "${API_ENDPOINT}/api/v1/spans?limit=10000" 2>/dev/null | jq -r '.total // 0')
+LOGS_COUNT=$(curl -s "${API_ENDPOINT}/api/v1/logs?limit=10000" 2>/dev/null | jq -r '.total // 0')
+MEMORY=$(curl -s "${API_ENDPOINT}/api/v1/health" 2>/dev/null | jq -r '.memory.sys_mb // 0')
+
+echo "📊 Current State:"
+echo "   Metrics: $METRICS_COUNT"
+echo "   Spans: $SPANS_COUNT"  
+echo "   Logs: $LOGS_COUNT"
+echo "   Memory: ${MEMORY} MB"
+echo ""
+
 echo "═══════════════════════════════════════════════════════════════"
 echo "1️⃣  Services by Total Sample Volume"
 echo "═══════════════════════════════════════════════════════════════"
-curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r '
-[.data[] | .services | to_entries[] | {service: .key, count: .value}] |
+
+# Combine data from metrics, traces, and logs
+{
+  # Metrics
+  if [ "$METRICS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r '
+    [.data[] | .services | to_entries[] | {service: .key, count: .value, type: "metrics"}]
+    ' 
+  else
+    echo "[]"
+  fi
+  
+  # Traces
+  if [ "$SPANS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/spans?limit=10000" | jq -r '
+    [.data[] | .services | to_entries[] | {service: .key, count: .value, type: "traces"}]
+    '
+  else
+    echo "[]"
+  fi
+  
+  # Logs
+  if [ "$LOGS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/logs?limit=10000" | jq -r '
+    [.data[] | .services | to_entries[] | {service: .key, count: .value, type: "logs"}]
+    '
+  else
+    echo "[]"
+  fi
+} | jq -s 'add | 
 group_by(.service) |
 map({
   service: .[0].service,
   total_samples: ([.[].count] | add),
-  metrics_count: length
+  metrics_samples: ([.[] | select(.type == "metrics") | .count] | add // 0),
+  traces_samples: ([.[] | select(.type == "traces") | .count] | add // 0),
+  logs_samples: ([.[] | select(.type == "logs") | .count] | add // 0),
+  signal_types: ([.[].type] | unique)
 }) |
 sort_by(.total_samples) | reverse | .[0:10]
-' | jq -r '.[] | "  📊 \(.service):\n     Samples: \(.total_samples)\n     Metrics: \(.metrics_count)\n"'
+' | jq -r '.[] | "  📊 \(.service):\n     Total: \(.total_samples) samples\n     Metrics: \(.metrics_samples) | Traces: \(.traces_samples) | Logs: \(.logs_samples)\n     Signal types: \(.signal_types | join(", "))\n"'
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "2️⃣  High Cardinality Labels (> ${THRESHOLD})"
+echo "2️⃣  High Cardinality Attributes (> ${THRESHOLD})"
 echo "═══════════════════════════════════════════════════════════════"
-curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
-[.data[] | 
-  . as $metric |
-  (.label_keys // {} | to_entries[] | select(.value.estimated_cardinality > $threshold)) as $label |
-  {
-    metric: $metric.name,
-    label: $label.key,
-    cardinality: $label.value.estimated_cardinality,
-    services: ($metric.services | to_entries | map({service: .key, samples: .value}))
-  }
-] | sort_by(.cardinality) | reverse | .[0:10]
-' | jq -r '
+
+# Combine high cardinality from metrics, traces, and logs
+{
+  # Metrics - check label_keys
+  if [ "$METRICS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
+    [.data[] | 
+      . as $item |
+      (.label_keys // {} | to_entries[] | select(.value.estimated_cardinality > $threshold)) as $attr |
+      {
+        name: $item.name,
+        attribute: $attr.key,
+        cardinality: $attr.value.estimated_cardinality,
+        type: "metric",
+        services: ($item.services | keys | join(", "))
+      }
+    ]
+    '
+  else
+    echo "[]"
+  fi
+  
+  # Traces - check attribute_keys
+  if [ "$SPANS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/spans?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
+    [.data[] | 
+      . as $item |
+      (.attribute_keys // {} | to_entries[] | select(.value.estimated_cardinality > $threshold)) as $attr |
+      {
+        name: $item.name,
+        attribute: $attr.key,
+        cardinality: $attr.value.estimated_cardinality,
+        type: "span",
+        services: ($item.services | keys | join(", "))
+      }
+    ]
+    '
+  else
+    echo "[]"
+  fi
+  
+  # Logs - check attribute_keys
+  if [ "$LOGS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/logs?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
+    [.data[] | 
+      . as $item |
+      (.attribute_keys // {} | to_entries[] | select(.value.estimated_cardinality > $threshold)) as $attr |
+      {
+        name: ("severity_" + $item.severity),
+        attribute: $attr.key,
+        cardinality: $attr.value.estimated_cardinality,
+        type: "log",
+        services: ($item.services | keys | join(", "))
+      }
+    ]
+    '
+  else
+    echo "[]"
+  fi
+} | jq -s 'add | sort_by(.cardinality) | reverse | .[0:10]' | jq -r '
 if length == 0 then
-  "  ✅ No high cardinality labels found\n"
+  "  ✅ No high cardinality attributes found\n"
 else
-  .[] | "  ⚠️  \(.metric).\(.label):\n     Cardinality: \(.cardinality)\n     Services: \(.services | map(.service) | join(", "))\n"
+  .[] | "  ⚠️  [\(.type)] \(.name).\(.attribute):\n     Cardinality: \(.cardinality)\n     Services: \(.services)\n"
 end
 '
 
 echo "═══════════════════════════════════════════════════════════════"
 echo "3️⃣  Services Contributing to High Cardinality"
 echo "═══════════════════════════════════════════════════════════════"
-curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
-[.data[] | 
-  select((.label_keys // {} | to_entries | any(.value.estimated_cardinality > $threshold))) |
-  . as $metric |
-  .services | to_entries[] | {
-    service: .key,
-    samples: .value,
-    metric: $metric.name,
-    high_card_labels: [$metric.label_keys | to_entries[] | select(.value.estimated_cardinality > $threshold) | .key]
-  }
-] |
+
+# Combine services from all signal types
+{
+  # Metrics
+  if [ "$METRICS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
+    [.data[] | 
+      select((.label_keys // {} | to_entries | any(.value.estimated_cardinality > $threshold))) |
+      . as $item |
+      .services | to_entries[] | {
+        service: .key,
+        samples: .value,
+        item_name: $item.name,
+        type: "metric"
+      }
+    ]
+    '
+  else
+    echo "[]"
+  fi
+  
+  # Traces
+  if [ "$SPANS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/spans?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
+    [.data[] | 
+      select((.attribute_keys // {} | to_entries | any(.value.estimated_cardinality > $threshold))) |
+      . as $item |
+      .services | to_entries[] | {
+        service: .key,
+        samples: .value,
+        item_name: $item.name,
+        type: "span"
+      }
+    ]
+    '
+  else
+    echo "[]"
+  fi
+  
+  # Logs
+  if [ "$LOGS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/logs?limit=10000" | jq -r --argjson threshold "$THRESHOLD" '
+    [.data[] | 
+      select((.attribute_keys // {} | to_entries | any(.value.estimated_cardinality > $threshold))) |
+      . as $item |
+      .services | to_entries[] | {
+        service: .key,
+        samples: .value,
+        item_name: ("severity_" + $item.severity),
+        type: "log"
+      }
+    ]
+    '
+  else
+    echo "[]"
+  fi
+} | jq -s 'add | 
 group_by(.service) |
 map({
   service: .[0].service,
-  high_card_metrics: length,
+  high_card_items: length,
   total_samples: ([.[].samples] | add),
-  examples: .[0:3]
+  by_type: (group_by(.type) | map({type: .[0].type, count: length}) | from_entries),
+  examples: .[0:3] | map("\(.type):\(.item_name)")
 }) |
 sort_by(.total_samples) | reverse | .[0:10]
 ' | jq -r '
 if length == 0 then
   "  ✅ No services contributing to high cardinality\n"
 else
-  .[] | "  🔥 \(.service):\n     High-card metrics: \(.high_card_metrics)\n     Total samples: \(.total_samples)\n     Examples: \(.examples | map(.metric) | join(", "))\n"
+  .[] | "  🔥 \(.service):\n     High-card items: \(.high_card_items) (\(.by_type | to_entries | map("\(.key):\(.value)") | join(", ")))\n     Total samples: \(.total_samples)\n     Examples: \(.examples | join(", "))\n"
 end
 '
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "4️⃣  Metrics with Most Unique Services (Multi-tenant Issues)"
+echo "4️⃣  Items with Most Unique Services (Multi-tenant Issues)"
 echo "═══════════════════════════════════════════════════════════════"
-curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r '
-.data | 
-sort_by(.services | length) | reverse | .[0:10] |
-map({
-  metric: .name,
-  service_count: (.services | length),
-  total_samples: .sample_count,
-  services: (.services | keys)
-})
-' | jq -r '.[] | "  🏢 \(.metric):\n     Services: \(.service_count)\n     Samples: \(.total_samples)\n     List: \(.services | join(", "))\n"'
+
+# Combine data from all signal types
+{
+  # Metrics
+  if [ "$METRICS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/metrics?limit=10000" | jq -r '
+    .data | map({
+      name: .name,
+      type: "metric",
+      service_count: (.services | length),
+      total_samples: .sample_count,
+      services: (.services | keys)
+    })
+    '
+  else
+    echo "[]"
+  fi
+  
+  # Traces
+  if [ "$SPANS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/spans?limit=10000" | jq -r '
+    .data | map({
+      name: .name,
+      type: "span",
+      service_count: (.services | length),
+      total_samples: .sample_count,
+      services: (.services | keys)
+    })
+    '
+  else
+    echo "[]"
+  fi
+  
+  # Logs
+  if [ "$LOGS_COUNT" -gt 0 ]; then
+    curl -s "${API_ENDPOINT}/api/v1/logs?limit=10000" | jq -r '
+    .data | map({
+      name: ("severity_" + .severity),
+      type: "log",
+      service_count: (.services | length),
+      total_samples: .sample_count,
+      services: (.services | keys)
+    })
+    '
+  else
+    echo "[]"
+  fi
+} | jq -s 'add | sort_by(.service_count) | reverse | .[0:10]' | jq -r '
+.[] | "  🏢 [\(.type)] \(.name):\n     Services: \(.service_count)\n     Samples: \(.total_samples)\n     List: \(.services | join(", "))\n"'
 
 echo "═══════════════════════════════════════════════════════════════"
 echo "5️⃣  Summary - Top Noisy Neighbors"
