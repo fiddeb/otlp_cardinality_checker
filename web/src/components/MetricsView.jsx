@@ -66,7 +66,7 @@ function MetricsView({ onViewDetails }) {
       'Summary': '#7b1fa2',
       'ExponentialHistogram': '#d32f2f'
     }
-    return colors[type] || '#666'
+    return colors[type] || 'var(--text-secondary)'
   }
 
   if (loading) return <div className="loading">Loading...</div>
@@ -123,7 +123,7 @@ function MetricsView({ onViewDetails }) {
         </div>
       </div>
 
-      <p style={{ marginTop: '10px', color: '#666' }}>
+      <p className="template-count-text" style={{ marginTop: '10px' }}>
         Showing {startIndex + 1}-{Math.min(endIndex, filteredMetrics.length)} of {filteredMetrics.length} metrics
         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
       </p>
@@ -244,7 +244,7 @@ function MetricsView({ onViewDetails }) {
             Previous
           </button>
           
-          <span style={{ color: '#666' }}>
+          <span className="template-count-text">
             Page {currentPage} of {totalPages}
           </span>
           
@@ -263,7 +263,7 @@ function MetricsView({ onViewDetails }) {
       )}
 
       {filteredMetrics.length === 0 && (
-        <p style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+        <p className="template-count-text" style={{ textAlign: 'center', padding: '20px' }}>
           No metrics match the current filters
         </p>
       )}
