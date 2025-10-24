@@ -426,6 +426,11 @@ body.dark-mode .template-progress-bar {
   color: var(--text-secondary);
 }
 
+.template-count-text-small {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}
+
 .template-show-more {
   margin-top: 12px;
   text-align: center;
