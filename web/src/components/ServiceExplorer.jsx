@@ -81,7 +81,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
             >
               Previous
             </button>
-            <span>
+            <span className="template-count-text">
               Page {metricsPage} of {totalPages(overview.metrics)} 
               (Showing {(metricsPage - 1) * itemsPerPage + 1}-{Math.min(metricsPage * itemsPerPage, overview.metrics.length)} of {overview.metrics.length})
             </span>
@@ -128,7 +128,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
             >
               Previous
             </button>
-            <span>
+            <span className="template-count-text">
               Page {spansPage} of {totalPages(overview.spans)} 
               (Showing {(spansPage - 1) * itemsPerPage + 1}-{Math.min(spansPage * itemsPerPage, overview.spans.length)} of {overview.spans.length})
             </span>
@@ -173,7 +173,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
             >
               Previous
             </button>
-            <span>
+            <span className="template-count-text">
               Page {logsPage} of {totalPages(overview.logs)} 
               (Showing {(logsPage - 1) * itemsPerPage + 1}-{Math.min(logsPage * itemsPerPage, overview.logs.length)} of {overview.logs.length})
             </span>
