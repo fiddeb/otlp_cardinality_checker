@@ -119,13 +119,64 @@ Stages:
 - 1m ramp to 100 VUs
 - 30s ramp down to 0
 
-### 3. Shell Script (`load-test.sh`)
+### 5. Shell Script (`load-test.sh`)
 Bash-based load test with memory monitoring (legacy, k6 preferred).
 
 **Run:**
 ```bash
 ./scripts/load-test.sh
 ```
+
+## Operational Tools
+
+### Noisy Neighbor Detection (`find-noisy-neighbors.sh`)
+Identifies services causing high cardinality or high volume.
+
+**Basic usage:**
+```bash
+./scripts/find-noisy-neighbors.sh
+```
+
+**Custom endpoint and threshold:**
+```bash
+./scripts/find-noisy-neighbors.sh http://localhost:8080 50
+```
+
+**Parameters:**
+- First argument: API endpoint (default: `http://localhost:8080`)
+- Second argument: Cardinality threshold (default: 30)
+
+**Features:**
+- **Services by Volume**: Identifies services sending the most samples
+- **High Cardinality Labels**: Detects labels exceeding threshold
+- **Service Contribution**: Shows which services contribute to high cardinality
+- **Multi-tenant Issues**: Finds metrics reported by many services
+- **Actionable Recommendations**: Provides curl commands for investigation
+
+**Example output:**
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  Noisy Neighbor Detection - OTLP Cardinality Checker         ║
+╚═══════════════════════════════════════════════════════════════╝
+
+1️⃣  Services by Total Sample Volume
+═══════════════════════════════════════════════════════════════
+  📊 service_2:
+     Samples: 10008
+     Metrics: 994
+
+  ⚠️  High Cardinality Labels (> 30)
+═══════════════════════════════════════════════════════════════
+  ⚠️  test_metric_1812.label1:
+     Cardinality: 122
+     Services: service_0, service_1, service_2, ...
+```
+
+**When to use:**
+- After load testing to analyze results
+- In production to identify problematic services
+- To investigate memory growth
+- To find candidates for label filtering or sampling
 
 ## Typical Test Scenarios
 
