@@ -167,8 +167,6 @@ Example response:
     "unit": "ms",
     "label_keys": ["method", "status_code", "route"],
     "resource_keys": ["service.name", "service.version"],
-    "first_seen": "2024-01-15T10:00:00Z",
-    "last_seen": "2024-01-15T10:30:00Z",
     "sample_count": 15420
   },
   "metadata": {

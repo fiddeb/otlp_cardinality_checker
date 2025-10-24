@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"sort"
 	"sync"
-	"time"
 )
 
 // MetricMetadata contains metadata about an observed metric.
@@ -27,10 +26,6 @@ type MetricMetadata struct {
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
-
-	// Timestamps
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
 
 	// SampleCount is the total number of data points observed for this metric
 	SampleCount int64 `json:"sample_count"`
@@ -64,10 +59,6 @@ type SpanMetadata struct {
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
 
-	// Timestamps
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
-
 	// SpanCount is the total number of spans observed with this name
 	SpanCount int64 `json:"span_count"`
 
@@ -89,10 +80,6 @@ type LogMetadata struct {
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
-
-	// Timestamps
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
 
 	// RecordCount is the total number of log records observed
 	RecordCount int64 `json:"record_count"`
@@ -125,10 +112,6 @@ type KeyMetadata struct {
 	// MaxSamples is the maximum number of value samples to keep
 	MaxSamples int `json:"-"`
 
-	// Timestamps
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
-
 	mu sync.RWMutex `json:"-"`
 }
 
@@ -146,8 +129,6 @@ func NewMetricMetadata(name, metricType string) *MetricMetadata {
 		LabelKeys:    make(map[string]*KeyMetadata),
 		ResourceKeys: make(map[string]*KeyMetadata),
 		Services:     make(map[string]int64),
-		FirstSeen:    time.Now(),
-		LastSeen:     time.Now(),
 	}
 }
 
@@ -162,8 +143,6 @@ func NewSpanMetadata(name, kind string) *SpanMetadata {
 		LinkAttributeKeys:  make(map[string]*KeyMetadata),
 		ResourceKeys:       make(map[string]*KeyMetadata),
 		Services:           make(map[string]int64),
-		FirstSeen:          time.Now(),
-		LastSeen:           time.Now(),
 	}
 }
 
@@ -174,8 +153,6 @@ func NewLogMetadata(severityText string) *LogMetadata {
 		AttributeKeys: make(map[string]*KeyMetadata),
 		ResourceKeys:  make(map[string]*KeyMetadata),
 		Services:      make(map[string]int64),
-		FirstSeen:     time.Now(),
-		LastSeen:      time.Now(),
 	}
 }
 
@@ -184,9 +161,7 @@ func NewKeyMetadata() *KeyMetadata {
 	return &KeyMetadata{
 		ValueSamples:   []string{},
 		valueSampleSet: make(map[string]struct{}),
-		MaxSamples:     100, // Default: keep first 100 unique values
-		FirstSeen:      time.Now(),
-		LastSeen:       time.Now(),
+		MaxSamples:     10, // Default: keep first 10 unique values (enough for sampling)
 	}
 }
 
@@ -197,7 +172,6 @@ func (k *KeyMetadata) AddValue(value string) {
 	defer k.mu.Unlock()
 
 	k.Count++
-	k.LastSeen = time.Now()
 
 	// Add to sample set if not full
 	if _, exists := k.valueSampleSet[value]; !exists {
@@ -255,14 +229,6 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Update timestamps
-	if other.LastSeen.After(m.LastSeen) {
-		m.LastSeen = other.LastSeen
-	}
-	if other.FirstSeen.Before(m.FirstSeen) {
-		m.FirstSeen = other.FirstSeen
-	}
-
 	// Update sample count
 	m.SampleCount += other.SampleCount
 
@@ -271,7 +237,6 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 		if existing, exists := m.LabelKeys[key]; exists {
 			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
-			existing.LastSeen = otherKeyMeta.LastSeen
 			
 			// Merge value samples
 			for _, sample := range otherKeyMeta.ValueSamples {
@@ -294,7 +259,6 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	for key, otherKeyMeta := range other.ResourceKeys {
 		if existing, exists := m.ResourceKeys[key]; exists {
 			existing.Count += otherKeyMeta.Count
-			existing.LastSeen = otherKeyMeta.LastSeen
 		} else {
 			m.ResourceKeys[key] = otherKeyMeta
 		}

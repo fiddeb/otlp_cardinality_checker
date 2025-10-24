@@ -81,14 +81,10 @@ Response:
           "count": 100,
           "percentage": 100,
           "estimated_cardinality": 5,
-          "value_samples": ["200", "201", "400", "404", "500"],
-          "first_seen": "2025-10-23T20:00:00Z",
-          "last_seen": "2025-10-23T21:00:00Z"
+          "value_samples": ["200", "201", "400", "404", "500"]
         }
       },
       "resource_keys": {...},
-      "first_seen": "2025-10-23T20:00:00Z",
-      "last_seen": "2025-10-23T21:00:00Z",
       "sample_count": 100,
       "services": {
         "my-service": 100

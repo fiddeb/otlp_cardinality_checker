@@ -130,9 +130,8 @@ for _, item := range items {
 ### Metadata Structures
 
 All metadata structs should include:
-- `FirstSeen time.Time` - When first observed
-- `LastSeen time.Time` - Most recent observation
 - `*Count int64` - Number of times seen
+- **Note**: FirstSeen/LastSeen timestamps removed for memory efficiency
 
 ```go
 type MetricMetadata struct {
@@ -140,8 +139,6 @@ type MetricMetadata struct {
     Type         string    `json:"type"`
     LabelKeys    []string  `json:"label_keys"`
     ResourceKeys []string  `json:"resource_keys"`
-    FirstSeen    time.Time `json:"first_seen"`
-    LastSeen     time.Time `json:"last_seen"`
     SampleCount  int64     `json:"sample_count"`
 }
 ```
