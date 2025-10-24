@@ -98,26 +98,16 @@ function generateLogBatch(vu, iter) {
 // Setup function - runs once before test
 export function setup() {
     console.log('='.repeat(50));
-    console.log('K6 Load Test for OTLP Logs');
+    console.log('K6 Load Test for OTLP Logs (Write-Only Mode)');
     console.log('='.repeat(50));
     console.log(`OTLP Endpoint: ${OTLP_ENDPOINT}`);
-    console.log(`API Endpoint:  ${API_ENDPOINT}`);
     console.log(`Modules:       ${NUM_MODULES} unique modules`);
     console.log(`Cardinality:   ${CARDINALITY} values per attribute`);
     console.log('='.repeat(50));
-    
-    // Get baseline logs
-    const baseline = http.get(`${API_ENDPOINT}/api/v1/logs`);
-    if (baseline.status === 200) {
-        const data = JSON.parse(baseline.body);
-        console.log(`Baseline log severities: ${data.total}`);
-        return { baselineLogs: data.total };
-    }
-    return { baselineLogs: 0 };
 }
 
 // Main test function - runs for each VU iteration
-export default function(data) {
+export default function() {
     const vu = __VU;
     const iter = __ITER;
     
@@ -137,69 +127,16 @@ export default function(data) {
     
     logsCreated.add(10); // 10 log records per batch
     
-    // Every 100 iterations, check API responsiveness
-    if (iter % 100 === 0) {
-        const apiCheck = http.get(`${API_ENDPOINT}/api/v1/logs?limit=10`, {
-            tags: { name: 'CheckAPI' },
-        });
-        
-        check(apiCheck, {
-            'API responsive': (r) => r.status === 200,
-        });
-    }
-    
     sleep(0.1); // 100ms pause between batches
 }
 
 // Teardown function - runs once after test
-export function teardown(data) {
+export function teardown() {
     console.log('\n' + '='.repeat(50));
-    console.log('Test Complete - Collecting Statistics');
+    console.log('Test Complete');
     console.log('='.repeat(50));
-    
-    // Get final stats
-    const final = http.get(`${API_ENDPOINT}/api/v1/logs`);
-    if (final.status === 200) {
-        const stats = JSON.parse(final.body);
-        const newLogs = stats.total - data.baselineLogs;
-        
-        console.log(`Final log severities: ${stats.total}`);
-        console.log(`New severities created: ${newLogs}`);
-        
-        // Show severity breakdown
-        if (stats.data && stats.data.length > 0) {
-            console.log('\nSeverity Breakdown:');
-            for (const log of stats.data) {
-                console.log(`  ${log.severity_text}: ${log.record_count} records`);
-            }
-        }
-        
-        // Get service stats
-        const services = http.get(`${API_ENDPOINT}/api/v1/services`);
-        if (services.status === 200) {
-            const serviceData = JSON.parse(services.body);
-            console.log(`\nServices tracked: ${serviceData.total || 'undefined'}`);
-        }
-        
-        // Check for high cardinality attributes
-        if (stats.data && stats.data.length > 0) {
-            console.log('='.repeat(50));
-            let highCardCount = 0;
-            for (const log of stats.data) {
-                for (const [key, meta] of Object.entries(log.attribute_keys)) {
-                    if (meta.estimated_cardinality > 40) {
-                        console.log(`⚠️  High cardinality: ${log.severity_text}.${key} = ${meta.estimated_cardinality}`);
-                        highCardCount++;
-                        if (highCardCount >= 5) break; // Show max 5 examples
-                    }
-                }
-                if (highCardCount >= 5) break;
-            }
-            if (highCardCount > 0) {
-                console.log(`Total high cardinality attributes: ${highCardCount}+`);
-            }
-        }
-    }
-    
+    console.log('Query the API manually to see results:');
+    console.log(`  curl ${API_ENDPOINT}/api/v1/logs`);
+    console.log(`  curl ${API_ENDPOINT}/api/v1/services`);
     console.log('='.repeat(50));
 }

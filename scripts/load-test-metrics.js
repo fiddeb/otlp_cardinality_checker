@@ -39,7 +39,7 @@ export const options = {
 };
 
 // Test configuration
-const OTLP_ENDPOINT = __ENV.OTLP_ENDPOINT || 'http://localhost:4218';
+const OTLP_ENDPOINT = __ENV.OTLP_ENDPOINT || 'http://localhost:4318';
 const API_ENDPOINT = __ENV.API_ENDPOINT || 'http://localhost:8080';
 const NUM_METRICS = parseInt(__ENV.NUM_METRICS || '1000');
 const CARDINALITY = parseInt(__ENV.CARDINALITY || '50');
@@ -102,26 +102,16 @@ function generateMetricBatch(vu, iter) {
 // Setup function - runs once before test
 export function setup() {
     console.log('='.repeat(50));
-    console.log('K6 Load Test for OTLP Cardinality Checker');
+    console.log('K6 Load Test for OTLP Cardinality Checker (Write-Only Mode)');
     console.log('='.repeat(50));
     console.log(`OTLP Endpoint: ${OTLP_ENDPOINT}`);
-    console.log(`API Endpoint:  ${API_ENDPOINT}`);
     console.log(`Metrics:       ${NUM_METRICS} unique metrics`);
     console.log(`Cardinality:   ${CARDINALITY} values per label`);
     console.log('='.repeat(50));
-    
-    // Get baseline metrics
-    const baseline = http.get(`${API_ENDPOINT}/api/v1/metrics`);
-    if (baseline.status === 200) {
-        const data = JSON.parse(baseline.body);
-        console.log(`Baseline metrics: ${data.total}`);
-        return { baselineMetrics: data.total };
-    }
-    return { baselineMetrics: 0 };
 }
 
 // Main test function - runs for each VU iteration
-export default function(data) {
+export default function() {
     const vu = __VU;
     const iter = __ITER;
     
@@ -141,63 +131,17 @@ export default function(data) {
     
     metricsCreated.add(10); // 10 metrics per batch
     
-    // Every 100 iterations, check API responsiveness
-    if (iter % 100 === 0) {
-        const apiCheck = http.get(`${API_ENDPOINT}/api/v1/metrics?limit=10`, {
-            tags: { name: 'CheckAPI' },
-        });
-        
-        check(apiCheck, {
-            'API responsive': (r) => r.status === 200 && r.timings.duration < 100,
-        });
-    }
-    
     // Small sleep to avoid overwhelming the server
     sleep(0.1);
 }
 
 // Teardown function - runs once after test
-export function teardown(data) {
+export function teardown() {
     console.log('\n' + '='.repeat(50));
-    console.log('Test Complete - Collecting Statistics');
+    console.log('Test Complete');
     console.log('='.repeat(50));
-    
-    // Get final metrics count
-    const finalResponse = http.get(`${API_ENDPOINT}/api/v1/metrics`);
-    if (finalResponse.status === 200) {
-        const finalData = JSON.parse(finalResponse.body);
-        console.log(`Final metrics: ${finalData.total}`);
-        console.log(`New metrics created: ${finalData.total - data.baselineMetrics}`);
-    }
-    
-    // Get services count
-    const servicesResponse = http.get(`${API_ENDPOINT}/api/v1/services`);
-    if (servicesResponse.status === 200) {
-        const services = JSON.parse(servicesResponse.body);
-        console.log(`Services tracked: ${services.length}`);
-    }
-    
-    // Check for high cardinality metrics
-    const metricsResponse = http.get(`${API_ENDPOINT}/api/v1/metrics?limit=100`);
-    if (metricsResponse.status === 200) {
-        const metricsData = JSON.parse(metricsResponse.body);
-        let highCardCount = 0;
-        
-        metricsData.data.forEach(metric => {
-            Object.entries(metric.label_keys || {}).forEach(([key, meta]) => {
-                if (meta.estimated_cardinality > 20) {
-                    highCardCount++;
-                    if (highCardCount <= 5) {
-                        console.log(`⚠️  High cardinality: ${metric.name}.${key} = ${meta.estimated_cardinality}`);
-                    }
-                }
-            });
-        });
-        
-        if (highCardCount > 0) {
-            console.log(`Total high cardinality labels: ${highCardCount}`);
-        }
-    }
-    
+    console.log('Query the API manually to see results:');
+    console.log(`  curl ${API_ENDPOINT}/api/v1/metrics`);
+    console.log(`  curl ${API_ENDPOINT}/api/v1/services`);
     console.log('='.repeat(50));
 }

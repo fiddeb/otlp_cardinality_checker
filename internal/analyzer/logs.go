@@ -8,11 +8,15 @@ import (
 )
 
 // LogsAnalyzer extracts metadata from OTLP logs.
-type LogsAnalyzer struct{}
+type LogsAnalyzer struct{
+	bodyAnalyzers map[string]*LogBodyAnalyzer // One analyzer per severity level
+}
 
 // NewLogsAnalyzer creates a new logs analyzer.
 func NewLogsAnalyzer() *LogsAnalyzer {
-	return &LogsAnalyzer{}
+	return &LogsAnalyzer{
+		bodyAnalyzers: make(map[string]*LogBodyAnalyzer),
+	}
 }
 
 // Analyze extracts metadata from an OTLP logs export request.
@@ -59,29 +63,62 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 				if serviceName != "" {
 					metadata.Services[serviceName]++
 				}
-
-				// Extract log record attributes
-				logAttrs := extractAttributes(logRecord.Attributes)
-				for attrKey, attrValue := range logAttrs {
-					if metadata.AttributeKeys[attrKey] == nil {
-						metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+				
+				// Extract body template (create analyzer per severity if needed)
+				body := logRecord.GetBody().GetStringValue()
+				if body != "" {
+					if _, exists := a.bodyAnalyzers[severityText]; !exists {
+						a.bodyAnalyzers[severityText] = NewLogBodyAnalyzer()
 					}
-					metadata.AttributeKeys[attrKey].AddValue(attrValue)
+					a.bodyAnalyzers[severityText].AddMessage(body)
 				}
 
-				// Update resource key counts
-				for resKey, resValue := range resourceAttrs {
-					if metadata.ResourceKeys[resKey] != nil {
-						metadata.ResourceKeys[resKey].AddValue(resValue)
-					}
+			// Extract log record attributes
+			logAttrs := extractAttributes(logRecord.Attributes)
+			for attrKey, attrValue := range logAttrs {
+				if metadata.AttributeKeys[attrKey] == nil {
+					metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+				}
+				metadata.AttributeKeys[attrKey].AddValue(attrValue)
+		}				// Update resource key counts
+			for resKey, resValue := range resourceAttrs {
+				if metadata.ResourceKeys[resKey] != nil {
+					metadata.ResourceKeys[resKey].AddValue(resValue)
 				}
 			}
 		}
 	}
-
-	// Convert map to slice
+}	// Convert map to slice and calculate percentages
 	results := make([]*models.LogMetadata, 0, len(logMap))
-	for _, metadata := range logMap {
+	for severityText, metadata := range logMap {
+		// Calculate percentages for attribute keys
+		for _, keyMeta := range metadata.AttributeKeys {
+			if metadata.SampleCount > 0 {
+				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
+			}
+		}
+		
+		// Calculate percentages for resource keys
+		for _, keyMeta := range metadata.ResourceKeys {
+			if metadata.SampleCount > 0 {
+				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
+			}
+		}
+		
+		// Add body templates for this severity level
+		if analyzer, exists := a.bodyAnalyzers[severityText]; exists {
+			templates := analyzer.GetTemplates()
+			metadata.BodyTemplates = make([]*models.BodyTemplate, 0, len(templates))
+			for _, tmpl := range templates {
+				metadata.BodyTemplates = append(metadata.BodyTemplates, &models.BodyTemplate{
+					Template:   tmpl.Template,
+					Count:      tmpl.Count,
+					Percentage: tmpl.Percentage,
+					Example:    tmpl.SampleValues["original"],
+				})
+			}
+		}
+		
 		results = append(results, metadata)
 	}
 

@@ -77,6 +77,9 @@ type LogMetadata struct {
 
 	// ResourceKeys maps resource attribute key names to their metadata
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
+	
+	// BodyTemplates contains extracted templates from log body text (optional)
+	BodyTemplates []*BodyTemplate `json:"body_templates,omitempty"`
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
@@ -88,6 +91,14 @@ type LogMetadata struct {
 	Services map[string]int64 `json:"services"`
 
 	mu sync.RWMutex `json:"-"`
+}
+
+// BodyTemplate represents a pattern extracted from log message bodies
+type BodyTemplate struct {
+	Template   string  `json:"template"`
+	Count      int64   `json:"count"`
+	Percentage float64 `json:"percentage"`
+	Example    string  `json:"example,omitempty"` // First sample that matched this template
 }
 
 // KeyMetadata tracks statistics about a specific attribute/label key.

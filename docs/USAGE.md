@@ -1561,12 +1561,12 @@ curl -s "http://localhost:8080/api/v1/logs?limit=1000" | \
 
 ## Load Testing
 
-See [scripts/README.md](scripts/README.md) for K6 load testing examples.
-
-Quick test:
+Quick test with all signal types:
 ```bash
-k6 run --vus 10 --duration 30s scripts/load-test-metrics.js
+./scripts/run-all-tests.sh quick
 ```
+
+For comprehensive K6 load testing examples, see [scripts/README.md](scripts/README.md).
 
 ---
 
