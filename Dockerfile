@@ -32,7 +32,10 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /build/otlp-cardinality-checker /otlp-cardinality-checker
 
 # Expose ports
-EXPOSE 4318 8080
+# 4317: OTLP gRPC
+# 4318: OTLP HTTP  
+# 8080: REST API
+EXPOSE 4317 4318 8080
 
 # Run as non-root user
 USER 65534:65534

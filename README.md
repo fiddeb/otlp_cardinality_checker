@@ -48,6 +48,7 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
            ↓
 ┌──────────────────────────────────┐
 │  OTLP Cardinality Checker        │
+│  • OTLP gRPC Endpoint (4317)     │
 │  • OTLP HTTP Endpoint (4318)     │
 │  • Metadata Extraction           │
 │  • Cardinality Analysis          │
@@ -62,20 +63,20 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 
 ## Features
 
-**Current (Phase 1 - Complete):**
+**Current (Phase 1 & 2 - Complete):**
 - ✅ **OTLP HTTP Endpoint** - Receives data from OpenTelemetry Collector (port 4318)
+- ✅ **OTLP gRPC Endpoint** - Full gRPC support (port 4317)
 - ✅ **Source Agnostic** - Works with any Collector receiver (Kafka, Redis, Prometheus, etc.)
 - ✅ **Metadata Extraction** - Analyzes metrics, traces, and logs
 - ✅ **Cardinality Tracking** - Estimates unique value counts per label
-- ✅ **In-Memory Storage** - Fast, handles 50,000+ metrics
+- ✅ **In-Memory Storage** - Fast, handles 500,000+ metrics
 - ✅ **REST API** - Query metadata with pagination support
 - ✅ **Service-Level Filtering** - View telemetry by service.name
 - ✅ **Docker & Kubernetes** - Production-ready deployment manifests
 
-**Planned (Phase 2):**
-- **OTLP gRPC Endpoint** - Port 4317 support
+**Planned (Phase 3):**
 - **Web UI** - Visual exploration of metadata
-- **PostgreSQL Persistence** - Optional historical tracking
+- **PostgreSQL Persistence** - Optional historical tracking (on hold)
 - **Alerting** - Notify on cardinality thresholds  
 
 ## Quick Start
@@ -116,12 +117,13 @@ docker push your-registry/otlp-cardinality-checker:latest
 kubectl apply -f k8s/
 
 # Port-forward to access locally
-kubectl port-forward svc/otlp-cardinality-checker 8080:8080 4318:4318
+kubectl port-forward svc/otlp-cardinality-checker 8080:8080 4317:4317 4318:4318
 ```
 
 See [k8s/README.md](k8s/README.md) for detailed Kubernetes deployment instructions.
 
 The tool will start listening on:
+- **gRPC**: `localhost:4317` (OTLP gRPC endpoint)
 - **HTTP**: `localhost:4318` (OTLP HTTP endpoint)
 - **API**: `localhost:8080` (REST API)
 
@@ -231,6 +233,9 @@ curl "http://localhost:8080/api/v1/metrics?service=payment-service"
 The server uses environment variables for configuration:
 
 ```bash
+# OTLP gRPC endpoint address (default: 0.0.0.0:4317)
+export OTLP_GRPC_ADDR="0.0.0.0:4317"
+
 # OTLP HTTP endpoint address (default: 0.0.0.0:4318)
 export OTLP_HTTP_ADDR="0.0.0.0:4318"
 
@@ -288,8 +293,8 @@ Run with config:
 - Sub-millisecond metadata updates
 - <10ms API responses for 100 items
 
-### Phase 2: Production Hardening (Planned)
-- [ ] OTLP gRPC receiver (port 4317)
+### Phase 2: Production Hardening (In Progress)
+- [✅] OTLP gRPC receiver (port 4317)
 - [ ] PostgreSQL persistence for historical tracking
 - [ ] Configuration file support (YAML)
 - [ ] Comprehensive unit tests
@@ -420,7 +425,7 @@ See [k8s/README.md](k8s/README.md) for complete deployment instructions includin
 docker build -t otlp-cardinality-checker:latest .
 
 # Run container
-docker run -p 4318:4318 -p 8080:8080 otlp-cardinality-checker:latest
+docker run -p 4317:4317 -p 4318:4318 -p 8080:8080 otlp-cardinality-checker:latest
 ```
 
 ## License

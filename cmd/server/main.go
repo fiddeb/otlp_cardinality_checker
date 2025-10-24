@@ -21,21 +21,30 @@ func main() {
 	// Create storage
 	store := memory.New()
 
-	// Create OTLP HTTP receiver
-	otlpAddr := getEnv("OTLP_HTTP_ADDR", "0.0.0.0:4318")
-	otlpReceiver := receiver.NewHTTPReceiver(otlpAddr, store)
+	// Create OTLP receivers
+	otlpHTTPAddr := getEnv("OTLP_HTTP_ADDR", "0.0.0.0:4318")
+	otlpGRPCAddr := getEnv("OTLP_GRPC_ADDR", "0.0.0.0:4317")
+	httpReceiver := receiver.NewHTTPReceiver(otlpHTTPAddr, store)
+	grpcReceiver := receiver.NewGRPCReceiver(otlpGRPCAddr, store)
 
 	// Create REST API server
 	apiAddr := getEnv("API_ADDR", "0.0.0.0:8080")
 	apiServer := api.NewServer(apiAddr, store)
 
 	// Start servers in goroutines
-	errChan := make(chan error, 2)
+	errChan := make(chan error, 3)
 
 	go func() {
-		log.Printf("Starting OTLP HTTP receiver on %s", otlpAddr)
-		if err := otlpReceiver.Start(); err != nil {
-			errChan <- fmt.Errorf("OTLP receiver error: %w", err)
+		log.Printf("Starting OTLP HTTP receiver on %s", otlpHTTPAddr)
+		if err := httpReceiver.Start(); err != nil {
+			errChan <- fmt.Errorf("OTLP HTTP receiver error: %w", err)
+		}
+	}()
+
+	go func() {
+		log.Printf("Starting OTLP gRPC receiver on %s", otlpGRPCAddr)
+		if err := grpcReceiver.Start(); err != nil {
+			errChan <- fmt.Errorf("OTLP gRPC receiver error: %w", err)
 		}
 	}()
 
@@ -50,9 +59,10 @@ func main() {
 	time.Sleep(100 * time.Millisecond)
 	log.Println("All servers started successfully")
 	log.Println("OTLP endpoints:")
-	log.Printf("  - HTTP: http://%s/v1/metrics", otlpAddr)
-	log.Printf("  - HTTP: http://%s/v1/traces", otlpAddr)
-	log.Printf("  - HTTP: http://%s/v1/logs", otlpAddr)
+	log.Printf("  - HTTP: http://%s/v1/metrics", otlpHTTPAddr)
+	log.Printf("  - HTTP: http://%s/v1/traces", otlpHTTPAddr)
+	log.Printf("  - HTTP: http://%s/v1/logs", otlpHTTPAddr)
+	log.Printf("  - gRPC: %s", otlpGRPCAddr)
 	log.Println("API endpoints:")
 	log.Printf("  - Metrics: http://%s/api/v1/metrics", apiAddr)
 	log.Printf("  - Spans: http://%s/api/v1/spans", apiAddr)
@@ -76,8 +86,11 @@ func main() {
 	defer cancel()
 
 	log.Println("Shutting down servers...")
-	if err := otlpReceiver.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Error shutting down OTLP receiver: %v", err)
+	if err := httpReceiver.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error shutting down OTLP HTTP receiver: %v", err)
+	}
+	if err := grpcReceiver.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error shutting down OTLP gRPC receiver: %v", err)
 	}
 	if err := apiServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Error shutting down API server: %v", err)
