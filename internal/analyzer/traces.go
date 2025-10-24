@@ -41,11 +41,13 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 					spanMap[key] = models.NewSpanMetadata(span.Name, getSpanKind(span.Kind))
 					spanMap[key].ScopeInfo = scopeInfo
 
-					// Add resource keys
-					for resKey := range resourceAttrs {
+					// Add resource keys and their values
+					for resKey, resValue := range resourceAttrs {
 						if spanMap[key].ResourceKeys[resKey] == nil {
 							spanMap[key].ResourceKeys[resKey] = models.NewKeyMetadata()
 						}
+						// Resource attributes are the same for all spans with this name
+						spanMap[key].ResourceKeys[resKey].AddValue(resValue)
 					}
 				}
 
