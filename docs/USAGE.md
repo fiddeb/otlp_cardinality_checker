@@ -327,9 +327,7 @@ curl "http://localhost:8080/api/v1/metrics/http_requests_total"
       "count": 1000,
       "percentage": 100,
       "estimated_cardinality": 4,
-      "value_samples": ["GET", "POST", "PUT", "DELETE"],
-      "first_seen": "2025-10-23T20:00:00Z",
-      "last_seen": "2025-10-23T22:00:00Z"
+      "value_samples": ["GET", "POST", "PUT", "DELETE"]
     }
   },
   "resource_keys": {...},

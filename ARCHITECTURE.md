@@ -166,8 +166,6 @@ type MetricMetadata struct {
     LabelKeys         []string          // Unika label keys
     ResourceKeys      []string          // Resource attribute keys
     ScopeInfo         ScopeMetadata     // Instrumentation scope
-    FirstSeen         time.Time
-    LastSeen          time.Time
     SampleCount       int64             // How many datapoints seen
 }
 
@@ -199,8 +197,6 @@ type SpanMetadata struct {
     LinkAttrKeys      []string          // Link attribute keys
     ResourceKeys      []string          // Resource attribute keys
     ScopeInfo         ScopeMetadata
-    FirstSeen         time.Time
-    LastSeen          time.Time
     SpanCount         int64
 }
 ```
@@ -214,8 +210,6 @@ type LogMetadata struct {
     AttributeKeys     []string          // Log record attribute keys
     ResourceKeys      []string          // Resource attribute keys
     ScopeInfo         ScopeMetadata
-    FirstSeen         time.Time
-    LastSeen          time.Time
     RecordCount       int64
 }
 ```
@@ -264,9 +258,11 @@ func (s *MetadataStore) ListMetrics(filter Filter) []*MetricMetadata
 - 1000 unique spans × ~500 bytes = ~500KB
 - Total: < 5MB för typisk microservice
 
-#### 4.2 PostgreSQL Store (Optional)
+#### 4.2 PostgreSQL Store (Optional, On Hold)
 
-**Schema**:
+**Note**: PostgreSQL persistence is currently on hold. In-memory storage has proven sufficient for typical workloads. The schema below is kept for future reference but includes timestamps (first_seen/last_seen) that have been removed from the in-memory implementation for better memory efficiency.
+
+**Schema (Future Reference)**:
 ```sql
 -- Metrics metadata
 CREATE TABLE metric_metadata (
@@ -387,8 +383,6 @@ GET  /api/v1/health               Health check
         "name": "go.opentelemetry.io/contrib/instrumentation/net/http",
         "version": "0.45.0"
       },
-      "first_seen": "2024-01-15T10:00:00Z",
-      "last_seen": "2024-01-15T10:30:00Z",
       "sample_count": 15420
     }
   ]

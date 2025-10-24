@@ -126,14 +126,6 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 
 	// If span exists, merge with existing
 	if existing, exists := s.spans[span.Name]; exists {
-		// Update timestamps
-		if span.LastSeen.After(existing.LastSeen) {
-			existing.LastSeen = span.LastSeen
-		}
-		if span.FirstSeen.Before(existing.FirstSeen) {
-			existing.FirstSeen = span.FirstSeen
-		}
-
 		// Update span count
 		existing.SpanCount += span.SpanCount
 
@@ -141,7 +133,6 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 		for key, keyMeta := range span.AttributeKeys {
 			if existingKey, exists := existing.AttributeKeys[key]; exists {
 				existingKey.Count += keyMeta.Count
-				existingKey.LastSeen = keyMeta.LastSeen
 			} else {
 				existing.AttributeKeys[key] = keyMeta
 			}
@@ -151,7 +142,6 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 		for key, keyMeta := range span.ResourceKeys {
 			if existingKey, exists := existing.ResourceKeys[key]; exists {
 				existingKey.Count += keyMeta.Count
-				existingKey.LastSeen = keyMeta.LastSeen
 			} else {
 				existing.ResourceKeys[key] = keyMeta
 			}
@@ -226,14 +216,6 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 
 	// If log exists, merge with existing
 	if existing, exists := s.logs[key]; exists {
-		// Update timestamps
-		if log.LastSeen.After(existing.LastSeen) {
-			existing.LastSeen = log.LastSeen
-		}
-		if log.FirstSeen.Before(existing.FirstSeen) {
-			existing.FirstSeen = log.FirstSeen
-		}
-
 		// Update record count
 		existing.RecordCount += log.RecordCount
 
@@ -241,7 +223,6 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 		for key, keyMeta := range log.AttributeKeys {
 			if existingKey, exists := existing.AttributeKeys[key]; exists {
 				existingKey.Count += keyMeta.Count
-				existingKey.LastSeen = keyMeta.LastSeen
 			} else {
 				existing.AttributeKeys[key] = keyMeta
 			}
@@ -251,7 +232,6 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 		for key, keyMeta := range log.ResourceKeys {
 			if existingKey, exists := existing.ResourceKeys[key]; exists {
 				existingKey.Count += keyMeta.Count
-				existingKey.LastSeen = keyMeta.LastSeen
 			} else {
 				existing.ResourceKeys[key] = keyMeta
 			}
