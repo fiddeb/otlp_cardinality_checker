@@ -220,7 +220,11 @@ k6 run --vus 10 --duration 60s \
 ./scripts/find-noisy-neighbors.sh
 
 # 5. Check overall stats
-curl -s http://localhost:8080/api/v1/stats | jq '{metrics, spans, logs, services, memory_mb}'
+echo "Metrics: $(curl -s http://localhost:8080/api/v1/metrics | jq -r '.total')"
+echo "Spans: $(curl -s http://localhost:8080/api/v1/spans | jq -r '.total')"
+echo "Logs: $(curl -s http://localhost:8080/api/v1/logs | jq -r '.total')"
+echo "Services: $(curl -s http://localhost:8080/api/v1/services | jq -r '.total')"
+curl -s http://localhost:8080/api/v1/health | jq '.memory'
 ```
 
 ### Automated Test Script
@@ -265,12 +269,13 @@ echo "🔎 Analyzing for noisy neighbors..."
 
 # Show final stats
 echo "📈 Final Statistics:"
-curl -s http://localhost:8080/api/v1/stats | jq '{
-  metrics_count: .metrics_count,
-  spans_count: .spans_count,
-  logs_count: .logs_count,
-  services_count: .services_count,
-  memory_mb: (.memory_bytes / 1024 / 1024 | round)
+echo "  Metrics: $(curl -s http://localhost:8080/api/v1/metrics | jq -r '.total')"
+echo "  Spans: $(curl -s http://localhost:8080/api/v1/spans | jq -r '.total')"
+echo "  Logs: $(curl -s http://localhost:8080/api/v1/logs | jq -r '.total')"
+echo "  Services: $(curl -s http://localhost:8080/api/v1/services | jq -r '.total')"
+curl -s http://localhost:8080/api/v1/health | jq '{
+  memory_mb: .memory.sys_mb,
+  uptime: .uptime
 }'
 
 echo "✅ Test suite complete!"
