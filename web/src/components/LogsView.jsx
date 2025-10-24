@@ -125,7 +125,7 @@ function LogsView({ onViewDetails }) {
           <tr>
             <th style={{ width: '40%' }}>Pattern Template</th>
             <th>Severity</th>
-            <th>Count</th>
+            <th>Samples</th>
             <th>% of Severity</th>
             <th>Example</th>
           </tr>
