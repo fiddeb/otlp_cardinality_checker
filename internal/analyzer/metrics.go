@@ -66,11 +66,14 @@ func (a *MetricsAnalyzer) analyzeMetric(
 		metadata.Services[serviceName] = 0 // Will be incremented per data point
 	}
 
-	// Extract resource keys
-	for key := range resourceAttrs {
+	// Extract resource keys and add their values
+	for key, value := range resourceAttrs {
 		if metadata.ResourceKeys[key] == nil {
 			metadata.ResourceKeys[key] = models.NewKeyMetadata()
 		}
+		// Resource attributes are the same for all data points in this metric
+		// We'll add the value once here, and increment count per data point in extract functions
+		metadata.ResourceKeys[key].AddValue(value)
 	}
 
 	// Extract data point attributes based on metric type
@@ -107,8 +110,14 @@ func (a *MetricsAnalyzer) extractGaugeKeys(gauge *metricspb.Gauge, metadata *mod
 		}
 	}
 
-	// Update percentages
+	// Update percentages for label keys
 	for _, keyMeta := range metadata.LabelKeys {
+		keyMeta.UpdatePercentage(metadata.SampleCount)
+	}
+	
+	// Update percentages for resource keys
+	// Resource keys already have Count set by AddValue() in analyzeMetric()
+	for _, keyMeta := range metadata.ResourceKeys {
 		keyMeta.UpdatePercentage(metadata.SampleCount)
 	}
 }
@@ -130,8 +139,14 @@ func (a *MetricsAnalyzer) extractSumKeys(sum *metricspb.Sum, metadata *models.Me
 		}
 	}
 
-	// Update percentages
+	// Update percentages for label keys
 	for _, keyMeta := range metadata.LabelKeys {
+		keyMeta.UpdatePercentage(metadata.SampleCount)
+	}
+	
+	// Update percentages for resource keys
+	// Resource keys already have Count set by AddValue() in analyzeMetric()
+	for _, keyMeta := range metadata.ResourceKeys {
 		keyMeta.UpdatePercentage(metadata.SampleCount)
 	}
 }
@@ -153,8 +168,14 @@ func (a *MetricsAnalyzer) extractHistogramKeys(histogram *metricspb.Histogram, m
 		}
 	}
 
-	// Update percentages
+	// Update percentages for label keys
 	for _, keyMeta := range metadata.LabelKeys {
+		keyMeta.UpdatePercentage(metadata.SampleCount)
+	}
+	
+	// Update percentages for resource keys
+	// Resource keys already have Count set by AddValue() in analyzeMetric()
+	for _, keyMeta := range metadata.ResourceKeys {
 		keyMeta.UpdatePercentage(metadata.SampleCount)
 	}
 }
@@ -176,8 +197,14 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(histogram *metricspb.E
 		}
 	}
 
-	// Update percentages
+	// Update percentages for label keys
 	for _, keyMeta := range metadata.LabelKeys {
+		keyMeta.UpdatePercentage(metadata.SampleCount)
+	}
+	
+	// Update percentages for resource keys
+	// Resource keys already have Count set by AddValue() in analyzeMetric()
+	for _, keyMeta := range metadata.ResourceKeys {
 		keyMeta.UpdatePercentage(metadata.SampleCount)
 	}
 }
@@ -199,8 +226,14 @@ func (a *MetricsAnalyzer) extractSummaryKeys(summary *metricspb.Summary, metadat
 		}
 	}
 
-	// Update percentages
+	// Update percentages for label keys
 	for _, keyMeta := range metadata.LabelKeys {
+		keyMeta.UpdatePercentage(metadata.SampleCount)
+	}
+	
+	// Update percentages for resource keys
+	// Resource keys already have Count set by AddValue() in analyzeMetric()
+	for _, keyMeta := range metadata.ResourceKeys {
 		keyMeta.UpdatePercentage(metadata.SampleCount)
 	}
 }
