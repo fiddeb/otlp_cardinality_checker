@@ -52,7 +52,7 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 				}
 
 				metadata := spanMap[key]
-				metadata.SpanCount++
+				metadata.SampleCount++
 
 				// Track service
 				if serviceName != "" {

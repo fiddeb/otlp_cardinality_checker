@@ -59,8 +59,8 @@ type SpanMetadata struct {
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
 
-	// SpanCount is the total number of spans observed with this name
-	SpanCount int64 `json:"span_count"`
+	// SampleCount is the total number of spans observed with this name
+	SampleCount int64 `json:"sample_count"`
 
 	// Services maps service names to span counts
 	Services map[string]int64 `json:"services"`
@@ -70,7 +70,7 @@ type SpanMetadata struct {
 
 // LogMetadata contains metadata about observed log records.
 type LogMetadata struct {
-	SeverityText string `json:"severity_text"` // INFO, WARN, ERROR, etc.
+	Severity string `json:"severity"` // INFO, WARN, ERROR, etc.
 
 	// AttributeKeys maps attribute key names to their metadata
 	AttributeKeys map[string]*KeyMetadata `json:"attribute_keys"`
@@ -81,8 +81,8 @@ type LogMetadata struct {
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
 
-	// RecordCount is the total number of log records observed
-	RecordCount int64 `json:"record_count"`
+	// SampleCount is the total number of log records observed
+	SampleCount int64 `json:"sample_count"`
 
 	// Services maps service names to record counts
 	Services map[string]int64 `json:"services"`
@@ -147,9 +147,9 @@ func NewSpanMetadata(name, kind string) *SpanMetadata {
 }
 
 // NewLogMetadata creates a new LogMetadata instance.
-func NewLogMetadata(severityText string) *LogMetadata {
+func NewLogMetadata(severity string) *LogMetadata {
 	return &LogMetadata{
-		SeverityText:  severityText,
+		Severity:      severity,
 		AttributeKeys: make(map[string]*KeyMetadata),
 		ResourceKeys:  make(map[string]*KeyMetadata),
 		Services:      make(map[string]int64),

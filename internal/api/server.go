@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -211,8 +212,15 @@ func (s *Server) listSpans(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getSpan(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
+	
+	// URL decode the span name
+	decodedName, err := url.QueryUnescape(name)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid span name encoding")
+		return
+	}
 
-	span, err := s.store.GetSpan(ctx, name)
+	span, err := s.store.GetSpan(ctx, decodedName)
 	if err != nil {
 		if err == memory.ErrNotFound {
 			s.respondError(w, http.StatusNotFound, "span not found")
@@ -247,8 +255,15 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	severity := chi.URLParam(r, "severity")
+	
+	// URL decode the severity
+	decodedSeverity, err := url.QueryUnescape(severity)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid severity encoding")
+		return
+	}
 
-	log, err := s.store.GetLog(ctx, severity)
+	log, err := s.store.GetLog(ctx, decodedSeverity)
 	if err != nil {
 		if err == memory.ErrNotFound {
 			s.respondError(w, http.StatusNotFound, "log severity not found")
@@ -272,8 +287,8 @@ func (s *Server) listServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{
-		"services": services,
-		"count":    len(services),
+		"data":  services,
+		"total": len(services),
 	})
 }
 

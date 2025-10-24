@@ -53,7 +53,7 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 				}
 
 				metadata := logMap[severityText]
-				metadata.RecordCount++
+				metadata.SampleCount++
 
 				// Track service
 				if serviceName != "" {
