@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import HighCardinality from './components/HighCardinality'
 import MetricsView from './components/MetricsView'
@@ -12,6 +12,29 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedService, setSelectedService] = useState(null)
+  const [darkMode, setDarkMode] = useState(() => {
+    // Check localStorage or system preference
+    const saved = localStorage.getItem('darkMode')
+    if (saved !== null) {
+      return saved === 'true'
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
+
+  useEffect(() => {
+    // Apply dark mode class to body
+    if (darkMode) {
+      document.body.classList.add('dark-mode')
+    } else {
+      document.body.classList.remove('dark-mode')
+    }
+    // Save preference
+    localStorage.setItem('darkMode', darkMode)
+  }, [darkMode])
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode)
+  }
 
   const handleViewDetails = (type, name) => {
     setSelectedItem({ type, name })
@@ -32,8 +55,17 @@ function App() {
   return (
     <div className="app">
       <header>
-        <h1>OTLP Cardinality Checker</h1>
-        <p className="subtitle">Analyze metadata structure from OpenTelemetry signals</p>
+        <div className="header-content">
+          <h1>OTLP Cardinality Checker</h1>
+          <p className="subtitle">Analyze metadata structure from OpenTelemetry signals</p>
+        </div>
+        <button 
+          className="dark-mode-toggle" 
+          onClick={toggleDarkMode}
+          title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {darkMode ? '☀️' : '🌙'}
+        </button>
       </header>
 
       {!selectedItem && !selectedService && (

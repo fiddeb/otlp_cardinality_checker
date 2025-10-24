@@ -58,7 +58,7 @@ function Details({ type, name, onBack }) {
               userSelect: 'none'
             }} onClick={() => setShowTemplates(!showTemplates)}>
               <h3 style={{ margin: 0 }}>📋 Message Templates</h3>
-              <span style={{ fontSize: '14px', color: '#666' }}>
+              <span className="template-count-text">
                 ({data.body_templates.length} patterns from {data.sample_count} messages)
               </span>
               <span style={{ fontSize: '20px', marginLeft: 'auto' }}>
@@ -67,21 +67,9 @@ function Details({ type, name, onBack }) {
             </div>
 
             {showTemplates && (
-              <div style={{ 
-                background: '#f8f9fa',
-                border: '1px solid #e0e0e0',
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '20px'
-              }}>
+              <div className="template-container">
                 {data.body_templates.slice(0, 10).map((tmpl, idx) => (
-                  <div key={idx} style={{
-                    background: 'white',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '6px',
-                    padding: '12px',
-                    marginBottom: idx < data.body_templates.length - 1 ? '12px' : '0'
-                  }}>
+                  <div key={idx} className="template-card">
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between',
@@ -89,18 +77,10 @@ function Details({ type, name, onBack }) {
                       marginBottom: '8px'
                     }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ 
-                          fontSize: '13px',
-                          color: '#666',
-                          marginBottom: '4px'
-                        }}>
+                        <div className="template-label">
                           Template #{idx + 1}
                         </div>
-                        <code style={{ 
-                          fontSize: '14px',
-                          color: '#333',
-                          wordBreak: 'break-word'
-                        }}>
+                        <code className="template-code">
                           {tmpl.template}
                         </code>
                       </div>
@@ -109,46 +89,26 @@ function Details({ type, name, onBack }) {
                         textAlign: 'right',
                         minWidth: '100px'
                       }}>
-                        <div style={{ 
-                          fontSize: '16px', 
-                          fontWeight: 'bold',
-                          color: '#1976d2'
-                        }}>
+                        <div className="template-count">
                           {tmpl.count.toLocaleString()}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
+                        <div className="template-percentage">
                           {tmpl.percentage.toFixed(1)}%
                         </div>
                       </div>
                     </div>
                     
                     {/* Progress bar */}
-                    <div style={{ 
-                      height: '6px',
-                      background: '#e0e0e0',
-                      borderRadius: '3px',
-                      overflow: 'hidden',
-                      marginBottom: '8px'
-                    }}>
-                      <div style={{
-                        width: `${tmpl.percentage}%`,
-                        height: '100%',
-                        background: 'linear-gradient(90deg, #1976d2, #42a5f5)',
-                        transition: 'width 0.3s'
-                      }}></div>
+                    <div className="template-progress-bg">
+                      <div 
+                        className="template-progress-bar"
+                        style={{ width: `${tmpl.percentage}%` }}
+                      ></div>
                     </div>
 
                     {/* Example */}
                     {tmpl.example && (
-                      <div style={{ 
-                        fontSize: '12px',
-                        color: '#666',
-                        fontStyle: 'italic',
-                        padding: '8px',
-                        background: '#f5f5f5',
-                        borderRadius: '4px',
-                        borderLeft: '3px solid #1976d2'
-                      }}>
+                      <div className="template-example">
                         💬 Example: "{tmpl.example.length > 80 ? tmpl.example.substring(0, 80) + '...' : tmpl.example}"
                       </div>
                     )}
@@ -156,12 +116,7 @@ function Details({ type, name, onBack }) {
                 ))}
                 
                 {data.body_templates.length > 10 && (
-                  <div style={{ 
-                    marginTop: '12px',
-                    textAlign: 'center',
-                    fontSize: '13px',
-                    color: '#666'
-                  }}>
+                  <div className="template-show-more">
                     Showing top 10 of {data.body_templates.length} templates
                   </div>
                 )}
