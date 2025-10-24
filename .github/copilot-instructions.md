@@ -15,6 +15,50 @@ The core purpose is to extract and track metadata structure (keys, not values) f
 
 **Implementation Note**: We implement simple OTLP HTTP/gRPC servers (not full Collector receivers). The Collector sends us data via its OTLP exporters.
 
+## Git Workflow
+
+**IMPORTANT: Commit working code frequently!**
+
+### When to Commit
+
+Commit immediately after:
+- ✅ Tests pass
+- ✅ Build succeeds
+- ✅ Feature works (even partially)
+- ✅ Bug is fixed
+- ✅ Refactoring is complete
+
+**Never accumulate many changes without committing.** Small, frequent commits are better than large, infrequent ones.
+
+### Commit Message Format
+
+Keep it simple and descriptive:
+
+```bash
+# Good examples
+git add -A
+git commit -m "Add log body template extraction"
+git commit -m "Fix percentage calculation bug in logs analyzer"
+git commit -m "Update K6 tests to write-only mode"
+git commit -m "Add UI for body templates in Details view"
+
+# Bad examples (too vague)
+git commit -m "Update files"
+git commit -m "Changes"
+git commit -m "Fix stuff"
+```
+
+### Always Use Terminal
+
+Use `run_in_terminal` for git commands:
+```bash
+git add -A
+git commit -m "Your message here"
+git push
+```
+
+**Rule**: After every working milestone, suggest a commit to the user. Don't wait for them to ask.
+
 ## Architecture Patterns
 
 ### 1. Layered Architecture

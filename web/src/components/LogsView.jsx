@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 
 function LogsView({ onViewDetails }) {
   const [logs, setLogs] = useState([])
+  const [patterns, setPatterns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -16,7 +17,24 @@ function LogsView({ onViewDetails }) {
     fetch('/api/v1/logs?limit=1000')
       .then(r => r.json())
       .then(result => {
-        setLogs(result.data || [])
+        const logsData = result.data || []
+        setLogs(logsData)
+        
+        // Extract all patterns from all severities
+        const allPatterns = []
+        logsData.forEach(log => {
+          if (log.body_templates) {
+            log.body_templates.forEach(tmpl => {
+              allPatterns.push({
+                ...tmpl,
+                severity: log.severity,
+                totalSeveritySamples: log.sample_count
+              })
+            })
+          }
+        })
+        
+        setPatterns(allPatterns)
         setLoading(false)
       })
       .catch(err => {
@@ -30,16 +48,15 @@ function LogsView({ onViewDetails }) {
     return Math.max(...Object.values(log.attribute_keys).map(k => k.estimated_cardinality || 0))
   }
 
-  const filteredLogs = logs.filter(log => {
-    if (log.sample_count < filter.minSamples) return false
-    if (getMaxCardinality(log) < filter.minCardinality) return false
+  const filteredPatterns = patterns.filter(pattern => {
+    if (pattern.count < filter.minSamples) return false
     return true
   })
 
-  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage)
+  const totalPages = Math.ceil(filteredPatterns.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const currentLogs = filteredLogs.slice(startIndex, endIndex)
+  const currentPatterns = filteredPatterns.slice(startIndex, endIndex)
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -66,15 +83,16 @@ function LogsView({ onViewDetails }) {
   if (loading) return <div className="loading">Loading...</div>
   if (error) return <div className="error">Error: {error}</div>
 
-  const totalSamples = filteredLogs.reduce((sum, log) => sum + log.sample_count, 0)
+  const totalSamples = logs.reduce((sum, log) => sum + log.sample_count, 0)
+  const totalPatternOccurrences = patterns.reduce((sum, p) => sum + p.count, 0)
 
   return (
     <div className="card">
-      <h2>Logs Analysis</h2>
+      <h2>Log Message Patterns</h2>
       
       <div className="filter-group">
         <div className="threshold-input">
-          <label>Min Samples:</label>
+          <label>Min Pattern Count:</label>
           <input 
             type="number" 
             value={filter.minSamples} 
@@ -82,71 +100,67 @@ function LogsView({ onViewDetails }) {
             min="0"
           />
         </div>
-
-        <div className="threshold-input">
-          <label>Min Cardinality:</label>
-          <input 
-            type="number" 
-            value={filter.minCardinality} 
-            onChange={(e) => setFilter({...filter, minCardinality: Number(e.target.value)})}
-            min="0"
-          />
-        </div>
       </div>
 
       <p style={{ marginTop: '10px', color: '#666' }}>
-        Showing {startIndex + 1}-{Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} log severities
+        Showing {startIndex + 1}-{Math.min(endIndex, filteredPatterns.length)} of {filteredPatterns.length} patterns
         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginTop: '20px' }}>
         <div className="stat-card">
-          <div className="stat-label">Total Severities</div>
-          <div className="stat-value">{filteredLogs.length}</div>
+          <div className="stat-label">Unique Patterns</div>
+          <div className="stat-value">{filteredPatterns.length}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Total Log Records</div>
+          <div className="stat-label">Total Logs</div>
           <div className="stat-value">{totalSamples.toLocaleString()}</div>
         </div>
       </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Log Severity Breakdown</h3>
+      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Message Patterns</h3>
       
       <table>
         <thead>
           <tr>
+            <th style={{ width: '40%' }}>Pattern Template</th>
             <th>Severity</th>
-            <th>Sample Count</th>
-            <th>Percentage</th>
-            <th>Attributes</th>
-            <th>Max Cardinality</th>
-            <th>Services</th>
+            <th>Count</th>
+            <th>% of Severity</th>
+            <th>Example</th>
           </tr>
         </thead>
         <tbody>
-          {currentLogs
-            .sort((a, b) => b.sample_count - a.sample_count)
-            .map((log, i) => {
-              const maxCard = getMaxCardinality(log)
-              const attrCount = log.attribute_keys ? Object.keys(log.attribute_keys).length : 0
-              const serviceCount = log.services ? Object.keys(log.services).length : 0
-              const percentage = totalSamples > 0 ? (log.sample_count / totalSamples * 100) : 0
-              
+          {currentPatterns
+            .sort((a, b) => b.count - a.count)
+            .map((pattern, i) => {
               return (
                 <tr key={i}>
                   <td>
+                    <code style={{ 
+                      fontSize: '13px',
+                      wordBreak: 'break-word',
+                      display: 'block',
+                      padding: '8px',
+                      background: '#f5f5f5',
+                      borderRadius: '4px'
+                    }}>
+                      {pattern.template}
+                    </code>
+                  </td>
+                  <td>
                     <span 
                       className="detail-link"
-                      onClick={() => onViewDetails('logs', log.severity)}
+                      onClick={() => onViewDetails('logs', pattern.severity)}
                       style={{ 
                         fontWeight: 'bold',
-                        color: getSeverityColor(log.severity)
+                        color: getSeverityColor(pattern.severity)
                       }}
                     >
-                      {log.severity}
+                      {pattern.severity}
                     </span>
                   </td>
-                  <td>{log.sample_count.toLocaleString()}</td>
+                  <td>{pattern.count.toLocaleString()}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div style={{ 
@@ -157,31 +171,29 @@ function LogsView({ onViewDetails }) {
                         overflow: 'hidden'
                       }}>
                         <div style={{
-                          width: `${percentage}%`,
+                          width: `${pattern.percentage}%`,
                           height: '100%',
-                          background: getSeverityColor(log.severity),
+                          background: getSeverityColor(pattern.severity),
                           transition: 'width 0.3s'
                         }}></div>
                       </div>
-                      <span>{percentage.toFixed(1)}%</span>
+                      <span>{pattern.percentage.toFixed(1)}%</span>
                     </div>
                   </td>
-                  <td>{attrCount}</td>
-                  <td>
-                    {maxCard > 0 ? (
-                      <span className={`badge ${getCardinalityBadge(maxCard)}`}>
-                        {maxCard}
-                      </span>
-                    ) : '-'}
+                  <td style={{ 
+                    fontSize: '12px',
+                    color: '#666',
+                    fontStyle: 'italic',
+                    maxWidth: '300px',
+                    wordBreak: 'break-word'
+                  }}>
+                    {pattern.example}
                   </td>
-                  <td>{serviceCount}</td>
                 </tr>
               )
             })}
         </tbody>
-      </table>
-
-      {totalPages > 1 && (
+      </table>      {totalPages > 1 && (
         <div style={{ 
           display: 'flex', 
           justifyContent: 'center', 
@@ -220,9 +232,9 @@ function LogsView({ onViewDetails }) {
         </div>
       )}
 
-      {filteredLogs.length === 0 && (
+      {filteredPatterns.length === 0 && (
         <p style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-          No logs match the current filters
+          No patterns match the current filters
         </p>
       )}
     </div>

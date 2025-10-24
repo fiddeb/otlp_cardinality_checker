@@ -18,10 +18,13 @@ function Dashboard({ onViewService }) {
       fetch('/api/v1/logs?limit=10000').then(r => r.json()),
     ])
       .then(([metrics, spans, logs, services, allMetrics, allSpans, allLogs]) => {
+        // Calculate total log count from all severities
+        const totalLogCount = allLogs.data?.reduce((sum, log) => sum + log.sample_count, 0) || 0
+        
         setStats({
           metrics: metrics.total,
           spans: spans.total,
-          logs: logs.total,
+          logs: totalLogCount,
         })
         setServices(services.data)
         
@@ -82,8 +85,8 @@ function Dashboard({ onViewService }) {
           <div className="stat-label">Spans</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.logs}</div>
-          <div className="stat-label">Log Severities</div>
+          <div className="stat-value">{stats.logs.toLocaleString()}</div>
+          <div className="stat-label">Total Logs</div>
         </div>
         <div className="stat-card">
           <div className="stat-value">{services.length}</div>
