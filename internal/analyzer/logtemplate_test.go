@@ -43,6 +43,16 @@ func TestLogBodyAnalyzer_ExtractTemplate(t *testing.T) {
 			expected: "<TIMESTAMP> Server started",
 		},
 		{
+			name:     "Email in message",
+			message:  "Email sent to user_59@example.com - delivery ID abc123def",
+			expected: "Email sent to <EMAIL> - delivery ID <HEX>",
+		},
+		{
+			name:     "Multiple emails",
+			message:  "Forwarded from john.doe@company.com to jane_smith@example.org",
+			expected: "Forwarded from <EMAIL> to <EMAIL>",
+		},
+		{
 			name:     "Mixed patterns",
 			message:  "User 12345 downloaded 2.5MB in 150ms from 192.168.1.1",
 			expected: "User <NUM> downloaded <SIZE> in <DURATION> from <IP>",
