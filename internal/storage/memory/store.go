@@ -126,8 +126,8 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 
 	// If span exists, merge with existing
 	if existing, exists := s.spans[span.Name]; exists {
-		// Update span count
-		existing.SpanCount += span.SpanCount
+		// Update sample count
+		existing.SampleCount += span.SampleCount
 
 		// Merge attribute keys
 		for key, keyMeta := range span.AttributeKeys {
@@ -209,15 +209,15 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 	// Track services
 	s.trackServices(log.Services)
 
-	key := log.SeverityText
+	key := log.Severity
 	if key == "" {
 		key = "UNSET"
 	}
 
 	// If log exists, merge with existing
 	if existing, exists := s.logs[key]; exists {
-		// Update record count
-		existing.RecordCount += log.RecordCount
+		// Update sample count
+		existing.SampleCount += log.SampleCount
 
 		// Merge attribute keys
 		for key, keyMeta := range log.AttributeKeys {
@@ -285,7 +285,7 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 
 	// Sort by severity for consistency
 	sort.Slice(logs, func(i, j int) bool {
-		return logs[i].SeverityText < logs[j].SeverityText
+		return logs[i].Severity < logs[j].Severity
 	})
 
 	return logs, nil
