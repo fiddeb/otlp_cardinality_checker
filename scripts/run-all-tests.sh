@@ -75,8 +75,15 @@ fi
 
 # Get initial stats
 echo -e "${YELLOW}📊 Initial state:${NC}"
-INITIAL_STATS=$(curl -s "$API_ENDPOINT/api/v1/stats")
-echo "$INITIAL_STATS" | jq '{metrics_count, spans_count, logs_count, services_count, memory_mb: (.memory_bytes / 1024 / 1024 | round)}'
+INITIAL_METRICS=$(curl -s "$API_ENDPOINT/api/v1/metrics" 2>/dev/null | jq -r '.total // 0')
+INITIAL_SPANS=$(curl -s "$API_ENDPOINT/api/v1/spans" 2>/dev/null | jq -r '.total // 0')
+INITIAL_LOGS=$(curl -s "$API_ENDPOINT/api/v1/logs" 2>/dev/null | jq -r '.total // 0')
+INITIAL_MEMORY=$(curl -s "$API_ENDPOINT/api/v1/health" 2>/dev/null | jq -r '.memory.sys_mb // 0')
+
+echo "  Metrics: $INITIAL_METRICS"
+echo "  Spans: $INITIAL_SPANS"
+echo "  Logs: $INITIAL_LOGS"
+echo "  Memory: ${INITIAL_MEMORY} MB"
 echo ""
 
 # Run metrics test
@@ -126,33 +133,35 @@ echo -e "${CYAN}║  Final Statistics                                           
 echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-FINAL_STATS=$(curl -s "$API_ENDPOINT/api/v1/stats")
-echo "$FINAL_STATS" | jq '{
-  metrics_count,
-  spans_count,
-  logs_count,
-  services_count,
-  memory_mb: (.memory_bytes / 1024 / 1024 | round),
-  memory_per_metric_kb: ((.memory_bytes / .metrics_count / 1024 | round) // 0)
-}'
+FINAL_METRICS=$(curl -s "$API_ENDPOINT/api/v1/metrics" 2>/dev/null | jq -r '.total // 0')
+FINAL_SPANS=$(curl -s "$API_ENDPOINT/api/v1/spans" 2>/dev/null | jq -r '.total // 0')
+FINAL_LOGS=$(curl -s "$API_ENDPOINT/api/v1/logs" 2>/dev/null | jq -r '.total // 0')
+FINAL_MEMORY=$(curl -s "$API_ENDPOINT/api/v1/health" 2>/dev/null | jq -r '.memory.sys_mb // 0')
+SERVICES_COUNT=$(curl -s "$API_ENDPOINT/api/v1/services" 2>/dev/null | jq -r '.total // 0')
+
+echo "  Metrics: $FINAL_METRICS"
+echo "  Spans: $FINAL_SPANS"
+echo "  Logs: $FINAL_LOGS"
+echo "  Services: $SERVICES_COUNT"
+echo "  Memory: ${FINAL_MEMORY} MB"
 
 # Calculate deltas
-INITIAL_METRICS=$(echo "$INITIAL_STATS" | jq -r '.metrics_count // 0')
-FINAL_METRICS=$(echo "$FINAL_STATS" | jq -r '.metrics_count // 0')
-INITIAL_MEMORY=$(echo "$INITIAL_STATS" | jq -r '.memory_bytes // 0')
-FINAL_MEMORY=$(echo "$FINAL_STATS" | jq -r '.memory_bytes // 0')
-
 METRICS_DELTA=$((FINAL_METRICS - INITIAL_METRICS))
-MEMORY_DELTA=$(( (FINAL_MEMORY - INITIAL_MEMORY) / 1024 / 1024 ))
+SPANS_DELTA=$((FINAL_SPANS - INITIAL_SPANS))
+LOGS_DELTA=$((FINAL_LOGS - INITIAL_LOGS))
+MEMORY_DELTA=$((FINAL_MEMORY - INITIAL_MEMORY))
 
 echo ""
 echo -e "${YELLOW}📈 Changes:${NC}"
-echo -e "  Metrics created: ${GREEN}+$METRICS_DELTA${NC}"
+echo -e "  Metrics: ${GREEN}+$METRICS_DELTA${NC}"
+echo -e "  Spans: ${GREEN}+$SPANS_DELTA${NC}"
+echo -e "  Logs: ${GREEN}+$LOGS_DELTA${NC}"
 echo -e "  Memory growth: ${GREEN}+${MEMORY_DELTA} MB${NC}"
 
-if [ $METRICS_DELTA -gt 0 ]; then
-  AVG_MEMORY=$((MEMORY_DELTA * 1024 / METRICS_DELTA))
-  echo -e "  Average per metric: ${CYAN}~${AVG_MEMORY} KB${NC}"
+TOTAL_ITEMS=$((METRICS_DELTA + SPANS_DELTA + LOGS_DELTA))
+if [ $TOTAL_ITEMS -gt 0 ] && [ $MEMORY_DELTA -gt 0 ]; then
+  AVG_MEMORY=$((MEMORY_DELTA * 1024 / TOTAL_ITEMS))
+  echo -e "  Average per item: ${CYAN}~${AVG_MEMORY} KB${NC}"
 fi
 
 echo ""
