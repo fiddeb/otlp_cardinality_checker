@@ -32,15 +32,34 @@ Commit immediately after:
 
 ### Commit Message Format
 
-Keep it simple and descriptive:
+Use **semantic commit messages** with conventional format:
 
 ```bash
-# Good examples
-git add -A
-git commit -m "Add log body template extraction"
-git commit -m "Fix percentage calculation bug in logs analyzer"
-git commit -m "Update K6 tests to write-only mode"
-git commit -m "Add UI for body templates in Details view"
+# Format: <type>: <description>
+# Types: feat, fix, refactor, test, docs, chore, perf, style
+
+# Feature examples
+git commit -m "feat: add log body template extraction"
+git commit -m "feat: add URL/path pattern matching to logs"
+git commit -m "feat: add UI for body templates in Details view"
+
+# Bug fix examples
+git commit -m "fix: correct percentage calculation in logs analyzer"
+git commit -m "fix: prevent template cross-contamination between severities"
+git commit -m "fix: handle empty log body fields"
+
+# Refactoring examples
+git commit -m "refactor: extract pattern matching to separate analyzer"
+git commit -m "refactor: simplify logs view to show patterns as main objects"
+
+# Test examples
+git commit -m "test: add benchmark for template extraction"
+git commit -m "test: add coverage for URL pattern matching"
+
+# Other types
+git commit -m "chore: update K6 tests to write-only mode"
+git commit -m "docs: update API documentation for body_templates"
+git commit -m "perf: optimize regex pattern compilation"
 
 # Bad examples (too vague)
 git commit -m "Update files"
@@ -48,12 +67,22 @@ git commit -m "Changes"
 git commit -m "Fix stuff"
 ```
 
+**Semantic Commit Types:**
+- `feat:` New feature or functionality
+- `fix:` Bug fix
+- `refactor:` Code restructuring without behavior change
+- `test:` Adding or updating tests
+- `docs:` Documentation changes
+- `chore:` Maintenance tasks (deps, configs, scripts)
+- `perf:` Performance improvements
+- `style:` Code style changes (formatting, naming)
+
 ### Always Use Terminal
 
 Use `run_in_terminal` for git commands:
 ```bash
 git add -A
-git commit -m "Your message here"
+git commit -m "feat: your feature description"
 git push
 ```
 
