@@ -51,6 +51,20 @@ function generateLogBatch(vu, iter) {
     const logRecords = [];
     const batchSize = 10;
     
+    // Different log message templates to create varied patterns
+    const logTemplates = [
+        (logNum, serviceName) => `Log message from ${serviceName} - event ${logNum}`,
+        (logNum) => `User ${logNum} logged in from 192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+        (logNum) => `Processing request ${logNum} took ${Math.floor(Math.random() * 1000)}ms`,
+        (logNum) => `Database query executed in ${Math.floor(Math.random() * 500)}ms - affected ${Math.floor(Math.random() * 100)} rows`,
+        (logNum) => `Cache hit for key cache_key_${logNum} - returned ${Math.floor(Math.random() * 10000)}B`,
+        (logNum) => `HTTP ${['GET', 'POST', 'PUT', 'DELETE'][Math.floor(Math.random() * 4)]} /api/v1/resource/${logNum} - status ${[200, 201, 404, 500][Math.floor(Math.random() * 4)]}`,
+        (logNum) => `Order ${logNum} was ${['placed', 'shipped', 'delivered', 'cancelled'][Math.floor(Math.random() * 4)]} successfully`,
+        (logNum) => `Payment transaction ${logNum} completed - amount $${(Math.random() * 1000).toFixed(2)}`,
+        (logNum) => `File ${logNum}.log uploaded - size ${Math.floor(Math.random() * 10)}MB`,
+        (logNum) => `Email sent to user_${logNum}@example.com - delivery ID ${Math.random().toString(36).substr(2, 9)}`
+    ];
+    
     for (let i = 0; i < batchSize; i++) {
         // Hybrid approach: sequential base + small random offset
         const baseLog = (iter * batchSize + i);
@@ -60,11 +74,15 @@ function generateLogBatch(vu, iter) {
         
         const severity = SEVERITIES[logNum % 4];
         
+        // Select a template based on logNum to get good distribution
+        const templateIndex = logNum % logTemplates.length;
+        const logMessage = logTemplates[templateIndex](logNum, serviceName);
+        
         logRecords.push({
             time_unix_nano: timestamp + (i * 1000000), // Spread logs over time
             severity_number: severity.number,
             severity_text: severity.text,
-            body: { string_value: `Log message from ${serviceName} - event ${logNum}` },
+            body: { string_value: logMessage },
             attributes: [
                 { key: 'log.level', value: { string_value: severity.text.toLowerCase() } },
                 { key: 'module', value: { string_value: `module_${logNum % 20}` } },
