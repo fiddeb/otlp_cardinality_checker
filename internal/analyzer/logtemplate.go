@@ -3,10 +3,11 @@ package analyzer
 import (
 	"fmt"
 	"hash/fnv"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/fidde/otlp_cardinality_checker/internal/config"
 )
 
 // LogTemplate represents a pattern extracted from log messages
@@ -24,32 +25,25 @@ type LogBodyAnalyzer struct {
 	templates map[uint64]*LogTemplate
 	total     int64
 	
-	// Regex patterns for common variable parts
-	numberPattern   *regexp.Regexp
-	uuidPattern     *regexp.Regexp
-	ipPattern       *regexp.Regexp
-	timestampPattern *regexp.Regexp
-	durationPattern *regexp.Regexp
-	sizePattern     *regexp.Regexp
-	hexPattern      *regexp.Regexp
-	urlPattern      *regexp.Regexp
+	// Compiled patterns from config
+	patterns []config.CompiledPattern
 }
 
 // NewLogBodyAnalyzer creates a new log body analyzer
 func NewLogBodyAnalyzer() *LogBodyAnalyzer {
+	return NewLogBodyAnalyzerWithPatterns(nil)
+}
+
+// NewLogBodyAnalyzerWithPatterns creates a new analyzer with custom patterns
+func NewLogBodyAnalyzerWithPatterns(patterns []config.CompiledPattern) *LogBodyAnalyzer {
+	if patterns == nil {
+		// Use default patterns if none provided
+		patterns = config.DefaultPatterns()
+	}
+	
 	return &LogBodyAnalyzer{
 		templates: make(map[uint64]*LogTemplate),
-		
-		// Simple regex patterns - optimize these if they're too slow
-		numberPattern:    regexp.MustCompile(`\b\d+\b`),
-		uuidPattern:      regexp.MustCompile(`\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`),
-		ipPattern:        regexp.MustCompile(`\[::1\]|\b(?:\d{1,3}\.){3}\d{1,3}\b`),
-		timestampPattern: regexp.MustCompile(`\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}`),
-		durationPattern:  regexp.MustCompile(`\d+(?:\.\d+)?(?:µs|ms|s|m|h)\b`),
-		sizePattern:      regexp.MustCompile(`\d+(?:\.\d+)?(?:B|KB|MB|GB)\b`),
-		hexPattern:       regexp.MustCompile(`\b[0-9a-f]{8,}\b`),
-		// URL pattern: matches full URLs (http/https) and absolute paths starting with /
-		urlPattern:       regexp.MustCompile(`https?://[^\s]+|\s(/[a-zA-Z0-9/_.-]+)`),
+		patterns:  patterns,
 	}
 }
 
@@ -57,15 +51,10 @@ func NewLogBodyAnalyzer() *LogBodyAnalyzer {
 func (a *LogBodyAnalyzer) ExtractTemplate(message string) string {
 	template := message
 	
-	// Order matters - do most specific patterns first
-	template = a.timestampPattern.ReplaceAllString(template, "<TIMESTAMP>")
-	template = a.uuidPattern.ReplaceAllString(template, "<UUID>")
-	template = a.urlPattern.ReplaceAllString(template, " <URL>") // Add space before to preserve whitespace
-	template = a.durationPattern.ReplaceAllString(template, "<DURATION>")
-	template = a.sizePattern.ReplaceAllString(template, "<SIZE>")
-	template = a.ipPattern.ReplaceAllString(template, "<IP>")
-	template = a.hexPattern.ReplaceAllString(template, "<HEX>")
-	template = a.numberPattern.ReplaceAllString(template, "<NUM>")
+	// Apply patterns in order
+	for _, pattern := range a.patterns {
+		template = pattern.Regex.ReplaceAllString(template, pattern.Placeholder)
+	}
 	
 	// Normalize whitespace
 	template = strings.Join(strings.Fields(template), " ")
