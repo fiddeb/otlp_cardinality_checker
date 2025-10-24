@@ -66,7 +66,7 @@ echo -e "${BLUE}API Endpoint:${NC} $API_ENDPOINT"
 echo ""
 
 # Check if server is running
-if ! curl -s "$API_ENDPOINT/api/v1/stats" > /dev/null 2>&1; then
+if ! curl -s "$API_ENDPOINT/api/v1/health" > /dev/null 2>&1; then
     echo -e "${RED}❌ Server not responding at $API_ENDPOINT${NC}"
     echo "Please start the server first:"
     echo "  ./otlp-cardinality-checker"
