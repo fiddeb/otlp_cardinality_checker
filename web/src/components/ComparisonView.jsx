@@ -88,7 +88,7 @@ function ComparisonView({ onViewDetails }) {
         </select>
       </div>
 
-      <p style={{ marginTop: '10px', color: '#666' }}>
+      <p style={{ marginTop: '10px' }} className="template-count-text">
         Select up to 4 {signalType} to compare. Selected: {selectedItems.length}/4
       </p>
 
@@ -97,10 +97,10 @@ function ComparisonView({ onViewDetails }) {
         <div style={{ 
           maxHeight: '200px', 
           overflowY: 'auto', 
-          border: '1px solid #ddd', 
+          border: '1px solid var(--border-light)', 
           borderRadius: '4px',
           padding: '10px',
-          background: '#f9f9f9'
+          background: 'var(--bg-tertiary)'
         }}>
           {items.slice(0, 50).map((item, i) => {
             const itemName = signalType === 'logs' ? item.severity : item.name
@@ -124,7 +124,7 @@ function ComparisonView({ onViewDetails }) {
                   style={{ marginRight: '8px' }}
                 />
                 {itemName}
-                <span style={{ color: '#666', marginLeft: '8px' }}>
+                <span className="template-count-text" style={{ marginLeft: '8px' }}>
                   ({item.sample_count.toLocaleString()} samples)
                 </span>
               </label>
@@ -205,7 +205,7 @@ function ComparisonView({ onViewDetails }) {
                   {comparisonData.map((item, j) => {
                     const value = getKeyValue(item, key)
                     if (!value) {
-                      return <td key={j} style={{ color: '#999' }}>-</td>
+                      return <td key={j} className="template-label">-</td>
                     }
                     return (
                       <td key={j}>
@@ -213,7 +213,7 @@ function ComparisonView({ onViewDetails }) {
                           <span className={`badge ${getCardinalityBadge(value.estimated_cardinality)}`}>
                             {value.estimated_cardinality}
                           </span>
-                          <span style={{ fontSize: '0.85em', color: '#666' }}>
+                          <span className="template-count-text-small">
                             {value.percentage.toFixed(1)}% usage
                           </span>
                         </div>
@@ -226,7 +226,7 @@ function ComparisonView({ onViewDetails }) {
           </table>
 
           {getAllKeys().length === 0 && (
-            <p style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+            <p style={{ textAlign: 'center', padding: '20px' }} className="template-count-text">
               No {signalType === 'metrics' ? 'labels' : 'attributes'} found
             </p>
           )}
@@ -234,7 +234,7 @@ function ComparisonView({ onViewDetails }) {
       )}
 
       {comparisonData.length === 0 && (
-        <p style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+        <p style={{ textAlign: 'center', padding: '40px' }} className="template-count-text">
           Select items above to start comparing
         </p>
       )}
