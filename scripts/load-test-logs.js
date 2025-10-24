@@ -52,6 +52,7 @@ function generateLogBatch(vu, iter) {
     const batchSize = 10;
     
     // Different log message templates to create varied patterns
+    // Use predictable values that will be replaced by template extraction regex
     const logTemplates = [
         (logNum, serviceName) => `Log message from ${serviceName} - event ${logNum}`,
         (logNum) => `User ${logNum} logged in from 192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
@@ -62,7 +63,8 @@ function generateLogBatch(vu, iter) {
         (logNum) => `Order ${logNum} was ${['placed', 'shipped', 'delivered', 'cancelled'][Math.floor(Math.random() * 4)]} successfully`,
         (logNum) => `Payment transaction ${logNum} completed - amount $${(Math.random() * 1000).toFixed(2)}`,
         (logNum) => `File ${logNum}.log uploaded - size ${Math.floor(Math.random() * 10)}MB`,
-        (logNum) => `Email sent to user_${logNum}@example.com - delivery ID ${Math.random().toString(36).substr(2, 9)}`
+        // Use hex number instead of random string - will be caught by hex pattern
+        (logNum) => `Email sent to user_${logNum}@example.com - delivery ID ${Math.floor(Math.random() * 0xffffffff).toString(16)}`
     ];
     
     for (let i = 0; i < batchSize; i++) {
