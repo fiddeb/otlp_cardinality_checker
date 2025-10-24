@@ -242,6 +242,11 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 			existing.Services[service] += count
 		}
 
+		// Update body templates (replace, not merge, since analyzer has full state)
+		if len(log.BodyTemplates) > 0 {
+			existing.BodyTemplates = log.BodyTemplates
+		}
+
 		return nil
 	}
 
@@ -264,6 +269,13 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 		return nil, fmt.Errorf("log severity %s: %w", severityText, ErrNotFound)
 	}
 
+	// Sort body templates by count descending
+	if len(log.BodyTemplates) > 0 {
+		sort.Slice(log.BodyTemplates, func(i, j int) bool {
+			return log.BodyTemplates[i].Count > log.BodyTemplates[j].Count
+		})
+	}
+
 	return log, nil
 }
 
@@ -280,6 +292,14 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 				continue
 			}
 		}
+		
+		// Sort body templates by count descending
+		if len(log.BodyTemplates) > 0 {
+			sort.Slice(log.BodyTemplates, func(i, j int) bool {
+				return log.BodyTemplates[i].Count > log.BodyTemplates[j].Count
+			})
+		}
+		
 		logs = append(logs, log)
 	}
 
