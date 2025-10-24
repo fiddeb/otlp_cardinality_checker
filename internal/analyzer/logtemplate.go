@@ -32,6 +32,7 @@ type LogBodyAnalyzer struct {
 	durationPattern *regexp.Regexp
 	sizePattern     *regexp.Regexp
 	hexPattern      *regexp.Regexp
+	urlPattern      *regexp.Regexp
 }
 
 // NewLogBodyAnalyzer creates a new log body analyzer
@@ -47,6 +48,8 @@ func NewLogBodyAnalyzer() *LogBodyAnalyzer {
 		durationPattern:  regexp.MustCompile(`\d+(?:\.\d+)?(?:µs|ms|s|m|h)\b`),
 		sizePattern:      regexp.MustCompile(`\d+(?:\.\d+)?(?:B|KB|MB|GB)\b`),
 		hexPattern:       regexp.MustCompile(`\b[0-9a-f]{8,}\b`),
+		// URL pattern: matches full URLs (http/https) and absolute paths starting with /
+		urlPattern:       regexp.MustCompile(`https?://[^\s]+|\s(/[a-zA-Z0-9/_.-]+)`),
 	}
 }
 
@@ -57,6 +60,7 @@ func (a *LogBodyAnalyzer) ExtractTemplate(message string) string {
 	// Order matters - do most specific patterns first
 	template = a.timestampPattern.ReplaceAllString(template, "<TIMESTAMP>")
 	template = a.uuidPattern.ReplaceAllString(template, "<UUID>")
+	template = a.urlPattern.ReplaceAllString(template, " <URL>") // Add space before to preserve whitespace
 	template = a.durationPattern.ReplaceAllString(template, "<DURATION>")
 	template = a.sizePattern.ReplaceAllString(template, "<SIZE>")
 	template = a.ipPattern.ReplaceAllString(template, "<IP>")

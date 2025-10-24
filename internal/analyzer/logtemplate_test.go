@@ -15,12 +15,22 @@ func TestLogBodyAnalyzer_ExtractTemplate(t *testing.T) {
 		{
 			name:     "HTTP request log",
 			message:  `[fidde.local/czlriPsfX6-000023] "GET http://localhost:8080/api/v1/logs?limit=10000 HTTP/1.1" from [::1]:62171 - 200 4946B in 377.802µs`,
-			expected: `[fidde.local/czlriPsfX6-<NUM>] "GET http://localhost:<NUM>/api/v1/logs?limit=<NUM> HTTP/<NUM>.<NUM>" from <IP>:<NUM> - <NUM> <SIZE> in <DURATION>`,
+			expected: `[fidde.local/czlriPsfX6-<NUM>] "GET <URL> HTTP/<NUM>.<NUM>" from <IP>:<NUM> - <NUM> <SIZE> in <DURATION>`,
 		},
 		{
 			name:     "Different limit value",
 			message:  `[fidde.local/czlriPsfX6-000025] "GET http://localhost:8080/api/v1/logs?limit=1 HTTP/1.1" from [::1]:62173 - 200 1225B in 398.234µs`,
-			expected: `[fidde.local/czlriPsfX6-<NUM>] "GET http://localhost:<NUM>/api/v1/logs?limit=<NUM> HTTP/<NUM>.<NUM>" from <IP>:<NUM> - <NUM> <SIZE> in <DURATION>`,
+			expected: `[fidde.local/czlriPsfX6-<NUM>] "GET <URL> HTTP/<NUM>.<NUM>" from <IP>:<NUM> - <NUM> <SIZE> in <DURATION>`,
+		},
+		{
+			name:     "URL in message",
+			message:  "Application started successfully http://bilder.fberggren.se",
+			expected: "Application started successfully <URL>",
+		},
+		{
+			name:     "Path in message",
+			message:  "Reading config from /etc/app/config.yml",
+			expected: "Reading config from <URL>",
 		},
 		{
 			name:     "UUID in message",
