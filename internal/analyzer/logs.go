@@ -3,20 +3,47 @@ package analyzer
 import (
 	"fmt"
 
+	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 )
 
-// LogsAnalyzer extracts metadata from OTLP logs.
-type LogsAnalyzer struct{
-	bodyAnalyzers map[string]*LogBodyAnalyzer // One analyzer per severity level
+// LogBodyAnalyzerInterface defines the interface for log body analyzers
+type LogBodyAnalyzerInterface interface {
+	AddMessage(body string)
+	GetTemplates() []*LogTemplate
 }
 
-// NewLogsAnalyzer creates a new logs analyzer.
+// LogsAnalyzer extracts metadata from OTLP logs.
+type LogsAnalyzer struct {
+	bodyAnalyzers    map[string]LogBodyAnalyzerInterface // One analyzer per severity level
+	useAutoTemplate  bool                                // Whether to use autotemplate
+	autoTemplateCfg  autotemplate.Config                 // Config for autotemplate
+}
+
+// NewLogsAnalyzer creates a new logs analyzer with regex-based template extraction.
 func NewLogsAnalyzer() *LogsAnalyzer {
 	return &LogsAnalyzer{
-		bodyAnalyzers: make(map[string]*LogBodyAnalyzer),
+		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
+		useAutoTemplate: false,
 	}
+}
+
+// NewLogsAnalyzerWithAutoTemplate creates a logs analyzer using autotemplate extraction.
+func NewLogsAnalyzerWithAutoTemplate(cfg autotemplate.Config) *LogsAnalyzer {
+	return &LogsAnalyzer{
+		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
+		useAutoTemplate: true,
+		autoTemplateCfg: cfg,
+	}
+}
+
+// createBodyAnalyzer creates the appropriate analyzer type
+func (a *LogsAnalyzer) createBodyAnalyzer() LogBodyAnalyzerInterface {
+	if a.useAutoTemplate {
+		return NewAutoLogBodyAnalyzerWithPatterns(a.autoTemplateCfg, nil)
+	}
+	return NewLogBodyAnalyzer()
 }
 
 // Analyze extracts metadata from an OTLP logs export request.
@@ -68,7 +95,7 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 				body := logRecord.GetBody().GetStringValue()
 				if body != "" {
 					if _, exists := a.bodyAnalyzers[severityText]; !exists {
-						a.bodyAnalyzers[severityText] = NewLogBodyAnalyzer()
+						a.bodyAnalyzers[severityText] = a.createBodyAnalyzer()
 					}
 					a.bodyAnalyzers[severityText].AddMessage(body)
 				}

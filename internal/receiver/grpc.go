@@ -30,11 +30,19 @@ type GRPCReceiver struct {
 
 // NewGRPCReceiver creates a new gRPC receiver.
 func NewGRPCReceiver(addr string, store *memory.Store) *GRPCReceiver {
+	// Create logs analyzer based on store configuration
+	var logsAnalyzer *analyzer.LogsAnalyzer
+	if store.UseAutoTemplate() {
+		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplate(store.AutoTemplateCfg())
+	} else {
+		logsAnalyzer = analyzer.NewLogsAnalyzer()
+	}
+	
 	return &GRPCReceiver{
 		store:           store,
 		metricsAnalyzer: analyzer.NewMetricsAnalyzer(),
 		tracesAnalyzer:  analyzer.NewTracesAnalyzer(),
-		logsAnalyzer:    analyzer.NewLogsAnalyzer(),
+		logsAnalyzer:    logsAnalyzer,
 		addr:            addr,
 	}
 }

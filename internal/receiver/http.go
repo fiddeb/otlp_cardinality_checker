@@ -43,11 +43,19 @@ type HTTPReceiver struct {
 
 // NewHTTPReceiver creates a new HTTP receiver.
 func NewHTTPReceiver(addr string, store *memory.Store) *HTTPReceiver {
+	// Create logs analyzer based on store configuration
+	var logsAnalyzer *analyzer.LogsAnalyzer
+	if store.UseAutoTemplate() {
+		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplate(store.AutoTemplateCfg())
+	} else {
+		logsAnalyzer = analyzer.NewLogsAnalyzer()
+	}
+	
 	r := &HTTPReceiver{
 		store:           store,
 		metricsAnalyzer: analyzer.NewMetricsAnalyzer(),
 		tracesAnalyzer:  analyzer.NewTracesAnalyzer(),
-		logsAnalyzer:    analyzer.NewLogsAnalyzer(),
+		logsAnalyzer:    logsAnalyzer,
 	}
 
 	mux := http.NewServeMux()

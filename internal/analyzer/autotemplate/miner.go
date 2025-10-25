@@ -340,6 +340,16 @@ func generalizeTokens(template, tokens []string) []string {
 	return result
 }
 
+// SetTraining switches between training and inference modes
+func (m *ShardedMiner) SetTraining(training bool) {
+	m.cfg.Training = training
+	for _, shard := range m.shards {
+		shard.mu.Lock()
+		shard.cfg.Training = training
+		shard.mu.Unlock()
+	}
+}
+
 // Stats returns current stats
 func (m *ShardedMiner) Stats() map[string]interface{} {
 	totalClusters := 0
@@ -353,15 +363,5 @@ func (m *ShardedMiner) Stats() map[string]interface{} {
 		"shards":   len(m.shards),
 		"clusters": totalClusters,
 		"training": m.cfg.Training,
-	}
-}
-
-// SetTraining changes the training mode for all shards
-func (m *ShardedMiner) SetTraining(training bool) {
-	m.cfg.Training = training
-	for _, shard := range m.shards {
-		shard.mu.Lock()
-		shard.cfg.Training = training
-		shard.mu.Unlock()
 	}
 }

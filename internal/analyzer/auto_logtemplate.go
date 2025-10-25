@@ -69,6 +69,11 @@ func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
 	return template
 }
 
+// AddMessage is an alias for ProcessMessage to match the interface
+func (a *AutoLogBodyAnalyzer) AddMessage(body string) {
+	a.ProcessMessage(body)
+}
+
 // preMask applies regex-based masking before template extraction
 func (a *AutoLogBodyAnalyzer) preMask(body string) string {
 	result := body
