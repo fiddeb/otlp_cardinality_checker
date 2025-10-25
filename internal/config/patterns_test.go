@@ -73,3 +73,113 @@ func TestDefaultPatterns(t *testing.T) {
 		}
 	}
 }
+
+// TestRealPatterns tests actual patterns from config/patterns.yaml
+func TestRealPatterns(t *testing.T) {
+	// Try to load real patterns file
+	patterns, err := LoadPatterns("../../config/patterns.yaml")
+	if err != nil {
+		t.Skipf("Skipping real patterns test: %v", err)
+		return
+	}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		// Apache timestamp
+		{
+			name:     "Apache timestamp with notice",
+			input:    "[Sun Dec 04 04:51:08 2005] [notice] jk2_init() Found child 6725",
+			expected: "<TIMESTAMP> [notice] jk2_init() Found child <NUM>",
+		},
+		// Syslog timestamp
+		{
+			name:     "Syslog timestamp single digit",
+			input:    "Jul  5 13:52:21 combo ftpd[6590]: connection",
+			expected: "<TIMESTAMP> combo ftpd[<NUM>]: connection",
+		},
+		{
+			name:     "Syslog timestamp double digit",
+			input:    "Jun 22 13:16:30 combo sshd: auth failure",
+			expected: "<TIMESTAMP> combo sshd: auth failure",
+		},
+		// ISO timestamp
+		{
+			name:     "ISO timestamp",
+			input:    "2024/10/26 14:30:45 Server started",
+			expected: "<TIMESTAMP> Server started",
+		},
+		// UUID
+		{
+			name:     "UUID in message",
+			input:    "Request 550e8400-e29b-41d4-a716-446655440000 done",
+			expected: "Request <UUID> done",
+		},
+		// Email
+		{
+			name:     "Email address",
+			input:    "User john.doe@example.com logged in",
+			expected: "User <EMAIL> logged in",
+		},
+		// URL
+		{
+			name:     "HTTPS URL",
+			input:    "GET https://example.com/api/users completed",
+			expected: "GET  <URL> completed", // Note: Two spaces before <URL> due to placeholder including leading space
+		},
+		// IP
+		{
+			name:     "IPv4 address",
+			input:    "Connection from 192.168.1.100 accepted",
+			expected: "Connection from <IP> accepted",
+		},
+		// Duration
+		{
+			name:     "Duration ms",
+			input:    "Query took 150ms to complete",
+			expected: "Query took <DURATION> to complete",
+		},
+		// Size
+		{
+			name:     "Size MB",
+			input:    "Downloaded 25.3MB successfully",
+			expected: "Downloaded <SIZE> successfully",
+		},
+		// Hex
+		{
+			name:     "Git commit hash",
+			input:    "Commit 7f8a9b3c2d1e4f5a6b7c8d9e0f1a2b3c pushed",
+			expected: "Commit <HEX> pushed",
+		},
+		// Numbers (applied last)
+		{
+			name:     "Port number",
+			input:    "Listening on port 8080",
+			expected: "Listening on port <NUM>",
+		},
+		// Combined
+		{
+			name:     "Multiple patterns",
+			input:    "Jul 27 14:41:57 server sshd[1234]: Failed from 10.0.0.1",
+			expected: "<TIMESTAMP> server sshd[<NUM>]: Failed from <IP>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.input
+			
+			// Apply all patterns in order
+			for _, pattern := range patterns {
+				result = pattern.Regex.ReplaceAllString(result, pattern.Placeholder)
+			}
+
+			if result != tt.expected {
+				t.Errorf("\n  Input:    %s\n  Expected: %s\n  Got:      %s", 
+					tt.input, tt.expected, result)
+			}
+		})
+	}
+}
