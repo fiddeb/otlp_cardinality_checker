@@ -175,6 +175,50 @@ h1 {
   font-size: 14px;
 }
 
+.memory-stats {
+  margin-bottom: 20px;
+}
+
+.memory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.memory-item {
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.memory-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memory-info {
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: normal;
+}
+
+.memory-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

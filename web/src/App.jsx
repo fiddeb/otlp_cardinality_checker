@@ -7,6 +7,7 @@ import LogsView from './components/LogsView'
 import ComparisonView from './components/ComparisonView'
 import ServiceExplorer from './components/ServiceExplorer'
 import Details from './components/Details'
+import MemoryView from './components/MemoryView'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -106,6 +107,12 @@ function App() {
           >
             Compare
           </button>
+          <button 
+            className={`tab ${activeTab === 'memory' ? 'active' : ''}`}
+            onClick={() => setActiveTab('memory')}
+          >
+            Memory
+          </button>
         </div>
       )}
 
@@ -131,6 +138,10 @@ function App() {
 
       {activeTab === 'comparison' && (
         <ComparisonView onViewDetails={handleViewDetails} />
+      )}
+
+      {activeTab === 'memory' && (
+        <MemoryView />
       )}
 
       {activeTab === 'service' && selectedService && (
