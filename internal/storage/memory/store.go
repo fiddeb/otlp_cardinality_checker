@@ -50,7 +50,7 @@ func New() *Store {
 func NewWithAutoTemplate(useAutoTemplate bool) *Store {
 	cfg := autotemplate.DefaultConfig()
 	cfg.Shards = 4
-	cfg.SimThreshold = 0.5
+	cfg.SimThreshold = 0.7 // Increased from 0.5 for stricter matching
 	
 	return &Store{
 		metrics:         make(map[string]*models.MetricMetadata),
