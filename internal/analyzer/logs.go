@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
+	"github.com/fidde/otlp_cardinality_checker/internal/config"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 )
@@ -19,6 +20,7 @@ type LogsAnalyzer struct {
 	bodyAnalyzers    map[string]LogBodyAnalyzerInterface // One analyzer per severity level
 	useAutoTemplate  bool                                // Whether to use autotemplate
 	autoTemplateCfg  autotemplate.Config                 // Config for autotemplate
+	patterns         []config.CompiledPattern            // Pre-masking patterns
 }
 
 // NewLogsAnalyzer creates a new logs analyzer with regex-based template extraction.
@@ -31,19 +33,25 @@ func NewLogsAnalyzer() *LogsAnalyzer {
 
 // NewLogsAnalyzerWithAutoTemplate creates a logs analyzer using autotemplate extraction.
 func NewLogsAnalyzerWithAutoTemplate(cfg autotemplate.Config) *LogsAnalyzer {
+	return NewLogsAnalyzerWithAutoTemplateAndPatterns(cfg, nil)
+}
+
+// NewLogsAnalyzerWithAutoTemplateAndPatterns creates a logs analyzer with patterns.
+func NewLogsAnalyzerWithAutoTemplateAndPatterns(cfg autotemplate.Config, patterns []config.CompiledPattern) *LogsAnalyzer {
 	return &LogsAnalyzer{
 		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
 		useAutoTemplate: true,
 		autoTemplateCfg: cfg,
+		patterns:        patterns,
 	}
 }
 
 // createBodyAnalyzer creates the appropriate analyzer type
 func (a *LogsAnalyzer) createBodyAnalyzer() LogBodyAnalyzerInterface {
 	if a.useAutoTemplate {
-		return NewAutoLogBodyAnalyzerWithPatterns(a.autoTemplateCfg, nil)
+		return NewAutoLogBodyAnalyzerWithPatterns(a.autoTemplateCfg, a.patterns)
 	}
-	return NewLogBodyAnalyzer()
+	return NewLogBodyAnalyzerWithPatterns(a.patterns)
 }
 
 // Analyze extracts metadata from an OTLP logs export request.
@@ -141,7 +149,7 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 					Template:   tmpl.Template,
 					Count:      tmpl.Count,
 					Percentage: tmpl.Percentage,
-					Example:    tmpl.SampleValues["original"],
+					Example:    tmpl.ExampleBody,
 				})
 			}
 		}

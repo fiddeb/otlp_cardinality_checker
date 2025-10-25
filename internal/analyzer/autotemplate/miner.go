@@ -9,9 +9,10 @@ import (
 
 // cluster represents a log template with metadata
 type cluster struct {
-	tokens   []string // Template tokens (with <*> wildcards)
-	size     int64    // Number of logs matched
-	lastUsed uint64   // Timestamp for LRU
+	tokens      []string // Template tokens (with <*> wildcards)
+	size        int64    // Number of logs matched
+	lastUsed    uint64   // Timestamp for LRU
+	exampleBody string   // Example log body that matches this template
 }
 
 // node is an internal tree node
@@ -92,7 +93,7 @@ func (m *ShardedMiner) Add(message string) (template string, matched bool) {
 	}
 	
 	shard := m.selectShard(tokens)
-	return shard.add(tokens)
+	return shard.add(tokens, message)
 }
 
 // Match attempts to match a log message against existing templates (inference mode)
@@ -107,7 +108,7 @@ func (m *ShardedMiner) Match(message string) (template string, ok bool) {
 }
 
 // add processes tokens in training mode
-func (s *MinerShard) add(tokens []string) (string, bool) {
+func (s *MinerShard) add(tokens []string, originalMessage string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
@@ -195,9 +196,10 @@ func (s *MinerShard) add(tokens []string) (string, bool) {
 	// Create new cluster if training
 	if s.cfg.Training {
 		newCluster := &cluster{
-			tokens:   make([]string, len(tokens)),
-			size:     1,
-			lastUsed: tick,
+			tokens:      make([]string, len(tokens)),
+			size:        1,
+			lastUsed:    tick,
+			exampleBody: originalMessage,
 		}
 		copy(newCluster.tokens, tokens)
 		

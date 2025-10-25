@@ -60,9 +60,10 @@ func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
 	} else {
 		hash := hashString(template)
 		a.templates[template] = &LogTemplate{
-			Template: template,
-			Hash:     hash,
-			Count:    1,
+			Template:    template,
+			Hash:        hash,
+			Count:       1,
+			ExampleBody: body, // Store original unmaked body as example
 		}
 	}
 	

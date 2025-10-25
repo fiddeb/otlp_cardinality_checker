@@ -4,6 +4,11 @@
 
 patterns:
   # Timestamp patterns
+  - name: syslog_timestamp
+    regex: '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
+    placeholder: '<TIMESTAMP>'
+    description: 'Syslog timestamps (MMM DD HH:MM:SS)'
+
   - name: timestamp
     regex: '\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}'
     placeholder: '<TIMESTAMP>'
