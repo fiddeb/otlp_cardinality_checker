@@ -4,6 +4,11 @@
 
 patterns:
   # Timestamp patterns
+  - name: apache_timestamp
+    regex: '\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}\]'
+    placeholder: '<TIMESTAMP>'
+    description: 'Apache-style timestamps [Weekday Month DD HH:MM:SS YYYY]'
+
   - name: syslog_timestamp
     regex: '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
     placeholder: '<TIMESTAMP>'
