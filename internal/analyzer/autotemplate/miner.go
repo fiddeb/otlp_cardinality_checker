@@ -355,3 +355,13 @@ func (m *ShardedMiner) Stats() map[string]interface{} {
 		"training": m.cfg.Training,
 	}
 }
+
+// SetTraining changes the training mode for all shards
+func (m *ShardedMiner) SetTraining(training bool) {
+	m.cfg.Training = training
+	for _, shard := range m.shards {
+		shard.mu.Lock()
+		shard.cfg.Training = training
+		shard.mu.Unlock()
+	}
+}
