@@ -8,6 +8,7 @@ import ComparisonView from './components/ComparisonView'
 import ServiceExplorer from './components/ServiceExplorer'
 import Details from './components/Details'
 import MemoryView from './components/MemoryView'
+import NoisyNeighbors from './components/NoisyNeighbors'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -108,6 +109,12 @@ function App() {
             Compare
           </button>
           <button 
+            className={`tab ${activeTab === 'noisy-neighbors' ? 'active' : ''}`}
+            onClick={() => setActiveTab('noisy-neighbors')}
+          >
+            Noisy Neighbors
+          </button>
+          <button 
             className={`tab ${activeTab === 'memory' ? 'active' : ''}`}
             onClick={() => setActiveTab('memory')}
           >
@@ -138,6 +145,10 @@ function App() {
 
       {activeTab === 'comparison' && (
         <ComparisonView onViewDetails={handleViewDetails} />
+      )}
+
+      {activeTab === 'noisy-neighbors' && (
+        <NoisyNeighbors />
       )}
 
       {activeTab === 'memory' && (
