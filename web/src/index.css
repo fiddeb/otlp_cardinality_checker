@@ -488,8 +488,135 @@ body.dark-mode .template-progress-bar {
 
 .template-count-text-small {
   font-size: 0.85em;
-  color: var(--text-secondary);
 }
+
+/* Noisy Neighbors Styles */
+.noisy-neighbors-header {
+  margin-bottom: 20px;
+}
+
+.noisy-neighbors-header .subtitle {
+  color: var(--text-secondary);
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+.threshold-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.threshold-control label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.threshold-control input[type="number"] {
+  width: 100px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.refresh-btn {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.refresh-btn:hover {
+  background: var(--accent-hover);
+}
+
+.signal-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.signal-metric {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.signal-span {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.signal-log {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+body.dark-mode .signal-metric {
+  background: #1a237e;
+  color: #90caf9;
+}
+
+body.dark-mode .signal-span {
+  background: #4a148c;
+  color: #ce93d8;
+}
+
+body.dark-mode .signal-log {
+  background: #e65100;
+  color: #ffcc80;
+}
+
+.cardinality-value {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.high-warning {
+  background: rgba(255, 152, 0, 0.05);
+}
+
+body.dark-mode .high-warning {
+  background: rgba(255, 152, 0, 0.1);
+}
+
+.item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.item-entry code {
+  flex: 1;
+  font-size: 12px;
+}
+
+.item-samples {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 
 .template-show-more {
   margin-top: 12px;
