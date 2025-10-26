@@ -4,19 +4,21 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage"
+	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 // Server is the REST API server.
 type Server struct {
-	store  *memory.Store
+	store  storage.Storage
 	router *chi.Mux
 	server *http.Server
 }
@@ -101,7 +103,7 @@ func paginateSlice[T any](items []T, params PaginationParams) ([]T, PaginatedRes
 }
 
 // NewServer creates a new API server.
-func NewServer(addr string, store *memory.Store) *Server {
+func NewServer(addr string, store storage.Storage) *Server {
 	s := &Server{
 		store:  store,
 		router: chi.NewRouter(),
@@ -179,7 +181,7 @@ func (s *Server) getMetric(w http.ResponseWriter, r *http.Request) {
 
 	metric, err := s.store.GetMetric(ctx, name)
 	if err != nil {
-		if err == memory.ErrNotFound {
+		if errors.Is(err, models.ErrNotFound) {
 			s.respondError(w, http.StatusNotFound, "metric not found")
 			return
 		}
@@ -222,7 +224,7 @@ func (s *Server) getSpan(w http.ResponseWriter, r *http.Request) {
 
 	span, err := s.store.GetSpan(ctx, decodedName)
 	if err != nil {
-		if err == memory.ErrNotFound {
+		if errors.Is(err, models.ErrNotFound) {
 			s.respondError(w, http.StatusNotFound, "span not found")
 			return
 		}
@@ -265,7 +267,7 @@ func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 
 	log, err := s.store.GetLog(ctx, decodedSeverity)
 	if err != nil {
-		if err == memory.ErrNotFound {
+		if errors.Is(err, models.ErrNotFound) {
 			s.respondError(w, http.StatusNotFound, "log severity not found")
 			return
 		}

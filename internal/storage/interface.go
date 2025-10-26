@@ -5,7 +5,6 @@ import (
 	"context"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
-	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 )
 
@@ -29,7 +28,7 @@ type Storage interface {
 
 	// Service operations
 	ListServices(ctx context.Context) ([]string, error)
-	GetServiceOverview(ctx context.Context, serviceName string) (*memory.ServiceOverview, error)
+	GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error)
 
 	// Configuration (for autotemplate support)
 	UseAutoTemplate() bool

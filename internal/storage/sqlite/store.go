@@ -13,18 +13,12 @@ import (
 	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
-	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	_ "modernc.org/sqlite"
 )
 
 //go:embed migrations/001_initial_schema.up.sql
 var migrationSQL string
-
-var (
-	// ErrNotFound is returned when a requested item is not found
-	ErrNotFound = errors.New("not found")
-)
 
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
@@ -390,7 +384,7 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 	`, name).Scan(&metric.Name, &metric.Type, &metric.Unit, &metric.Description, &metric.SampleCount)
 
 	if err == sql.ErrNoRows {
-		return nil, ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying metric: %w", err)
@@ -646,7 +640,7 @@ func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata,
 	`, name).Scan(&span.Name, &span.Kind, &span.SampleCount)
 
 	if err == sql.ErrNoRows {
-		return nil, ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying span: %w", err)
@@ -971,7 +965,7 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 	`, severityText).Scan(&log.Severity, &log.SampleCount)
 
 	if err == sql.ErrNoRows {
-		return nil, ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying log: %w", err)
@@ -1151,7 +1145,7 @@ func (s *Store) ListServices(ctx context.Context) ([]string, error) {
 }
 
 // GetServiceOverview returns an overview of all telemetry for a service.
-func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*memory.ServiceOverview, error) {
+func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error) {
 	metrics, err := s.ListMetrics(ctx, serviceName)
 	if err != nil {
 		return nil, fmt.Errorf("listing metrics: %w", err)
@@ -1167,7 +1161,7 @@ func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*me
 		return nil, fmt.Errorf("listing logs: %w", err)
 	}
 
-	return &memory.ServiceOverview{
+	return &models.ServiceOverview{
 		ServiceName: serviceName,
 		MetricCount: len(metrics),
 		SpanCount:   len(spans),

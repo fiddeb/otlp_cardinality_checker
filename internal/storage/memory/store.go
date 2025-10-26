@@ -7,15 +7,9 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
-)
-
-var (
-	// ErrNotFound is returned when a requested item is not found
-	ErrNotFound = errors.New("not found")
 )
 
 // Store is an in-memory storage for telemetry metadata.
@@ -105,7 +99,7 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 
 	metric, exists := s.metrics[name]
 	if !exists {
-		return nil, fmt.Errorf("metric %s: %w", name, ErrNotFound)
+		return nil, fmt.Errorf("metric %s: %w", name, models.ErrNotFound)
 	}
 
 	return metric, nil
@@ -193,7 +187,7 @@ func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata,
 
 	span, exists := s.spans[name]
 	if !exists {
-		return nil, fmt.Errorf("span %s: %w", name, ErrNotFound)
+		return nil, fmt.Errorf("span %s: %w", name, models.ErrNotFound)
 	}
 
 	return span, nil
@@ -292,7 +286,7 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 
 	log, exists := s.logs[severityText]
 	if !exists {
-		return nil, fmt.Errorf("log severity %s: %w", severityText, ErrNotFound)
+		return nil, fmt.Errorf("log severity %s: %w", severityText, models.ErrNotFound)
 	}
 
 	// Sort body templates by count descending
@@ -351,8 +345,8 @@ func (s *Store) ListServices(ctx context.Context) ([]string, error) {
 	return services, nil
 }
 
-// GetServiceOverview returns a summary of all telemetry for a service.
-func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*ServiceOverview, error) {
+// GetServiceOverview returns a complete overview of all telemetry for a given service.
+func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error) {
 	if serviceName == "" {
 		return nil, errors.New("service name cannot be empty")
 	}
@@ -372,28 +366,15 @@ func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*Se
 		return nil, fmt.Errorf("listing logs: %w", err)
 	}
 
-	return &ServiceOverview{
-		ServiceName:  serviceName,
-		MetricCount:  len(metrics),
-		SpanCount:    len(spans),
-		LogCount:     len(logs),
-		Metrics:      metrics,
-		Spans:        spans,
-		Logs:         logs,
-		GeneratedAt:  time.Now(),
+	return &models.ServiceOverview{
+		ServiceName: serviceName,
+		MetricCount: len(metrics),
+		SpanCount:   len(spans),
+		LogCount:    len(logs),
+		Metrics:     metrics,
+		Spans:       spans,
+		Logs:        logs,
 	}, nil
-}
-
-// ServiceOverview contains a summary of all telemetry for a service.
-type ServiceOverview struct {
-	ServiceName string                     `json:"service_name"`
-	MetricCount int                        `json:"metric_count"`
-	SpanCount   int                        `json:"span_count"`
-	LogCount    int                        `json:"log_count"`
-	Metrics     []*models.MetricMetadata   `json:"metrics"`
-	Spans       []*models.SpanMetadata     `json:"spans"`
-	Logs        []*models.LogMetadata      `json:"logs"`
-	GeneratedAt time.Time                  `json:"generated_at"`
 }
 
 // Clear removes all stored data.

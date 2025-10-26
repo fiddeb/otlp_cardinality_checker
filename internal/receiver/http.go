@@ -13,7 +13,7 @@ import (
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer"
 	"github.com/fidde/otlp_cardinality_checker/internal/config"
-	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -36,7 +36,7 @@ func decompressGzip(r io.Reader) (io.ReadCloser, error) {
 
 // HTTPReceiver handles OTLP HTTP requests.
 type HTTPReceiver struct {
-	store           *memory.Store
+	store           storage.Storage
 	metricsAnalyzer *analyzer.MetricsAnalyzer
 	tracesAnalyzer  *analyzer.TracesAnalyzer
 	logsAnalyzer    *analyzer.LogsAnalyzer
@@ -44,7 +44,7 @@ type HTTPReceiver struct {
 }
 
 // NewHTTPReceiver creates a new HTTP receiver.
-func NewHTTPReceiver(addr string, store *memory.Store) *HTTPReceiver {
+func NewHTTPReceiver(addr string, store storage.Storage) *HTTPReceiver {
 	// Load patterns from config
 	patterns, err := config.LoadPatterns("config/patterns.yaml")
 	if err != nil {
