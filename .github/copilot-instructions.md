@@ -83,10 +83,50 @@ Use `run_in_terminal` for git commands:
 ```bash
 git add -A
 git commit -m "feat: your feature description"
-git push
+git push origin feature/branch-name
 ```
 
 **Rule**: After every working milestone, suggest a commit to the user. Don't wait for them to ask.
+
+### Feature Branch Workflow
+
+**ALWAYS use feature branches for new work:**
+
+1. **Create feature branch** from main:
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b feature/descriptive-name
+   ```
+
+2. **Work and commit** on feature branch:
+   ```bash
+   # Make changes
+   git add -A
+   git commit -m "feat: add new feature"
+   git push origin feature/descriptive-name
+   ```
+
+3. **Create Pull Request** when ready:
+   ```bash
+   # Push final changes
+   git push origin feature/descriptive-name
+   # Then create PR via GitHub CLI or web interface
+   gh pr create --title "feat: Add new feature" --body "Description of changes"
+   ```
+
+4. **Merge via Pull Request**:
+   - Use GitHub web interface or CLI to merge PR
+   - Delete feature branch after merge
+   - Update local main: `git checkout main && git pull origin main`
+
+**Branch naming conventions:**
+- `feature/description` - New features
+- `fix/description` - Bug fixes
+- `refactor/description` - Code refactoring
+- `docs/description` - Documentation updates
+
+**Never merge directly to main.** Always use Pull Requests for code review and CI validation.
 
 ## Architecture Patterns
 
