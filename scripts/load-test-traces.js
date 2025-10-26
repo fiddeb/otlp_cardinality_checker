@@ -37,16 +37,16 @@ const CARDINALITY = parseInt(__ENV.CARDINALITY || '50');
 // Realistic span names based on microservices architecture
 const spanTemplates = [
     // Web API endpoints
-    { name: 'GET /api/v1/user/{userId}', kind: 2, service: 'api-gateway', attrs: ['http.method', 'http.route', 'http.status_code', 'user_id'] },
-    { name: 'POST /api/v1/auth/login', kind: 2, service: 'api-gateway', attrs: ['http.method', 'http.route', 'http.status_code', 'client_ip'] },
-    { name: 'POST /api/v1/order/create', kind: 2, service: 'api-gateway', attrs: ['http.method', 'http.route', 'http.status_code', 'user_id'] },
+    { name: 'GET /api/v1/user/{userId}', kind: 2, service: 'service-1', attrs: ['http.method', 'http.route', 'http.status_code', 'user_id'] },
+    { name: 'POST /api/v1/auth/login', kind: 2, service: 'service-1', attrs: ['http.method', 'http.route', 'http.status_code', 'client_ip'] },
+    { name: 'POST /api/v1/order/create', kind: 2, service: 'service-1', attrs: ['http.method', 'http.route', 'http.status_code', 'user_id'] },
     { name: 'PUT /api/v1/profile/update', kind: 2, service: 'api-gateway', attrs: ['http.method', 'http.route', 'http.status_code', 'user_id'] },
     { name: 'GET /api/v1/search/products', kind: 2, service: 'api-gateway', attrs: ['http.method', 'http.route', 'http.status_code', 'query'] },
     
     // Order service operations
-    { name: 'order-service/createOrder', kind: 1, service: 'order-service', attrs: ['order_id', 'user_id', 'total_amount'] },
-    { name: 'order-service/validateStock', kind: 3, service: 'order-service', attrs: ['product_id', 'quantity'] },
-    { name: 'order-service/processPayment', kind: 3, service: 'order-service', attrs: ['order_id', 'payment_method'] },
+    { name: 'order-service/createOrder', kind: 1, service: 'service-1', attrs: ['order_id', 'user_id', 'total_amount'] },
+    { name: 'order-service/validateStock', kind: 3, service: 'service-1', attrs: ['product_id', 'quantity'] },
+    { name: 'order-service/processPayment', kind: 3, service: 'service-1', attrs: ['order_id', 'payment_method'] },
     { name: 'order-service/sendConfirmationEmail', kind: 3, service: 'order-service', attrs: ['order_id', 'user_email'] },
     
     // Product service operations

@@ -48,7 +48,7 @@ const CARDINALITY = parseInt(__ENV.CARDINALITY || '50');
 function generateMetricBatch(vu, iter) {
     const timestamp = Date.now() * 1000000; // nanoseconds
     const serviceNum = (vu % 10);
-    const serviceName = `service_${serviceNum}`;
+    const serviceName = `service-${serviceNum}`;
     
     const metrics = [];
     const batchSize = 10;
