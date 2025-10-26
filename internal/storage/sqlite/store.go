@@ -364,6 +364,7 @@ func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
 }
 
 // upsertKeysForMetric upserts key metadata for a metric.
+// Dual-writes to both metric_keys (legacy) and signal_keys (unified) tables.
 func (s *Store) upsertKeysForMetric(tx *sql.Tx, metricName, keyScope string, keys map[string]*models.KeyMetadata) error {
 	for keyName, keyMeta := range keys {
 		samples, err := encodeJSON(keyMeta.ValueSamples)
@@ -371,6 +372,7 @@ func (s *Store) upsertKeysForMetric(tx *sql.Tx, metricName, keyScope string, key
 			return fmt.Errorf("encoding samples for key %s: %w", keyName, err)
 		}
 
+		// Write to legacy metric_keys table for backward compatibility
 		_, err = tx.Exec(`
 			INSERT INTO metric_keys (
 				metric_name, key_scope, key_name, key_count, key_percentage,
@@ -386,7 +388,26 @@ func (s *Store) upsertKeysForMetric(tx *sql.Tx, metricName, keyScope string, key
 			keyMeta.EstimatedCardinality, samples, nil) // HLL sketch = nil for now
 
 		if err != nil {
-			return fmt.Errorf("upserting key %s: %w", keyName, err)
+			return fmt.Errorf("upserting key %s to metric_keys: %w", keyName, err)
+		}
+
+		// Write to unified signal_keys table
+		_, err = tx.Exec(`
+			INSERT INTO signal_keys (
+				signal_type, signal_name, key_scope, key_name, event_name,
+				key_count, key_percentage, estimated_cardinality, value_samples, hll_sketch
+			) VALUES ('metric', ?, ?, ?, '', ?, ?, ?, ?, ?)
+			ON CONFLICT(signal_type, signal_name, key_scope, key_name, event_name) DO UPDATE SET
+				key_count = key_count + excluded.key_count,
+				key_percentage = excluded.key_percentage,
+				estimated_cardinality = excluded.estimated_cardinality,
+				value_samples = excluded.value_samples,
+				hll_sketch = excluded.hll_sketch
+		`, metricName, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
+			keyMeta.EstimatedCardinality, samples, nil)
+
+		if err != nil {
+			return fmt.Errorf("upserting key %s to signal_keys: %w", keyName, err)
 		}
 	}
 	return nil
@@ -447,11 +468,12 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 }
 
 // getKeysForMetric retrieves key metadata for a metric and scope.
+// Reads from unified signal_keys table.
 func (s *Store) getKeysForMetric(ctx context.Context, metricName, keyScope string) (map[string]*models.KeyMetadata, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
-		FROM metric_keys
-		WHERE metric_name = ? AND key_scope = ?
+		FROM signal_keys
+		WHERE signal_type = 'metric' AND signal_name = ? AND key_scope = ?
 	`, metricName, keyScope)
 	if err != nil {
 		return nil, err
@@ -606,6 +628,7 @@ func (s *Store) storeSpanTx(tx *sql.Tx, span *models.SpanMetadata) error {
 }
 
 // upsertKeysForSpan upserts key metadata for a span.
+// Dual-writes to both span_keys (legacy) and signal_keys (unified) tables.
 func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys map[string]*models.KeyMetadata, eventName string) error {
 	for keyName, keyMeta := range keys {
 		samples, err := encodeJSON(keyMeta.ValueSamples)
@@ -613,6 +636,9 @@ func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys ma
 			return fmt.Errorf("encoding samples for key %s: %w", keyName, err)
 		}
 
+		eventNameVal := eventNameOrEmpty(eventName)
+
+		// Write to legacy span_keys table for backward compatibility
 		_, err = tx.Exec(`
 			INSERT INTO span_keys (
 				span_name, key_scope, key_name, event_name, key_count, key_percentage,
@@ -624,11 +650,30 @@ func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys ma
 				estimated_cardinality = excluded.estimated_cardinality,
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
-		`, spanName, keyScope, keyName, eventNameOrEmpty(eventName), keyMeta.Count, keyMeta.Percentage,
+		`, spanName, keyScope, keyName, eventNameVal, keyMeta.Count, keyMeta.Percentage,
 			keyMeta.EstimatedCardinality, samples, nil)
 
 		if err != nil {
-			return fmt.Errorf("upserting key %s: %w", keyName, err)
+			return fmt.Errorf("upserting key %s to span_keys: %w", keyName, err)
+		}
+
+		// Write to unified signal_keys table
+		_, err = tx.Exec(`
+			INSERT INTO signal_keys (
+				signal_type, signal_name, key_scope, key_name, event_name,
+				key_count, key_percentage, estimated_cardinality, value_samples, hll_sketch
+			) VALUES ('span', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(signal_type, signal_name, key_scope, key_name, event_name) DO UPDATE SET
+				key_count = key_count + excluded.key_count,
+				key_percentage = excluded.key_percentage,
+				estimated_cardinality = excluded.estimated_cardinality,
+				value_samples = excluded.value_samples,
+				hll_sketch = excluded.hll_sketch
+		`, spanName, keyScope, keyName, eventNameVal, keyMeta.Count, keyMeta.Percentage,
+			keyMeta.EstimatedCardinality, samples, nil)
+
+		if err != nil {
+			return fmt.Errorf("upserting key %s to signal_keys: %w", keyName, err)
 		}
 	}
 	return nil
@@ -732,6 +777,7 @@ func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata,
 }
 
 // getKeysForSpan retrieves key metadata for a span, scope, and optional event name.
+// Reads from unified signal_keys table.
 func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventName string) (map[string]*models.KeyMetadata, error) {
 	var rows *sql.Rows
 	var err error
@@ -739,14 +785,14 @@ func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventNam
 	if eventName != "" {
 		rows, err = s.db.QueryContext(ctx, `
 			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
-			FROM span_keys
-			WHERE span_name = ? AND key_scope = ? AND event_name = ?
+			FROM signal_keys
+			WHERE signal_type = 'span' AND signal_name = ? AND key_scope = ? AND event_name = ?
 		`, spanName, keyScope, eventName)
 	} else {
 		rows, err = s.db.QueryContext(ctx, `
 			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
-			FROM span_keys
-			WHERE span_name = ? AND key_scope = ? AND event_name = ''
+			FROM signal_keys
+			WHERE signal_type = 'span' AND signal_name = ? AND key_scope = ? AND event_name = ''
 		`, spanName, keyScope)
 	}
 
