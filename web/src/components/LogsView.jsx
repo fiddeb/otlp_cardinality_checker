@@ -48,7 +48,7 @@ function LogsView({ onViewDetails }) {
     return Math.max(...Object.values(log.attribute_keys).map(k => k.estimated_cardinality || 0))
   }
 
-  const filteredPatterns = patterns.filter(pattern => {
+  const filteredPatterns = (patterns || []).filter(pattern => {
     if (pattern.count < filter.minSamples) return false
     return true
   })

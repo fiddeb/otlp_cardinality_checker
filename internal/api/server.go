@@ -4,19 +4,23 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage"
+	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 // Server is the REST API server.
 type Server struct {
-	store  *memory.Store
+	store  storage.Storage
 	router *chi.Mux
 	server *http.Server
 }
@@ -101,7 +105,7 @@ func paginateSlice[T any](items []T, params PaginationParams) ([]T, PaginatedRes
 }
 
 // NewServer creates a new API server.
-func NewServer(addr string, store *memory.Store) *Server {
+func NewServer(addr string, store storage.Storage) *Server {
 	s := &Server{
 		store:  store,
 		router: chi.NewRouter(),
@@ -134,6 +138,27 @@ func NewServer(addr string, store *memory.Store) *Server {
 		// Services endpoints
 		r.Get("/services", s.listServices)
 		r.Get("/services/{name}/overview", s.getServiceOverview)
+
+		// Admin endpoints
+		r.Post("/admin/clear", s.clearAllData)
+	})
+
+	// Serve static files from web/dist
+	workDir, _ := os.Getwd()
+	filesDir := http.Dir(filepath.Join(workDir, "web", "dist"))
+	fileServer := http.FileServer(filesDir)
+	
+	// Serve static files, with SPA fallback to index.html
+	s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+		// Try to serve the file
+		path := filepath.Join(workDir, "web", "dist", r.URL.Path)
+		if _, err := os.Stat(path); err == nil {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		
+		// If file doesn't exist, serve index.html for SPA routing
+		http.ServeFile(w, r, filepath.Join(workDir, "web", "dist", "index.html"))
 	})
 
 	s.server = &http.Server{
@@ -179,7 +204,7 @@ func (s *Server) getMetric(w http.ResponseWriter, r *http.Request) {
 
 	metric, err := s.store.GetMetric(ctx, name)
 	if err != nil {
-		if err == memory.ErrNotFound {
+		if errors.Is(err, models.ErrNotFound) {
 			s.respondError(w, http.StatusNotFound, "metric not found")
 			return
 		}
@@ -222,7 +247,7 @@ func (s *Server) getSpan(w http.ResponseWriter, r *http.Request) {
 
 	span, err := s.store.GetSpan(ctx, decodedName)
 	if err != nil {
-		if err == memory.ErrNotFound {
+		if errors.Is(err, models.ErrNotFound) {
 			s.respondError(w, http.StatusNotFound, "span not found")
 			return
 		}
@@ -265,7 +290,7 @@ func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 
 	log, err := s.store.GetLog(ctx, decodedSeverity)
 	if err != nil {
-		if err == memory.ErrNotFound {
+		if errors.Is(err, models.ErrNotFound) {
 			s.respondError(w, http.StatusNotFound, "log severity not found")
 			return
 		}
@@ -324,5 +349,20 @@ func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}
 func (s *Server) respondError(w http.ResponseWriter, status int, message string) {
 	s.respondJSON(w, status, map[string]string{
 		"error": message,
+	})
+}
+
+// clearAllData clears all data from the storage.
+// POST /api/v1/admin/clear
+func (s *Server) clearAllData(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := s.store.Clear(ctx); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "Failed to clear data")
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"message": "All data cleared successfully",
 	})
 }

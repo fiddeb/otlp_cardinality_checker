@@ -32,7 +32,7 @@ function MetricsView({ onViewDetails }) {
     return Math.max(...Object.values(metric.label_keys).map(k => k.estimated_cardinality || 0))
   }
 
-  const filteredMetrics = metrics.filter(metric => {
+  const filteredMetrics = (metrics || []).filter(metric => {
     if (filter.type !== 'all' && metric.type !== filter.type) return false
     if (metric.sample_count < filter.minSamples) return false
     if (getMaxCardinality(metric) < filter.minCardinality) return false
@@ -50,7 +50,7 @@ function MetricsView({ onViewDetails }) {
     setCurrentPage(1)
   }, [filter])
 
-  const metricTypes = ['all', ...new Set(metrics.map(m => m.type).filter(Boolean))]
+  const metricTypes = ['all', ...new Set((metrics || []).map(m => m.type).filter(Boolean))]
 
   const getCardinalityBadge = (card) => {
     if (card > 200) return 'high'
