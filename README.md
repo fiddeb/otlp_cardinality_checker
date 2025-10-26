@@ -68,6 +68,7 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 - ✅ **OTLP gRPC Endpoint** - Full gRPC support (port 4317)
 - ✅ **Source Agnostic** - Works with any Collector receiver (Kafka, Redis, Prometheus, etc.)
 - ✅ **Metadata Extraction** - Analyzes metrics, traces, and logs
+- ✅ **Automatic Log Template Extraction** - Drain algorithm for pattern detection (20-30k+ EPS)
 - ✅ **Cardinality Tracking** - Estimates unique value counts per label
 - ✅ **In-Memory Storage** - Fast, handles 500,000+ metrics
 - ✅ **REST API** - Query metadata with pagination support
@@ -151,6 +152,9 @@ curl http://localhost:8080/api/v1/metrics/http_server_duration
 
 # List spans
 curl http://localhost:8080/api/v1/spans
+
+# Get log templates by severity (with autotemplate enabled)
+curl http://localhost:8080/api/v1/logs/INFO
 
 # Get summary
 curl http://localhost:8080/api/v1/summary
@@ -240,11 +244,50 @@ export OTLP_HTTP_ADDR="0.0.0.0:4318"
 # REST API address (default: 0.0.0.0:8080)
 export API_ADDR="0.0.0.0:8080"
 
+# Enable automatic log template extraction with Drain algorithm (default: false)
+export USE_AUTOTEMPLATE=true
+
 # Run the server
 ./otlp-cardinality-checker
 ```
 
-**Note:** Configuration file support (YAML) is planned for Phase 2.
+### Automatic Log Template Extraction
+
+When `USE_AUTOTEMPLATE=true`, the tool uses the **Drain algorithm** to automatically detect patterns in log bodies:
+
+```bash
+# Enable autotemplate mode
+USE_AUTOTEMPLATE=true ./otlp-cardinality-checker
+```
+
+**Features:**
+- **Algorithm**: Drain (ICWS'17) - Fixed-depth tree with token similarity clustering
+- **Performance**: 53k-1.6M events/sec (exceeds 20-30k target by 2-80x)
+- **Pattern detection**: Automatically groups similar log messages into templates
+- **Pre-masking**: Recognizes timestamps, UUIDs, IPs, URLs, emails, and more
+- **Example bodies**: Each template stores an example log for reference
+
+**Example patterns detected:**
+```
+Syslog:
+  Dec  4 10:30:15 host sshd[1234]: Accepted publickey for user from 1.2.3.4
+  → <TIMESTAMP> host sshd[<NUM>]: Accepted publickey for user from <IP>
+
+Apache:
+  [Sun Dec 04 04:51:08 2005] [notice] jk2_init() Found child 6725
+  → <TIMESTAMP> [notice] jk2_init() Found child <NUM>
+```
+
+**Query templates:**
+```bash
+# Get all INFO-level log templates
+curl http://localhost:8080/api/v1/logs/INFO | jq '.body_templates'
+
+# Get ERROR-level templates with sample counts
+curl http://localhost:8080/api/v1/logs/ERROR | jq '{severity, sample_count, body_templates}'
+```
+
+See [docs/research/log-templating/](docs/research/log-templating/) for algorithm details and performance benchmarks.
   format: "json"
 ```
 
@@ -258,7 +301,10 @@ Run with config:
 
 - **[docs/USAGE.md](docs/USAGE.md)** - 📘 **Start here!** Practical usage guide with examples
 - **[docs/API.md](docs/API.md)** - Complete REST API documentation with pagination examples
-- **[docs/SCALABILITY.md](docs/SCALABILITY.md)** - Performance optimizations and scalability limits  
+- **[docs/SCALABILITY.md](docs/SCALABILITY.md)** - Performance optimizations and scalability limits
+- **[docs/research/log-templating/](docs/research/log-templating/)** - Automatic log template extraction with Drain algorithm
+  - **[README.md](docs/research/log-templating/README.md)** - Algorithm research and comparison
+  - **[STATUS.md](docs/research/log-templating/STATUS.md)** - Implementation details and benchmarks
 - **[k8s/README.md](k8s/README.md)** - Kubernetes deployment guide
 - **[scripts/README.md](scripts/README.md)** - Load testing guide with K6
 - **[PRODUCT.md](PRODUCT.md)** - Product overview and requirements
@@ -291,13 +337,16 @@ Run with config:
 - Sub-millisecond metadata updates
 - <10ms API responses for 100 items
 
-### Phase 2: Production Hardening (In Progress)
-- [✅] OTLP gRPC receiver (port 4317)
-- [ ] PostgreSQL persistence for historical tracking
-- [ ] Configuration file support (YAML)
-- [ ] Comprehensive unit tests
+### Phase 2: Production Hardening ✅ **COMPLETE**
+- [x] OTLP gRPC receiver (port 4317)
+- [x] Automatic log template extraction with Drain algorithm
+- [x] Pattern pre-masking (timestamps, UUIDs, IPs, URLs, etc.)
+- [x] Configurable similarity threshold for template specificity
+- [x] Comprehensive pattern validation tests
+- [x] Performance benchmarks (53k-1.6M EPS)
+- [ ] PostgreSQL persistence for historical tracking (deferred)
+- [ ] Configuration file support (YAML) (deferred)
 - [ ] Helm charts for easier Kubernetes deployment
-- [ ] HyperLogLog for >1,000 unique values per label
 
 ### Phase 3: Enhanced Features (Future)
 - [ ] Web UI for visualization
@@ -404,6 +453,15 @@ A: Approximately 8-9 KB per metric. For 10,000 metrics: ~85 MB, for 50,000 metri
 
 **Q: Can I run multiple replicas in Kubernetes?**  
 A: Each replica has independent in-memory storage. For shared state, you would need to implement distributed storage (future enhancement).
+
+**Q: What is automatic log template extraction?**  
+A: When enabled with `USE_AUTOTEMPLATE=true`, the tool uses the Drain algorithm to automatically group similar log messages into patterns. For example, "User 123 logged in" and "User 456 logged in" become one template: "User <NUM> logged in". This helps identify log cardinality issues without manual configuration.
+
+**Q: How fast is the Drain template extraction?**  
+A: Performance ranges from 53k to 1.6M events per second depending on concurrency, exceeding the 20-30k EPS target by 2-80x. See [docs/research/log-templating/STATUS.md](docs/research/log-templating/STATUS.md) for benchmarks.
+
+**Q: Can I adjust how specific the templates are?**  
+A: Yes, the similarity threshold is configurable (default 0.7). Higher values create more specific templates, lower values create more generic ones.
 
 ## Deployment
 

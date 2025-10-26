@@ -98,7 +98,7 @@ type BodyTemplate struct {
 	Template   string  `json:"template"`
 	Count      int64   `json:"count"`
 	Percentage float64 `json:"percentage"`
-	Example    string  `json:"example,omitempty"` // First sample that matched this template
+	Example    string  `json:"example"` // First sample that matched this template
 }
 
 // KeyMetadata tracks statistics about a specific attribute/label key.
