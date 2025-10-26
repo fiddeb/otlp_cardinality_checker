@@ -135,7 +135,12 @@ function LogsView({ onViewDetails }) {
             .sort((a, b) => b.count - a.count)
             .map((pattern, i) => {
               return (
-                <tr key={i}>
+                <tr 
+                  key={i}
+                  onClick={() => onViewDetails('log', pattern.severity)}
+                  style={{ cursor: 'pointer' }}
+                  className="clickable-row"
+                >
                   <td>
                     <code className="template-code" style={{ 
                       fontSize: '13px',
