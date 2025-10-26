@@ -36,9 +36,9 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
 
   const totalPages = (items) => Math.ceil(items.length / itemsPerPage)
 
-  const paginatedMetrics = paginate(overview.metrics, metricsPage)
-  const paginatedSpans = paginate(overview.spans, spansPage)
-  const paginatedLogs = paginate(overview.logs, logsPage)
+  const paginatedMetrics = paginate(overview?.metrics || [], metricsPage)
+  const paginatedSpans = paginate(overview?.spans || [], spansPage)
+  const paginatedLogs = paginate(overview?.logs || [], logsPage)
 
   return (
     <>
@@ -47,7 +47,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
       <div className="card">
         <h2>Service: {serviceName}</h2>
         
-        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Metrics ({overview.metrics.length})</h3>
+        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Metrics ({overview?.metrics?.length || 0})</h3>
         <table>
           <thead>
             <tr>
@@ -73,7 +73,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
             ))}
           </tbody>
         </table>
-        {overview.metrics.length > itemsPerPage && (
+        {(overview?.metrics?.length || 0) > itemsPerPage && (
           <div className="pagination">
             <button 
               onClick={() => setMetricsPage(p => Math.max(1, p - 1))}
@@ -82,19 +82,19 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
               Previous
             </button>
             <span className="template-count-text">
-              Page {metricsPage} of {totalPages(overview.metrics)} 
-              (Showing {(metricsPage - 1) * itemsPerPage + 1}-{Math.min(metricsPage * itemsPerPage, overview.metrics.length)} of {overview.metrics.length})
+              Page {metricsPage} of {totalPages(overview?.metrics || [])} 
+              (Showing {(metricsPage - 1) * itemsPerPage + 1}-{Math.min(metricsPage * itemsPerPage, overview?.metrics?.length || 0)} of {overview?.metrics?.length || 0})
             </span>
             <button 
-              onClick={() => setMetricsPage(p => Math.min(totalPages(overview.metrics), p + 1))}
-              disabled={metricsPage === totalPages(overview.metrics)}
+              onClick={() => setMetricsPage(p => Math.min(totalPages(overview?.metrics || []), p + 1))}
+              disabled={metricsPage === totalPages(overview?.metrics || [])}
             >
               Next
             </button>
           </div>
         )}
 
-        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Spans ({overview.spans.length})</h3>
+        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Spans ({overview?.spans?.length || 0})</h3>
         <table>
           <thead>
             <tr>
@@ -120,7 +120,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
             ))}
           </tbody>
         </table>
-        {overview.spans.length > itemsPerPage && (
+        {(overview?.spans?.length || 0) > itemsPerPage && (
           <div className="pagination">
             <button 
               onClick={() => setSpansPage(p => Math.max(1, p - 1))}
@@ -129,19 +129,19 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
               Previous
             </button>
             <span className="template-count-text">
-              Page {spansPage} of {totalPages(overview.spans)} 
-              (Showing {(spansPage - 1) * itemsPerPage + 1}-{Math.min(spansPage * itemsPerPage, overview.spans.length)} of {overview.spans.length})
+              Page {spansPage} of {totalPages(overview?.spans || [])} 
+              (Showing {(spansPage - 1) * itemsPerPage + 1}-{Math.min(spansPage * itemsPerPage, overview?.spans?.length || 0)} of {overview?.spans?.length || 0})
             </span>
             <button 
-              onClick={() => setSpansPage(p => Math.min(totalPages(overview.spans), p + 1))}
-              disabled={spansPage === totalPages(overview.spans)}
+              onClick={() => setSpansPage(p => Math.min(totalPages(overview?.spans || []), p + 1))}
+              disabled={spansPage === totalPages(overview?.spans || [])}
             >
               Next
             </button>
           </div>
         )}
 
-        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Logs ({overview.logs.length})</h3>
+        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Logs ({overview?.logs?.length || 0})</h3>
         <table>
           <thead>
             <tr>
@@ -165,7 +165,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
             ))}
           </tbody>
         </table>
-        {overview.logs.length > itemsPerPage && (
+        {(overview?.logs?.length || 0) > itemsPerPage && (
           <div className="pagination">
             <button 
               onClick={() => setLogsPage(p => Math.max(1, p - 1))}
@@ -174,12 +174,12 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
               Previous
             </button>
             <span className="template-count-text">
-              Page {logsPage} of {totalPages(overview.logs)} 
-              (Showing {(logsPage - 1) * itemsPerPage + 1}-{Math.min(logsPage * itemsPerPage, overview.logs.length)} of {overview.logs.length})
+              Page {logsPage} of {totalPages(overview?.logs || [])} 
+              (Showing {(logsPage - 1) * itemsPerPage + 1}-{Math.min(logsPage * itemsPerPage, overview?.logs?.length || 0)} of {overview?.logs?.length || 0})
             </span>
             <button 
-              onClick={() => setLogsPage(p => Math.min(totalPages(overview.logs), p + 1))}
-              disabled={logsPage === totalPages(overview.logs)}
+              onClick={() => setLogsPage(p => Math.min(totalPages(overview?.logs || []), p + 1))}
+              disabled={logsPage === totalPages(overview?.logs || [])}
             >
               Next
             </button>

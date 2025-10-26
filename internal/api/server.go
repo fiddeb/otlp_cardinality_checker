@@ -7,6 +7,8 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -136,6 +138,27 @@ func NewServer(addr string, store storage.Storage) *Server {
 		// Services endpoints
 		r.Get("/services", s.listServices)
 		r.Get("/services/{name}/overview", s.getServiceOverview)
+
+		// Admin endpoints
+		r.Post("/admin/clear", s.clearAllData)
+	})
+
+	// Serve static files from web/dist
+	workDir, _ := os.Getwd()
+	filesDir := http.Dir(filepath.Join(workDir, "web", "dist"))
+	fileServer := http.FileServer(filesDir)
+	
+	// Serve static files, with SPA fallback to index.html
+	s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+		// Try to serve the file
+		path := filepath.Join(workDir, "web", "dist", r.URL.Path)
+		if _, err := os.Stat(path); err == nil {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		
+		// If file doesn't exist, serve index.html for SPA routing
+		http.ServeFile(w, r, filepath.Join(workDir, "web", "dist", "index.html"))
 	})
 
 	s.server = &http.Server{
@@ -326,5 +349,20 @@ func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}
 func (s *Server) respondError(w http.ResponseWriter, status int, message string) {
 	s.respondJSON(w, status, map[string]string{
 		"error": message,
+	})
+}
+
+// clearAllData clears all data from the storage.
+// POST /api/v1/admin/clear
+func (s *Server) clearAllData(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := s.store.Clear(ctx); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "Failed to clear data")
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"message": "All data cleared successfully",
 	})
 }
