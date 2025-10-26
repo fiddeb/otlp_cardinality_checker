@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-function LogsView({ onViewDetails }) {
+function LogsView({ onViewTemplate }) {
   const [logs, setLogs] = useState([])
   const [patterns, setPatterns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -137,7 +137,7 @@ function LogsView({ onViewDetails }) {
               return (
                 <tr 
                   key={i}
-                  onClick={() => onViewDetails('log', pattern.severity)}
+                  onClick={() => onViewTemplate(pattern.severity, pattern.template)}
                   style={{ cursor: 'pointer' }}
                   className="clickable-row"
                 >
@@ -155,8 +155,6 @@ function LogsView({ onViewDetails }) {
                   </td>
                   <td>
                     <span 
-                      className="detail-link"
-                      onClick={() => onViewDetails('logs', pattern.severity)}
                       style={{ 
                         fontWeight: 'bold',
                         color: getSeverityColor(pattern.severity)
