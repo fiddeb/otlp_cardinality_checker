@@ -32,6 +32,9 @@ type Storage interface {
 	// Cross-signal cardinality analysis
 	GetHighCardinalityKeys(ctx context.Context, threshold int, limit int) (*models.CrossSignalCardinalityResponse, error)
 
+	// Metadata complexity analysis
+	GetMetadataComplexity(ctx context.Context, threshold int, limit int) (*models.MetadataComplexityResponse, error)
+
 	// Service operations
 	ListServices(ctx context.Context) ([]string, error)
 	GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error)
