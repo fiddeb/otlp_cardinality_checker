@@ -6,7 +6,7 @@
 -- ============================================================================
 
 -- Base metric metadata (one row per unique metric name)
-CREATE TABLE metrics (
+CREATE TABLE IF NOT EXISTS metrics (
     name TEXT PRIMARY KEY,
     type TEXT NOT NULL,
     unit TEXT,
@@ -15,7 +15,7 @@ CREATE TABLE metrics (
 ) STRICT;
 
 -- Service tracking for metrics (many-to-many)
-CREATE TABLE metric_services (
+CREATE TABLE IF NOT EXISTS metric_services (
     metric_name TEXT NOT NULL,
     service_name TEXT NOT NULL,
     sample_count INTEGER DEFAULT 0,
@@ -23,10 +23,10 @@ CREATE TABLE metric_services (
     FOREIGN KEY (metric_name) REFERENCES metrics(name) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX idx_metric_services_service ON metric_services(service_name);
+CREATE INDEX IF NOT EXISTS idx_metric_services_service ON metric_services(service_name);
 
 -- Label and resource keys with cardinality tracking
-CREATE TABLE metric_keys (
+CREATE TABLE IF NOT EXISTS metric_keys (
     metric_name TEXT NOT NULL,
     key_scope TEXT NOT NULL,  -- 'label' or 'resource'
     key_name TEXT NOT NULL,
@@ -39,21 +39,21 @@ CREATE TABLE metric_keys (
     FOREIGN KEY (metric_name) REFERENCES metrics(name) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX idx_metric_keys_name ON metric_keys(metric_name);
+CREATE INDEX IF NOT EXISTS idx_metric_keys_name ON metric_keys(metric_name);
 
 -- ============================================================================
 -- SPANS
 -- ============================================================================
 
 -- Base span metadata
-CREATE TABLE spans (
+CREATE TABLE IF NOT EXISTS spans (
     name TEXT PRIMARY KEY,
     kind TEXT,  -- Client, Server, Internal, Producer, Consumer
     total_sample_count INTEGER DEFAULT 0
 ) STRICT;
 
 -- Service tracking for spans
-CREATE TABLE span_services (
+CREATE TABLE IF NOT EXISTS span_services (
     span_name TEXT NOT NULL,
     service_name TEXT NOT NULL,
     sample_count INTEGER DEFAULT 0,
@@ -61,10 +61,10 @@ CREATE TABLE span_services (
     FOREIGN KEY (span_name) REFERENCES spans(name) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX idx_span_services_service ON span_services(service_name);
+CREATE INDEX IF NOT EXISTS idx_span_services_service ON span_services(service_name);
 
 -- Span attribute and resource keys
-CREATE TABLE span_keys (
+CREATE TABLE IF NOT EXISTS span_keys (
     span_name TEXT NOT NULL,
     key_scope TEXT NOT NULL,  -- 'attribute', 'resource', 'event', 'link'
     key_name TEXT NOT NULL,
@@ -78,10 +78,10 @@ CREATE TABLE span_keys (
     FOREIGN KEY (span_name) REFERENCES spans(name) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX idx_span_keys_name ON span_keys(span_name);
+CREATE INDEX IF NOT EXISTS idx_span_keys_name ON span_keys(span_name);
 
 -- Event names observed in spans
-CREATE TABLE span_events (
+CREATE TABLE IF NOT EXISTS span_events (
     span_name TEXT NOT NULL,
     event_name TEXT NOT NULL,
     PRIMARY KEY (span_name, event_name),
@@ -93,13 +93,13 @@ CREATE TABLE span_events (
 -- ============================================================================
 
 -- Base log metadata (grouped by severity)
-CREATE TABLE logs (
+CREATE TABLE IF NOT EXISTS logs (
     severity TEXT PRIMARY KEY,
     total_sample_count INTEGER DEFAULT 0
 ) STRICT;
 
 -- Service tracking for logs
-CREATE TABLE log_services (
+CREATE TABLE IF NOT EXISTS log_services (
     severity TEXT NOT NULL,
     service_name TEXT NOT NULL,
     sample_count INTEGER DEFAULT 0,
@@ -107,10 +107,10 @@ CREATE TABLE log_services (
     FOREIGN KEY (severity) REFERENCES logs(severity) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX idx_log_services_service ON log_services(service_name);
+CREATE INDEX IF NOT EXISTS idx_log_services_service ON log_services(service_name);
 
 -- Log attribute and resource keys
-CREATE TABLE log_keys (
+CREATE TABLE IF NOT EXISTS log_keys (
     severity TEXT NOT NULL,
     key_scope TEXT NOT NULL,  -- 'attribute' or 'resource'
     key_name TEXT NOT NULL,
@@ -123,11 +123,11 @@ CREATE TABLE log_keys (
     FOREIGN KEY (severity) REFERENCES logs(severity) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX idx_log_keys_severity ON log_keys(severity);
+CREATE INDEX IF NOT EXISTS idx_log_keys_severity ON log_keys(severity);
 
 -- Body templates extracted from log messages (Drain algorithm output)
 -- Stored per-service because different services have different log patterns
-CREATE TABLE log_body_templates (
+CREATE TABLE IF NOT EXISTS log_body_templates (
     severity TEXT NOT NULL,
     service_name TEXT NOT NULL,
     template TEXT NOT NULL,
@@ -138,11 +138,11 @@ CREATE TABLE log_body_templates (
     FOREIGN KEY (severity) REFERENCES logs(severity) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX idx_log_templates_severity_service 
+CREATE INDEX IF NOT EXISTS idx_log_templates_severity_service 
     ON log_body_templates(severity, service_name);
 
 -- Optimize for top-K template queries (ORDER BY count DESC)
-CREATE INDEX idx_log_templates_count 
+CREATE INDEX IF NOT EXISTS idx_log_templates_count 
     ON log_body_templates(severity, service_name, count DESC);
 
 -- ============================================================================
