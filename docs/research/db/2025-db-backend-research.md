@@ -72,6 +72,77 @@ This document summarizes an unbiased look at storage options to replace the curr
 
 ## Initial schema (SQLite/Postgres compatible)
 
+### Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    services ||--o{ metrics_metadata : "has"
+    services ||--o{ spans_metadata : "has"
+    services ||--o{ logs_metadata : "has"
+    services ||--o{ body_templates : "has"
+    services ||--o{ key_metadata : "has"
+
+    services {
+        INTEGER id PK
+        TEXT name UK "NOT NULL"
+    }
+
+    metrics_metadata {
+        INTEGER id PK
+        INTEGER service_id FK "NOT NULL"
+        TEXT name "NOT NULL"
+        TEXT type "NOT NULL"
+        TEXT label_keys "sorted JSON/delim"
+        TEXT resource_keys "sorted JSON/delim"
+        BIGINT sample_count "NOT NULL"
+    }
+
+    spans_metadata {
+        INTEGER id PK
+        INTEGER service_id FK "NOT NULL"
+        TEXT name "NOT NULL"
+        TEXT attr_keys "sorted JSON/delim"
+        TEXT resource_keys "sorted JSON/delim"
+        BIGINT sample_count "NOT NULL"
+    }
+
+    logs_metadata {
+        INTEGER id PK
+        INTEGER service_id FK "NOT NULL"
+        TEXT severity "NOT NULL"
+        TEXT attr_keys "sorted JSON/delim"
+        TEXT resource_keys "sorted JSON/delim"
+        BIGINT sample_count "NOT NULL"
+    }
+
+    body_templates {
+        INTEGER id PK
+        INTEGER service_id FK "NOT NULL"
+        TEXT severity "NOT NULL"
+        TEXT template "NOT NULL"
+        TEXT example "NULL, for UX"
+        BIGINT count "NOT NULL"
+        REAL percentage "NOT NULL"
+    }
+
+    key_metadata {
+        INTEGER id PK
+        INTEGER service_id FK "NOT NULL"
+        TEXT scope "metric/span/log"
+        TEXT key "NOT NULL"
+        BIGINT sample_count "NOT NULL"
+        BIGINT cardinality_estimate "NULL"
+        BLOB sketch "NULL, one-way hashed"
+    }
+```
+
+**Key relationships:**
+- All tables reference `services` with CASCADE delete.
+- `body_templates` is per (service, severity, template) — tracks Drain-extracted log patterns.
+- `key_metadata` tracks individual label/attribute keys across signals (scope).
+
+### DDL
+
 ```sql
 -- services
 CREATE TABLE services (
