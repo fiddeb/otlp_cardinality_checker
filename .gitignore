@@ -52,3 +52,8 @@ config.local.yaml
 # Temporary files
 tmp/
 temp/
+
+# Frontend build artifacts
+web/dist/
+web/node_modules/
+web/.vite/
