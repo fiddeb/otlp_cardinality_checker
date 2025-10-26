@@ -142,6 +142,7 @@ func NewServer(addr string, store storage.Storage) *Server {
 
 		// Cardinality analysis endpoints
 		r.Get("/cardinality/high", s.getHighCardinalityKeys)
+		r.Get("/cardinality/complexity", s.getMetadataComplexity)
 
 		// Admin endpoints
 		r.Post("/admin/clear", s.clearAllData)
@@ -390,6 +391,41 @@ func (s *Server) getHighCardinalityKeys(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response, err := s.store.GetHighCardinalityKeys(ctx, threshold, limit)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, response)
+}
+
+// getMetadataComplexity returns signals with high metadata complexity.
+// Query parameters:
+//   - threshold: minimum total key count (default: 10)
+//   - limit: max results to return (default: 100, max: 1000)
+func (s *Server) getMetadataComplexity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Parse threshold parameter
+	threshold := 10
+	if thresholdStr := r.URL.Query().Get("threshold"); thresholdStr != "" {
+		if parsed, err := strconv.Atoi(thresholdStr); err == nil && parsed > 0 {
+			threshold = parsed
+		}
+	}
+
+	// Parse limit parameter
+	limit := 100
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+			if limit > 1000 {
+				limit = 1000
+			}
+		}
+	}
+
+	response, err := s.store.GetMetadataComplexity(ctx, threshold, limit)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
 		return

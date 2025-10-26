@@ -587,6 +587,169 @@ func (s *Store) GetHighCardinalityKeys(ctx context.Context, threshold int, limit
 	}, nil
 }
 
+// GetMetadataComplexity returns signals with high metadata complexity (many keys).
+func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit int) (*models.MetadataComplexityResponse, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var signals []models.SignalComplexity
+
+	// Analyze metrics
+	s.metricsmu.RLock()
+	for metricName, metric := range s.metrics {
+		totalKeys := len(metric.LabelKeys) + len(metric.ResourceKeys)
+		if totalKeys < threshold {
+			continue
+		}
+
+		sig := models.SignalComplexity{
+			SignalType:        "metric",
+			SignalName:        metricName,
+			TotalKeys:         totalKeys,
+			AttributeKeyCount: len(metric.LabelKeys),
+			ResourceKeyCount:  len(metric.ResourceKeys),
+		}
+
+		// Find max cardinality and count high-cardinality keys
+		for _, keyMeta := range metric.LabelKeys {
+			if int(keyMeta.EstimatedCardinality) > sig.MaxCardinality {
+				sig.MaxCardinality = int(keyMeta.EstimatedCardinality)
+			}
+			if keyMeta.EstimatedCardinality > 100 {
+				sig.HighCardinalityCount++
+			}
+		}
+		for _, keyMeta := range metric.ResourceKeys {
+			if int(keyMeta.EstimatedCardinality) > sig.MaxCardinality {
+				sig.MaxCardinality = int(keyMeta.EstimatedCardinality)
+			}
+			if keyMeta.EstimatedCardinality > 100 {
+				sig.HighCardinalityCount++
+			}
+		}
+
+		sig.ComplexityScore = sig.TotalKeys * sig.MaxCardinality
+		signals = append(signals, sig)
+	}
+	s.metricsmu.RUnlock()
+
+	// Analyze spans
+	s.spansmu.RLock()
+	for spanName, span := range s.spans {
+		totalKeys := len(span.AttributeKeys) + len(span.ResourceKeys) + len(span.LinkAttributeKeys)
+		
+		// Count event keys
+		eventKeys := 0
+		for _, eventAttrs := range span.EventAttributeKeys {
+			eventKeys += len(eventAttrs)
+		}
+		totalKeys += eventKeys
+
+		if totalKeys < threshold {
+			continue
+		}
+
+		sig := models.SignalComplexity{
+			SignalType:        "span",
+			SignalName:        spanName,
+			TotalKeys:         totalKeys,
+			AttributeKeyCount: len(span.AttributeKeys),
+			ResourceKeyCount:  len(span.ResourceKeys),
+			EventKeyCount:     eventKeys,
+			LinkKeyCount:      len(span.LinkAttributeKeys),
+		}
+
+		// Find max cardinality
+		for _, keyMeta := range span.AttributeKeys {
+			if int(keyMeta.EstimatedCardinality) > sig.MaxCardinality {
+				sig.MaxCardinality = int(keyMeta.EstimatedCardinality)
+			}
+			if keyMeta.EstimatedCardinality > 100 {
+				sig.HighCardinalityCount++
+			}
+		}
+		for _, keyMeta := range span.ResourceKeys {
+			if int(keyMeta.EstimatedCardinality) > sig.MaxCardinality {
+				sig.MaxCardinality = int(keyMeta.EstimatedCardinality)
+			}
+			if keyMeta.EstimatedCardinality > 100 {
+				sig.HighCardinalityCount++
+			}
+		}
+		for _, keyMeta := range span.LinkAttributeKeys {
+			if int(keyMeta.EstimatedCardinality) > sig.MaxCardinality {
+				sig.MaxCardinality = int(keyMeta.EstimatedCardinality)
+			}
+			if keyMeta.EstimatedCardinality > 100 {
+				sig.HighCardinalityCount++
+			}
+		}
+
+		sig.ComplexityScore = sig.TotalKeys * sig.MaxCardinality
+		signals = append(signals, sig)
+	}
+	s.spansmu.RUnlock()
+
+	// Analyze logs
+	s.logsmu.RLock()
+	for severity, log := range s.logs {
+		totalKeys := len(log.AttributeKeys) + len(log.ResourceKeys)
+		if totalKeys < threshold {
+			continue
+		}
+
+		sig := models.SignalComplexity{
+			SignalType:        "log",
+			SignalName:        severity,
+			TotalKeys:         totalKeys,
+			AttributeKeyCount: len(log.AttributeKeys),
+			ResourceKeyCount:  len(log.ResourceKeys),
+		}
+
+		// Find max cardinality
+		for _, keyMeta := range log.AttributeKeys {
+			if int(keyMeta.EstimatedCardinality) > sig.MaxCardinality {
+				sig.MaxCardinality = int(keyMeta.EstimatedCardinality)
+			}
+			if keyMeta.EstimatedCardinality > 100 {
+				sig.HighCardinalityCount++
+			}
+		}
+		for _, keyMeta := range log.ResourceKeys {
+			if int(keyMeta.EstimatedCardinality) > sig.MaxCardinality {
+				sig.MaxCardinality = int(keyMeta.EstimatedCardinality)
+			}
+			if keyMeta.EstimatedCardinality > 100 {
+				sig.HighCardinalityCount++
+			}
+		}
+
+		sig.ComplexityScore = sig.TotalKeys * sig.MaxCardinality
+		signals = append(signals, sig)
+	}
+	s.logsmu.RUnlock()
+
+	// Sort by complexity score descending
+	sort.Slice(signals, func(i, j int) bool {
+		if signals[i].TotalKeys == signals[j].TotalKeys {
+			return signals[i].MaxCardinality > signals[j].MaxCardinality
+		}
+		return signals[i].TotalKeys > signals[j].TotalKeys
+	})
+
+	// Apply limit
+	if len(signals) > limit {
+		signals = signals[:limit]
+	}
+
+	return &models.MetadataComplexityResponse{
+		Signals:   signals,
+		Total:     len(signals),
+		Threshold: threshold,
+	}, nil
+}
+
 // Clear removes all stored data.
 func (s *Store) Clear(ctx context.Context) error {
 	s.metricsmu.Lock()
