@@ -133,6 +133,7 @@ func NewServer(addr string, store storage.Storage) *Server {
 
 		// Logs endpoints
 		r.Get("/logs", s.listLogs)
+		r.Get("/logs/patterns", s.getLogPatterns)
 		r.Get("/logs/{severity}", s.getLog)
 
 		// Services endpoints
@@ -299,6 +300,34 @@ func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.respondJSON(w, http.StatusOK, log)
+}
+
+// getLogPatterns returns advanced pattern analysis view grouped by service.
+func (s *Server) getLogPatterns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	
+	// Parse query parameters with defaults
+	minCount := int64(10)
+	if minCountStr := r.URL.Query().Get("minCount"); minCountStr != "" {
+		if parsed, err := strconv.ParseInt(minCountStr, 10, 64); err == nil && parsed > 0 {
+			minCount = parsed
+		}
+	}
+	
+	minServices := 1
+	if minServicesStr := r.URL.Query().Get("minServices"); minServicesStr != "" {
+		if parsed, err := strconv.Atoi(minServicesStr); err == nil && parsed > 0 {
+			minServices = parsed
+		}
+	}
+	
+	patterns, err := s.store.GetLogPatterns(ctx, minCount, minServices)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	s.respondJSON(w, http.StatusOK, patterns)
 }
 
 // listServices returns all service names.

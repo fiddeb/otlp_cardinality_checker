@@ -1115,6 +1115,201 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 	return results, nil
 }
 
+// GetLogPatterns returns an advanced pattern analysis view.
+// Groups patterns by template, then by service, with key cardinality info.
+func (s *Store) GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error) {
+	// Step 1: Get all unique patterns with their total counts and severity breakdown
+	patternsQuery := `
+		SELECT 
+			template,
+			severity,
+			service_name,
+			example,
+			count
+		FROM log_body_templates
+		ORDER BY template, count DESC
+	`
+	
+	rows, err := s.db.QueryContext(ctx, patternsQuery)
+	if err != nil {
+		return nil, fmt.Errorf("querying patterns: %w", err)
+	}
+	defer rows.Close()
+	
+	// Build pattern groups
+	patternMap := make(map[string]*models.PatternGroup)
+	servicePatternMap := make(map[string]map[string]*models.ServicePatternInfo) // pattern -> service -> info
+	
+	for rows.Next() {
+		var template, severity, serviceName, example string
+		var count int64
+		
+		if err := rows.Scan(&template, &severity, &serviceName, &example, &count); err != nil {
+			return nil, fmt.Errorf("scanning pattern: %w", err)
+		}
+		
+		// Handle missing service name
+		if serviceName == "" {
+			serviceName = "unknown"
+		}
+		
+		// Initialize pattern group if needed
+		if _, exists := patternMap[template]; !exists {
+			patternMap[template] = &models.PatternGroup{
+				Template:          template,
+				ExampleBody:       example,
+				TotalCount:        0,
+				SeverityBreakdown: make(map[string]int64),
+				Services:          []models.ServicePatternInfo{},
+			}
+			servicePatternMap[template] = make(map[string]*models.ServicePatternInfo)
+		}
+		
+		pg := patternMap[template]
+		pg.TotalCount += count
+		pg.SeverityBreakdown[severity] += count
+		
+		// Track service info
+		if _, exists := servicePatternMap[template][serviceName]; !exists {
+			servicePatternMap[template][serviceName] = &models.ServicePatternInfo{
+				ServiceName:   serviceName,
+				SampleCount:   0,
+				Severities:    []string{},
+				ResourceKeys:  []models.KeyInfo{},
+				AttributeKeys: []models.KeyInfo{},
+			}
+		}
+		
+		spi := servicePatternMap[template][serviceName]
+		spi.SampleCount += count
+		spi.Severities = append(spi.Severities, severity)
+	}
+	
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	
+	// Step 2: For each pattern+service, fetch unique keys
+	for _, serviceMap := range servicePatternMap {
+		for serviceName, spi := range serviceMap {
+			// Get severities for this pattern+service combo
+			severities := spi.Severities
+			
+			// Fetch resource keys
+			resourceKeys, err := s.getKeysForPatternService(ctx, severities, serviceName, "resource")
+			if err != nil {
+				return nil, fmt.Errorf("fetching resource keys: %w", err)
+			}
+			spi.ResourceKeys = resourceKeys
+			
+			// Fetch attribute keys
+			attrKeys, err := s.getKeysForPatternService(ctx, severities, serviceName, "attribute")
+			if err != nil {
+				return nil, fmt.Errorf("fetching attribute keys: %w", err)
+			}
+			spi.AttributeKeys = attrKeys
+		}
+	}
+	
+	// Step 3: Filter and build final result
+	var patterns []models.PatternGroup
+	for template, pg := range patternMap {
+		// Apply filters
+		if pg.TotalCount < minCount {
+			continue
+		}
+		
+		// Build services list for this pattern
+		servicesForPattern := servicePatternMap[template]
+		if len(servicesForPattern) < minServices {
+			continue
+		}
+		
+		for _, spi := range servicesForPattern {
+			pg.Services = append(pg.Services, *spi)
+		}
+		
+		patterns = append(patterns, *pg)
+	}
+	
+	// Sort by total count descending
+	for i := 0; i < len(patterns); i++ {
+		for j := i + 1; j < len(patterns); j++ {
+			if patterns[j].TotalCount > patterns[i].TotalCount {
+				patterns[i], patterns[j] = patterns[j], patterns[i]
+			}
+		}
+	}
+	
+	return &models.PatternExplorerResponse{
+		Patterns: patterns,
+		Total:    len(patterns),
+	}, nil
+}
+
+// getKeysForPatternService fetches keys for a specific service and severities
+func (s *Store) getKeysForPatternService(ctx context.Context, severities []string, serviceName string, keyScope string) ([]models.KeyInfo, error) {
+	if len(severities) == 0 {
+		return []models.KeyInfo{}, nil
+	}
+	
+	// Build IN clause for severities
+	placeholders := ""
+	args := []interface{}{}
+	for i, sev := range severities {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "?"
+		args = append(args, sev)
+	}
+	args = append(args, keyScope)
+	
+	query := `
+		SELECT DISTINCT
+			key_name,
+			estimated_cardinality,
+			value_samples
+		FROM log_keys
+		WHERE severity IN (` + placeholders + `)
+		AND key_scope = ?
+		ORDER BY estimated_cardinality DESC
+	`
+	
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying keys: %w", err)
+	}
+	defer rows.Close()
+	
+	var keys []models.KeyInfo
+	for rows.Next() {
+		var keyName string
+		var cardinality int
+		var samplesJSON string
+		
+		if err := rows.Scan(&keyName, &cardinality, &samplesJSON); err != nil {
+			return nil, fmt.Errorf("scanning key: %w", err)
+		}
+		
+		var samples []string
+		if samplesJSON != "" {
+			if err := decodeJSON(samplesJSON, &samples); err != nil {
+				// Ignore decode errors, just use empty samples
+				samples = []string{}
+			}
+		}
+		
+		keys = append(keys, models.KeyInfo{
+			Name:         keyName,
+			Cardinality:  cardinality,
+			SampleValues: samples,
+		})
+	}
+	
+	return keys, rows.Err()
+}
+
 // ListServices lists all known services.
 func (s *Store) ListServices(ctx context.Context) ([]string, error) {
 	// Collect services from all three junction tables
