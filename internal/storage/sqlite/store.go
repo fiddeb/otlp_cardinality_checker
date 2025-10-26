@@ -247,6 +247,7 @@ func (s *Store) AutoTemplateCfg() autotemplate.Config {
 // Clear removes all stored data.
 func (s *Store) Clear(ctx context.Context) error {
 	tables := []string{
+		"signal_keys", // Unified keys table (new)
 		"log_body_templates",
 		"log_keys",
 		"log_services",

@@ -46,7 +46,7 @@ const SEVERITIES = [
 function generateLogBatch(vu, iter) {
     const timestamp = Date.now() * 1000000; // nanoseconds
     const serviceNum = (vu % 10);
-    const serviceName = `log-service-${serviceNum}`;
+    const serviceName = `service-${serviceNum}`;
     
     const logRecords = [];
     const batchSize = 10;
