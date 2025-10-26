@@ -1,3 +1,24 @@
+// Package autotemplate implements automatic log template extraction using the Drain algorithm.
+//
+// Drain is a fixed-depth tree algorithm for online log template mining, originally
+// published in "Drain: An Online Log Parsing Approach with Fixed Depth Tree" (ICWS'17).
+//
+// Algorithm Overview:
+//   - Layer 1: Group by token count (log length)
+//   - Layer 2: Group by first token (starting keyword)
+//   - Layer 3+: Navigate by exact token match or wildcard
+//   - Leaf nodes: Clusters with similar token sequences (similarity threshold)
+//
+// Key features of this implementation:
+//   - Sharded for concurrent processing (default 4 shards)
+//   - LRU-bounded to prevent unbounded memory growth
+//   - Training/inference modes for different use cases
+//   - Token-level similarity clustering with configurable threshold
+//
+// References:
+//   - Original paper: https://jiemingzhu.github.io/pub/pjhe_icws2017.pdf
+//   - Logparser implementation: https://github.com/logpai/logparser/tree/main/logparser/Drain
+//   - Drain3 (production): https://github.com/logpai/Drain3
 package autotemplate
 
 import (
@@ -51,7 +72,10 @@ func NewMinerShard(cfg Config) *MinerShard {
 	}
 }
 
-// ShardedMiner manages multiple shards
+// ShardedMiner manages multiple shards for concurrent log template extraction.
+//
+// The Drain algorithm is applied independently to each shard, with logs distributed
+// by hash of their token sequence. This allows parallel processing without lock contention.
 type ShardedMiner struct {
 	shards []*MinerShard
 	cfg    Config
@@ -134,6 +158,12 @@ func (s *MinerShard) add(tokens []string, originalMessage string) (string, bool)
 		return "", false
 	}
 	depth = 1
+	
+	// Drain algorithm tree navigation:
+	// Layer 1 (depth=1): Route by token count (log length)
+	// Layer 2 (depth=2): Route by first token (starting keyword)
+	// Layer 3+: Navigate to leaf (simplified: always use wildcard path)
+	// Leaf nodes: Clusters grouped by token similarity
 	
 	// Level 2: route by first token (if we have tokens)
 	if len(tokens) > 0 && depth < s.cfg.MaxDepth {
