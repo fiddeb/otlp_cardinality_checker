@@ -734,7 +734,7 @@ func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventNam
 		rows, err = s.db.QueryContext(ctx, `
 			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
 			FROM span_keys
-			WHERE span_name = ? AND key_scope = ? AND event_name IS NULL
+			WHERE span_name = ? AND key_scope = ? AND event_name = ''
 		`, spanName, keyScope)
 	}
 
