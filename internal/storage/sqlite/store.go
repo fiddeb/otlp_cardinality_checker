@@ -516,53 +516,665 @@ func (s *Store) ListMetrics(ctx context.Context, serviceName string) ([]*models.
 	return results, nil
 }
 
-// StoreSpan stores or updates span metadata (TODO: implement).
+// StoreSpan stores or updates span metadata.
 func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error {
-	return fmt.Errorf("StoreSpan not yet implemented")
+	done := make(chan error, 1)
+
+	select {
+	case s.writeCh <- writeOp{opType: "StoreSpan", data: span, done: done}:
+		select {
+		case err := <-done:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.closeCh:
+		return errors.New("store is closed")
+	}
 }
 
-// storeSpanTx stores span metadata within a transaction (TODO: implement).
+// storeSpanTx stores span metadata within a transaction.
 func (s *Store) storeSpanTx(tx *sql.Tx, span *models.SpanMetadata) error {
-	return fmt.Errorf("storeSpanTx not yet implemented")
+	// 1. Upsert base span
+	_, err := tx.Exec(`
+		INSERT INTO spans (name, kind, total_sample_count)
+		VALUES (?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET
+			kind = excluded.kind,
+			total_sample_count = total_sample_count + excluded.total_sample_count
+	`, span.Name, span.Kind, span.SampleCount)
+	if err != nil {
+		return fmt.Errorf("upserting span: %w", err)
+	}
+
+	// 2. Upsert service mappings
+	for service, count := range span.Services {
+		_, err := tx.Exec(`
+			INSERT INTO span_services (span_name, service_name, sample_count)
+			VALUES (?, ?, ?)
+			ON CONFLICT(span_name, service_name) DO UPDATE SET
+				sample_count = sample_count + excluded.sample_count
+		`, span.Name, service, count)
+		if err != nil {
+			return fmt.Errorf("upserting span service %s: %w", service, err)
+		}
+	}
+
+	// 3. Upsert attribute keys
+	if err := s.upsertKeysForSpan(tx, span.Name, "attribute", span.AttributeKeys, ""); err != nil {
+		return fmt.Errorf("upserting attribute keys: %w", err)
+	}
+
+	// 4. Upsert resource keys
+	if err := s.upsertKeysForSpan(tx, span.Name, "resource", span.ResourceKeys, ""); err != nil {
+		return fmt.Errorf("upserting resource keys: %w", err)
+	}
+
+	// 5. Upsert link attribute keys
+	if err := s.upsertKeysForSpan(tx, span.Name, "link", span.LinkAttributeKeys, ""); err != nil {
+		return fmt.Errorf("upserting link attribute keys: %w", err)
+	}
+
+	// 6. Upsert event names
+	for _, eventName := range span.EventNames {
+		_, err := tx.Exec(`
+			INSERT INTO span_events (span_name, event_name)
+			VALUES (?, ?)
+			ON CONFLICT(span_name, event_name) DO NOTHING
+		`, span.Name, eventName)
+		if err != nil {
+			return fmt.Errorf("upserting event name %s: %w", eventName, err)
+		}
+
+		// Upsert event attribute keys
+		if eventKeys, ok := span.EventAttributeKeys[eventName]; ok {
+			if err := s.upsertKeysForSpan(tx, span.Name, "event", eventKeys, eventName); err != nil {
+				return fmt.Errorf("upserting event %s attribute keys: %w", eventName, err)
+			}
+		}
+	}
+
+	return nil
 }
 
-// GetSpan retrieves span metadata by name (TODO: implement).
+// upsertKeysForSpan upserts key metadata for a span.
+func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys map[string]*models.KeyMetadata, eventName string) error {
+	for keyName, keyMeta := range keys {
+		samples, err := encodeJSON(keyMeta.ValueSamples)
+		if err != nil {
+			return fmt.Errorf("encoding samples for key %s: %w", keyName, err)
+		}
+
+		_, err = tx.Exec(`
+			INSERT INTO span_keys (
+				span_name, key_scope, key_name, event_name, key_count, key_percentage,
+				estimated_cardinality, value_samples, hll_sketch
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(span_name, key_scope, key_name, COALESCE(event_name, '')) DO UPDATE SET
+				key_count = key_count + excluded.key_count,
+				key_percentage = excluded.key_percentage,
+				estimated_cardinality = excluded.estimated_cardinality,
+				value_samples = excluded.value_samples,
+				hll_sketch = excluded.hll_sketch
+		`, spanName, keyScope, keyName, nullString(eventName), keyMeta.Count, keyMeta.Percentage,
+			keyMeta.EstimatedCardinality, samples, nil)
+
+		if err != nil {
+			return fmt.Errorf("upserting key %s: %w", keyName, err)
+		}
+	}
+	return nil
+}
+
+// nullString returns nil if s is empty, otherwise returns s.
+func nullString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// GetSpan retrieves span metadata by name.
 func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata, error) {
-	return nil, fmt.Errorf("GetSpan not yet implemented")
+	// Get base span
+	var span models.SpanMetadata
+	err := s.db.QueryRowContext(ctx, `
+		SELECT name, kind, total_sample_count
+		FROM spans WHERE name = ?
+	`, name).Scan(&span.Name, &span.Kind, &span.SampleCount)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying span: %w", err)
+	}
+
+	// Get services
+	span.Services = make(map[string]int64)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT service_name, sample_count
+		FROM span_services WHERE span_name = ?
+	`, name)
+	if err != nil {
+		return nil, fmt.Errorf("querying span services: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var serviceName string
+		var count int64
+		if err := rows.Scan(&serviceName, &count); err != nil {
+			return nil, fmt.Errorf("scanning service: %w", err)
+		}
+		span.Services[serviceName] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Get attribute keys
+	span.AttributeKeys, err = s.getKeysForSpan(ctx, name, "attribute", "")
+	if err != nil {
+		return nil, fmt.Errorf("querying attribute keys: %w", err)
+	}
+
+	// Get resource keys
+	span.ResourceKeys, err = s.getKeysForSpan(ctx, name, "resource", "")
+	if err != nil {
+		return nil, fmt.Errorf("querying resource keys: %w", err)
+	}
+
+	// Get link attribute keys
+	span.LinkAttributeKeys, err = s.getKeysForSpan(ctx, name, "link", "")
+	if err != nil {
+		return nil, fmt.Errorf("querying link attribute keys: %w", err)
+	}
+
+	// Get event names
+	eventRows, err := s.db.QueryContext(ctx, `
+		SELECT event_name FROM span_events WHERE span_name = ?
+	`, name)
+	if err != nil {
+		return nil, fmt.Errorf("querying event names: %w", err)
+	}
+	defer eventRows.Close()
+
+	span.EventNames = []string{}
+	span.EventAttributeKeys = make(map[string]map[string]*models.KeyMetadata)
+
+	for eventRows.Next() {
+		var eventName string
+		if err := eventRows.Scan(&eventName); err != nil {
+			return nil, fmt.Errorf("scanning event name: %w", err)
+		}
+		span.EventNames = append(span.EventNames, eventName)
+
+		// Get event attribute keys
+		eventKeys, err := s.getKeysForSpan(ctx, name, "event", eventName)
+		if err != nil {
+			return nil, fmt.Errorf("querying event %s keys: %w", eventName, err)
+		}
+		span.EventAttributeKeys[eventName] = eventKeys
+	}
+
+	return &span, eventRows.Err()
 }
 
-// ListSpans lists all spans (TODO: implement).
+// getKeysForSpan retrieves key metadata for a span, scope, and optional event name.
+func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventName string) (map[string]*models.KeyMetadata, error) {
+	var rows *sql.Rows
+	var err error
+
+	if eventName != "" {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
+			FROM span_keys
+			WHERE span_name = ? AND key_scope = ? AND event_name = ?
+		`, spanName, keyScope, eventName)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
+			FROM span_keys
+			WHERE span_name = ? AND key_scope = ? AND event_name IS NULL
+		`, spanName, keyScope)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	keys := make(map[string]*models.KeyMetadata)
+	for rows.Next() {
+		var keyName string
+		var keyMeta models.KeyMetadata
+		var samplesJSON string
+
+		if err := rows.Scan(&keyName, &keyMeta.Count, &keyMeta.Percentage,
+			&keyMeta.EstimatedCardinality, &samplesJSON); err != nil {
+			return nil, fmt.Errorf("scanning key: %w", err)
+		}
+
+		if err := decodeJSON(samplesJSON, &keyMeta.ValueSamples); err != nil {
+			return nil, fmt.Errorf("decoding samples for key %s: %w", keyName, err)
+		}
+
+		keys[keyName] = &keyMeta
+	}
+
+	return keys, rows.Err()
+}
+
+// ListSpans lists all spans, optionally filtered by service.
 func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.SpanMetadata, error) {
-	return nil, fmt.Errorf("ListSpans not yet implemented")
+	var query string
+	var args []interface{}
+
+	if serviceName != "" {
+		query = `
+			SELECT DISTINCT sp.name
+			FROM spans sp
+			JOIN span_services ss ON sp.name = ss.span_name
+			WHERE ss.service_name = ?
+			ORDER BY sp.name
+		`
+		args = []interface{}{serviceName}
+	} else {
+		query = `SELECT name FROM spans ORDER BY name`
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying spans: %w", err)
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scanning span name: %w", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Fetch full metadata for each span
+	var results []*models.SpanMetadata
+	for _, name := range names {
+		span, err := s.GetSpan(ctx, name)
+		if err != nil {
+			return nil, fmt.Errorf("getting span %s: %w", name, err)
+		}
+		results = append(results, span)
+	}
+
+	return results, nil
 }
 
-// StoreLog stores or updates log metadata (TODO: implement).
+// StoreLog stores or updates log metadata.
 func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
-	return fmt.Errorf("StoreLog not yet implemented")
+	done := make(chan error, 1)
+
+	select {
+	case s.writeCh <- writeOp{opType: "StoreLog", data: log, done: done}:
+		select {
+		case err := <-done:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.closeCh:
+		return errors.New("store is closed")
+	}
 }
 
-// storeLogTx stores log metadata within a transaction (TODO: implement).
+// storeLogTx stores log metadata within a transaction.
 func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
-	return fmt.Errorf("storeLogTx not yet implemented")
+	// 1. Upsert base log
+	_, err := tx.Exec(`
+		INSERT INTO logs (severity, total_sample_count)
+		VALUES (?, ?)
+		ON CONFLICT(severity) DO UPDATE SET
+			total_sample_count = total_sample_count + excluded.total_sample_count
+	`, log.Severity, log.SampleCount)
+	if err != nil {
+		return fmt.Errorf("upserting log: %w", err)
+	}
+
+	// 2. Upsert service mappings
+	for service, count := range log.Services {
+		_, err := tx.Exec(`
+			INSERT INTO log_services (severity, service_name, sample_count)
+			VALUES (?, ?, ?)
+			ON CONFLICT(severity, service_name) DO UPDATE SET
+				sample_count = sample_count + excluded.sample_count
+		`, log.Severity, service, count)
+		if err != nil {
+			return fmt.Errorf("upserting log service %s: %w", service, err)
+		}
+	}
+
+	// 3. Upsert attribute keys
+	if err := s.upsertKeysForLog(tx, log.Severity, "attribute", log.AttributeKeys); err != nil {
+		return fmt.Errorf("upserting attribute keys: %w", err)
+	}
+
+	// 4. Upsert resource keys
+	if err := s.upsertKeysForLog(tx, log.Severity, "resource", log.ResourceKeys); err != nil {
+		return fmt.Errorf("upserting resource keys: %w", err)
+	}
+
+	// 5. Upsert body templates (per service)
+	if len(log.BodyTemplates) > 0 {
+		// Body templates are stored per service in the model
+		// We need to iterate through services and store their templates
+		for _, tmpl := range log.BodyTemplates {
+			// In the current model, templates don't have explicit service association
+			// We'll store them for all services that have this severity
+			for service := range log.Services {
+				_, err := tx.Exec(`
+					INSERT INTO log_body_templates (severity, service_name, template, example, count, percentage)
+					VALUES (?, ?, ?, ?, ?, ?)
+					ON CONFLICT(severity, service_name, template) DO UPDATE SET
+						example = COALESCE(excluded.example, example),
+						count = excluded.count,
+						percentage = excluded.percentage
+				`, log.Severity, service, tmpl.Template, tmpl.Example, tmpl.Count, tmpl.Percentage)
+				if err != nil {
+					return fmt.Errorf("upserting body template for service %s: %w", service, err)
+				}
+			}
+		}
+
+		// Recalculate percentages for each service
+		for service := range log.Services {
+			if err := s.recalculateTemplatePercentages(tx, log.Severity, service); err != nil {
+				return fmt.Errorf("recalculating percentages for service %s: %w", service, err)
+			}
+		}
+	}
+
+	return nil
 }
 
-// GetLog retrieves log metadata by severity (TODO: implement).
+// upsertKeysForLog upserts key metadata for a log.
+func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map[string]*models.KeyMetadata) error {
+	for keyName, keyMeta := range keys {
+		samples, err := encodeJSON(keyMeta.ValueSamples)
+		if err != nil {
+			return fmt.Errorf("encoding samples for key %s: %w", keyName, err)
+		}
+
+		_, err = tx.Exec(`
+			INSERT INTO log_keys (
+				severity, key_scope, key_name, key_count, key_percentage,
+				estimated_cardinality, value_samples, hll_sketch
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(severity, key_scope, key_name) DO UPDATE SET
+				key_count = key_count + excluded.key_count,
+				key_percentage = excluded.key_percentage,
+				estimated_cardinality = excluded.estimated_cardinality,
+				value_samples = excluded.value_samples,
+				hll_sketch = excluded.hll_sketch
+		`, severity, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
+			keyMeta.EstimatedCardinality, samples, nil)
+
+		if err != nil {
+			return fmt.Errorf("upserting key %s: %w", keyName, err)
+		}
+	}
+	return nil
+}
+
+// recalculateTemplatePercentages recalculates percentages for all templates in a severity+service.
+func (s *Store) recalculateTemplatePercentages(tx *sql.Tx, severity, service string) error {
+	// Get total count
+	var totalCount int64
+	err := tx.QueryRow(`
+		SELECT COALESCE(SUM(count), 0) 
+		FROM log_body_templates 
+		WHERE severity = ? AND service_name = ?
+	`, severity, service).Scan(&totalCount)
+	if err != nil {
+		return fmt.Errorf("getting total count: %w", err)
+	}
+
+	if totalCount == 0 {
+		return nil
+	}
+
+	// Update all percentages
+	_, err = tx.Exec(`
+		UPDATE log_body_templates
+		SET percentage = (count * 100.0) / ?
+		WHERE severity = ? AND service_name = ?
+	`, totalCount, severity, service)
+
+	return err
+}
+
+// GetLog retrieves log metadata by severity.
 func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMetadata, error) {
-	return nil, fmt.Errorf("GetLog not yet implemented")
+	// Get base log
+	var log models.LogMetadata
+	err := s.db.QueryRowContext(ctx, `
+		SELECT severity, total_sample_count
+		FROM logs WHERE severity = ?
+	`, severityText).Scan(&log.Severity, &log.SampleCount)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying log: %w", err)
+	}
+
+	// Get services
+	log.Services = make(map[string]int64)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT service_name, sample_count
+		FROM log_services WHERE severity = ?
+	`, severityText)
+	if err != nil {
+		return nil, fmt.Errorf("querying log services: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var serviceName string
+		var count int64
+		if err := rows.Scan(&serviceName, &count); err != nil {
+			return nil, fmt.Errorf("scanning service: %w", err)
+		}
+		log.Services[serviceName] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Get attribute keys
+	log.AttributeKeys, err = s.getKeysForLog(ctx, severityText, "attribute")
+	if err != nil {
+		return nil, fmt.Errorf("querying attribute keys: %w", err)
+	}
+
+	// Get resource keys
+	log.ResourceKeys, err = s.getKeysForLog(ctx, severityText, "resource")
+	if err != nil {
+		return nil, fmt.Errorf("querying resource keys: %w", err)
+	}
+
+	// Get body templates (aggregated across all services)
+	tmplRows, err := s.db.QueryContext(ctx, `
+		SELECT template, example, SUM(count) as total_count, AVG(percentage) as avg_percentage
+		FROM log_body_templates
+		WHERE severity = ?
+		GROUP BY template, example
+		ORDER BY total_count DESC
+	`, severityText)
+	if err != nil {
+		return nil, fmt.Errorf("querying body templates: %w", err)
+	}
+	defer tmplRows.Close()
+
+	log.BodyTemplates = []*models.BodyTemplate{}
+	for tmplRows.Next() {
+		var tmpl models.BodyTemplate
+		if err := tmplRows.Scan(&tmpl.Template, &tmpl.Example, &tmpl.Count, &tmpl.Percentage); err != nil {
+			return nil, fmt.Errorf("scanning body template: %w", err)
+		}
+		log.BodyTemplates = append(log.BodyTemplates, &tmpl)
+	}
+
+	return &log, tmplRows.Err()
 }
 
-// ListLogs lists all logs (TODO: implement).
+// getKeysForLog retrieves key metadata for a log and scope.
+func (s *Store) getKeysForLog(ctx context.Context, severity, keyScope string) (map[string]*models.KeyMetadata, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
+		FROM log_keys
+		WHERE severity = ? AND key_scope = ?
+	`, severity, keyScope)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	keys := make(map[string]*models.KeyMetadata)
+	for rows.Next() {
+		var keyName string
+		var keyMeta models.KeyMetadata
+		var samplesJSON string
+
+		if err := rows.Scan(&keyName, &keyMeta.Count, &keyMeta.Percentage,
+			&keyMeta.EstimatedCardinality, &samplesJSON); err != nil {
+			return nil, fmt.Errorf("scanning key: %w", err)
+		}
+
+		if err := decodeJSON(samplesJSON, &keyMeta.ValueSamples); err != nil {
+			return nil, fmt.Errorf("decoding samples for key %s: %w", keyName, err)
+		}
+
+		keys[keyName] = &keyMeta
+	}
+
+	return keys, rows.Err()
+}
+
+// ListLogs lists all logs, optionally filtered by service.
 func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.LogMetadata, error) {
-	return nil, fmt.Errorf("ListLogs not yet implemented")
+	var query string
+	var args []interface{}
+
+	if serviceName != "" {
+		query = `
+			SELECT DISTINCT l.severity
+			FROM logs l
+			JOIN log_services ls ON l.severity = ls.severity
+			WHERE ls.service_name = ?
+			ORDER BY l.severity
+		`
+		args = []interface{}{serviceName}
+	} else {
+		query = `SELECT severity FROM logs ORDER BY severity`
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying logs: %w", err)
+	}
+	defer rows.Close()
+
+	var severities []string
+	for rows.Next() {
+		var severity string
+		if err := rows.Scan(&severity); err != nil {
+			return nil, fmt.Errorf("scanning severity: %w", err)
+		}
+		severities = append(severities, severity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Fetch full metadata for each severity
+	var results []*models.LogMetadata
+	for _, severity := range severities {
+		log, err := s.GetLog(ctx, severity)
+		if err != nil {
+			return nil, fmt.Errorf("getting log %s: %w", severity, err)
+		}
+		results = append(results, log)
+	}
+
+	return results, nil
 }
 
-// ListServices lists all known services (TODO: implement).
+// ListServices lists all known services.
 func (s *Store) ListServices(ctx context.Context) ([]string, error) {
-	return nil, fmt.Errorf("ListServices not yet implemented")
+	// Collect services from all three junction tables
+	query := `
+		SELECT DISTINCT service_name FROM (
+			SELECT service_name FROM metric_services
+			UNION
+			SELECT service_name FROM span_services
+			UNION
+			SELECT service_name FROM log_services
+		) ORDER BY service_name
+	`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("querying services: %w", err)
+	}
+	defer rows.Close()
+
+	var services []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scanning service: %w", err)
+		}
+		services = append(services, name)
+	}
+
+	return services, rows.Err()
 }
 
-// GetServiceOverview returns an overview of all telemetry for a service (TODO: implement).
+// GetServiceOverview returns an overview of all telemetry for a service.
 func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*memory.ServiceOverview, error) {
-	return nil, fmt.Errorf("GetServiceOverview not yet implemented")
+	metrics, err := s.ListMetrics(ctx, serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("listing metrics: %w", err)
+	}
+
+	spans, err := s.ListSpans(ctx, serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("listing spans: %w", err)
+	}
+
+	logs, err := s.ListLogs(ctx, serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("listing logs: %w", err)
+	}
+
+	return &memory.ServiceOverview{
+		ServiceName: serviceName,
+		MetricCount: len(metrics),
+		SpanCount:   len(spans),
+		LogCount:    len(logs),
+		Metrics:     metrics,
+		Spans:       spans,
+		Logs:        logs,
+	}, nil
 }
 
