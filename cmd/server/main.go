@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -18,8 +19,16 @@ import (
 func main() {
 	log.Println("Starting OTLP Cardinality Checker...")
 
-	// Create storage
-	store := memory.New()
+	// Check autotemplate config from environment
+	useAutoTemplate := getEnvBool("USE_AUTOTEMPLATE", false)
+	if useAutoTemplate {
+		log.Println("⚡ Autotemplate mode enabled (Drain-style extraction)")
+	} else {
+		log.Println("Using regex-based template extraction")
+	}
+
+	// Create storage with autotemplate config
+	store := memory.NewWithAutoTemplate(useAutoTemplate)
 
 	// Create OTLP receivers
 	otlpHTTPAddr := getEnv("OTLP_HTTP_ADDR", "0.0.0.0:4318")
@@ -103,6 +112,16 @@ func main() {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+// getEnvBool gets a boolean environment variable with a default fallback.
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if b, err := strconv.ParseBool(value); err == nil {
+			return b
+		}
 	}
 	return defaultValue
 }

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 )
 
@@ -34,16 +35,41 @@ type Store struct {
 	// Services tracks all service names seen
 	services map[string]struct{}
 	servicesmu sync.RWMutex
+	
+	// Autotemplate configuration
+	useAutoTemplate bool
+	autoTemplateCfg autotemplate.Config
 }
 
 // New creates a new in-memory store.
 func New() *Store {
+	return NewWithAutoTemplate(false)
+}
+
+// NewWithAutoTemplate creates a store with optional autotemplate support.
+func NewWithAutoTemplate(useAutoTemplate bool) *Store {
+	cfg := autotemplate.DefaultConfig()
+	cfg.Shards = 4
+	cfg.SimThreshold = 0.7 // Increased from 0.5 for stricter matching
+	
 	return &Store{
-		metrics:  make(map[string]*models.MetricMetadata),
-		spans:    make(map[string]*models.SpanMetadata),
-		logs:     make(map[string]*models.LogMetadata),
-		services: make(map[string]struct{}),
+		metrics:         make(map[string]*models.MetricMetadata),
+		spans:           make(map[string]*models.SpanMetadata),
+		logs:            make(map[string]*models.LogMetadata),
+		services:        make(map[string]struct{}),
+		useAutoTemplate: useAutoTemplate,
+		autoTemplateCfg: cfg,
 	}
+}
+
+// UseAutoTemplate returns whether autotemplate is enabled
+func (s *Store) UseAutoTemplate() bool {
+	return s.useAutoTemplate
+}
+
+// AutoTemplateCfg returns the autotemplate configuration
+func (s *Store) AutoTemplateCfg() autotemplate.Config {
+	return s.autoTemplateCfg
 }
 
 // StoreMetric stores or updates metric metadata.
