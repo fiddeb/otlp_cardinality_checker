@@ -23,6 +23,9 @@ var migration001SQL string
 //go:embed migrations/002_unified_signal_keys.up.sql
 var migration002SQL string
 
+//go:embed migrations/003_log_service_keys.up.sql
+var migration003SQL string
+
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
 	db *sql.DB
@@ -96,7 +99,7 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL}
+	migrations := []string{migration001SQL, migration002SQL, migration003SQL}
 	for i, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
 			db.Close()
@@ -915,10 +918,38 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 	if err := s.upsertKeysForLog(tx, log.Severity, "attribute", log.AttributeKeys); err != nil {
 		return fmt.Errorf("upserting attribute keys: %w", err)
 	}
+	
+	// 3a. Link attribute keys to services
+	for service := range log.Services {
+		for keyName := range log.AttributeKeys {
+			_, err := tx.Exec(`
+				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
+				VALUES (?, ?, 'attribute', ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
+			`, service, log.Severity, keyName)
+			if err != nil {
+				return fmt.Errorf("linking attribute key %s to service %s: %w", keyName, service, err)
+			}
+		}
+	}
 
 	// 4. Upsert resource keys
 	if err := s.upsertKeysForLog(tx, log.Severity, "resource", log.ResourceKeys); err != nil {
 		return fmt.Errorf("upserting resource keys: %w", err)
+	}
+	
+	// 4a. Link resource keys to services
+	for service := range log.Services {
+		for keyName := range log.ResourceKeys {
+			_, err := tx.Exec(`
+				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
+				VALUES (?, ?, 'resource', ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
+			`, service, log.Severity, keyName)
+			if err != nil {
+				return fmt.Errorf("linking resource key %s to service %s: %w", keyName, service, err)
+			}
+		}
 	}
 
 	// 5. Upsert body templates (per service)
@@ -1339,18 +1370,24 @@ func (s *Store) getKeysForPatternService(ctx context.Context, severities []strin
 		placeholders += "?"
 		args = append(args, sev)
 	}
+	args = append(args, serviceName)
 	args = append(args, keyScope)
 	
 	query := `
 		SELECT DISTINCT
-			key_name,
-			estimated_cardinality,
-			value_samples
-		FROM signal_keys
-		WHERE signal_type = 'log'
-		AND signal_name IN (` + placeholders + `)
-		AND key_scope = ?
-		ORDER BY estimated_cardinality DESC
+			sk.key_name,
+			sk.estimated_cardinality,
+			sk.value_samples
+		FROM signal_keys sk
+		INNER JOIN log_service_keys lsk 
+			ON sk.key_name = lsk.key_name 
+			AND sk.signal_name = lsk.severity 
+			AND sk.key_scope = lsk.key_scope
+		WHERE sk.signal_type = 'log'
+		AND sk.signal_name IN (` + placeholders + `)
+		AND lsk.service_name = ?
+		AND sk.key_scope = ?
+		ORDER BY sk.estimated_cardinality DESC
 	`
 	
 	rows, err := s.db.QueryContext(ctx, query, args...)
