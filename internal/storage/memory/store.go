@@ -464,6 +464,129 @@ func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*mo
 	}, nil
 }
 
+// GetHighCardinalityKeys returns high-cardinality keys across all signal types.
+// For in-memory store, we aggregate keys from metrics, spans, and logs.
+func (s *Store) GetHighCardinalityKeys(ctx context.Context, threshold int, limit int) (*models.CrossSignalCardinalityResponse, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	threshold64 := int64(threshold)
+	var allKeys []models.SignalKey
+
+	// Collect metric keys
+	s.metricsmu.RLock()
+	for metricName, metric := range s.metrics {
+		for keyName, keyMeta := range metric.LabelKeys {
+			if keyMeta.EstimatedCardinality >= threshold64 {
+				allKeys = append(allKeys, models.SignalKey{
+					SignalType:          "metric",
+					SignalName:          metricName,
+					KeyScope:            "label",
+					KeyName:             keyName,
+					EstimatedCardinality: int(keyMeta.EstimatedCardinality),
+					KeyCount:            keyMeta.Count,
+					ValueSamples:        keyMeta.ValueSamples,
+				})
+			}
+		}
+		for keyName, keyMeta := range metric.ResourceKeys {
+			if keyMeta.EstimatedCardinality >= threshold64 {
+				allKeys = append(allKeys, models.SignalKey{
+					SignalType:          "metric",
+					SignalName:          metricName,
+					KeyScope:            "resource",
+					KeyName:             keyName,
+					EstimatedCardinality: int(keyMeta.EstimatedCardinality),
+					KeyCount:            keyMeta.Count,
+					ValueSamples:        keyMeta.ValueSamples,
+				})
+			}
+		}
+	}
+	s.metricsmu.RUnlock()
+
+	// Collect span keys
+	s.spansmu.RLock()
+	for spanName, span := range s.spans {
+		for keyName, keyMeta := range span.AttributeKeys {
+			if keyMeta.EstimatedCardinality >= threshold64 {
+				allKeys = append(allKeys, models.SignalKey{
+					SignalType:          "span",
+					SignalName:          spanName,
+					KeyScope:            "attribute",
+					KeyName:             keyName,
+					EstimatedCardinality: int(keyMeta.EstimatedCardinality),
+					KeyCount:            keyMeta.Count,
+					ValueSamples:        keyMeta.ValueSamples,
+				})
+			}
+		}
+		for keyName, keyMeta := range span.ResourceKeys {
+			if keyMeta.EstimatedCardinality >= threshold64 {
+				allKeys = append(allKeys, models.SignalKey{
+					SignalType:          "span",
+					SignalName:          spanName,
+					KeyScope:            "resource",
+					KeyName:             keyName,
+					EstimatedCardinality: int(keyMeta.EstimatedCardinality),
+					KeyCount:            keyMeta.Count,
+					ValueSamples:        keyMeta.ValueSamples,
+				})
+			}
+		}
+	}
+	s.spansmu.RUnlock()
+
+	// Collect log keys
+	s.logsmu.RLock()
+	for severity, log := range s.logs {
+		for keyName, keyMeta := range log.AttributeKeys {
+			if keyMeta.EstimatedCardinality >= threshold64 {
+				allKeys = append(allKeys, models.SignalKey{
+					SignalType:          "log",
+					SignalName:          severity,
+					KeyScope:            "attribute",
+					KeyName:             keyName,
+					EstimatedCardinality: int(keyMeta.EstimatedCardinality),
+					KeyCount:            keyMeta.Count,
+					ValueSamples:        keyMeta.ValueSamples,
+				})
+			}
+		}
+		for keyName, keyMeta := range log.ResourceKeys {
+			if keyMeta.EstimatedCardinality >= threshold64 {
+				allKeys = append(allKeys, models.SignalKey{
+					SignalType:          "log",
+					SignalName:          severity,
+					KeyScope:            "resource",
+					KeyName:             keyName,
+					EstimatedCardinality: int(keyMeta.EstimatedCardinality),
+					KeyCount:            keyMeta.Count,
+					ValueSamples:        keyMeta.ValueSamples,
+				})
+			}
+		}
+	}
+	s.logsmu.RUnlock()
+
+	// Sort by cardinality descending
+	sort.Slice(allKeys, func(i, j int) bool {
+		return allKeys[i].EstimatedCardinality > allKeys[j].EstimatedCardinality
+	})
+
+	// Apply limit
+	if len(allKeys) > limit {
+		allKeys = allKeys[:limit]
+	}
+
+	return &models.CrossSignalCardinalityResponse{
+		HighCardinalityKeys: allKeys,
+		Total:               len(allKeys),
+		Threshold:           threshold,
+	}, nil
+}
+
 // Clear removes all stored data.
 func (s *Store) Clear(ctx context.Context) error {
 	s.metricsmu.Lock()
