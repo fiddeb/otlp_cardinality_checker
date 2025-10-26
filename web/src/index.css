@@ -1260,3 +1260,12 @@ body.dark-mode .high-warning {
   border-radius: 8px;
   margin-top: 20px;
 }
+
+/* Clickable table rows */
+.clickable-row {
+  transition: background-color 0.2s ease;
+}
+
+.clickable-row:hover {
+  background-color: var(--bg-hover) !important;
+}

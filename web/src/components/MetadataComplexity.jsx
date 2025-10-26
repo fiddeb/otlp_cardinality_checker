@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-function MetadataComplexity() {
+function MetadataComplexity({ onViewDetails }) {
   const [threshold, setThreshold] = useState(10)
   const [limit, setLimit] = useState(50)
   const [data, setData] = useState(null)
@@ -157,7 +157,12 @@ function MetadataComplexity() {
           </thead>
           <tbody>
             {sortedSignals.map((signal, idx) => (
-              <tr key={idx}>
+              <tr 
+                key={idx}
+                onClick={() => onViewDetails(signal.signal_type, signal.signal_name)}
+                style={{ cursor: 'pointer' }}
+                className="clickable-row"
+              >
                 <td>
                   <span 
                     className="signal-type-badge"
