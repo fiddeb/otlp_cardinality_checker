@@ -6,9 +6,14 @@ package models
 
 import (
 	"encoding/json"
+	"errors"
 	"sort"
 	"sync"
 )
+
+// ErrNotFound is returned when a requested item is not found.
+// Storage implementations wrap this error when an item doesn't exist.
+var ErrNotFound = errors.New("not found")
 
 // MetricMetadata contains metadata about an observed metric.
 // It tracks all unique label keys and their cardinality statistics.
@@ -341,4 +346,16 @@ func (m *MetricMetadata) GetHighCardinalityLabels(threshold int64) []string {
 	}
 	sort.Strings(highCard)
 	return highCard
+}
+
+// ServiceOverview contains a summary of all telemetry for a service.
+// This is used by the API to provide aggregated views across all signal types.
+type ServiceOverview struct {
+	ServiceName string            `json:"service_name"`
+	MetricCount int               `json:"metric_count"`
+	SpanCount   int               `json:"span_count"`
+	LogCount    int               `json:"log_count"`
+	Metrics     []*MetricMetadata `json:"metrics"`
+	Spans       []*SpanMetadata   `json:"spans"`
+	Logs        []*LogMetadata    `json:"logs"`
 }

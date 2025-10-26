@@ -13,22 +13,38 @@ import (
 
 	"github.com/fidde/otlp_cardinality_checker/internal/api"
 	"github.com/fidde/otlp_cardinality_checker/internal/receiver"
-	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage"
 )
 
 func main() {
 	log.Println("Starting OTLP Cardinality Checker...")
 
-	// Check autotemplate config from environment
+	// Configure storage from environment
+	storageBackend := getEnv("STORAGE_BACKEND", "memory")
+	sqliteDBPath := getEnv("SQLITE_DB_PATH", "data/otlp_metadata.db")
 	useAutoTemplate := getEnvBool("USE_AUTOTEMPLATE", false)
+
+	storageCfg := storage.DefaultConfig()
+	storageCfg.Backend = storageBackend
+	storageCfg.SQLiteDBPath = sqliteDBPath
+	storageCfg.UseAutoTemplate = useAutoTemplate
+
 	if useAutoTemplate {
 		log.Println("⚡ Autotemplate mode enabled (Drain-style extraction)")
 	} else {
 		log.Println("Using regex-based template extraction")
 	}
 
-	// Create storage with autotemplate config
-	store := memory.NewWithAutoTemplate(useAutoTemplate)
+	// Create storage
+	store, err := storage.NewStorage(storageCfg)
+	if err != nil {
+		log.Fatalf("Failed to create storage: %v", err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Printf("Error closing storage: %v", err)
+		}
+	}()
 
 	// Create OTLP receivers
 	otlpHTTPAddr := getEnv("OTLP_HTTP_ADDR", "0.0.0.0:4318")
@@ -103,6 +119,11 @@ func main() {
 	}
 	if err := apiServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Error shutting down API server: %v", err)
+	}
+
+	log.Println("Closing storage...")
+	if err := store.Close(); err != nil {
+		log.Printf("Error closing storage: %v", err)
 	}
 
 	log.Println("Shutdown complete")

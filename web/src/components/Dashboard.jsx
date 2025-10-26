@@ -22,11 +22,11 @@ function Dashboard({ onViewService }) {
         const totalLogCount = allLogs.data?.reduce((sum, log) => sum + log.sample_count, 0) || 0
         
         setStats({
-          metrics: metrics.total,
-          spans: spans.total,
+          metrics: metrics.total || 0,
+          spans: spans.total || 0,
           logs: totalLogCount,
         })
-        setServices(services.data)
+        setServices(services.data || [])
         
         // Calculate service statistics
         const stats = {}
@@ -77,19 +77,19 @@ function Dashboard({ onViewService }) {
     <>
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-value">{stats.metrics}</div>
+          <div className="stat-value">{stats?.metrics || 0}</div>
           <div className="stat-label">Metrics</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.spans}</div>
+          <div className="stat-value">{stats?.spans || 0}</div>
           <div className="stat-label">Spans</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.logs.toLocaleString()}</div>
+          <div className="stat-value">{(stats?.logs || 0).toLocaleString()}</div>
           <div className="stat-label">Total Logs</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{services.length}</div>
+          <div className="stat-value">{services?.length || 0}</div>
           <div className="stat-label">Services</div>
         </div>
       </div>
