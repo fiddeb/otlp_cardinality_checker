@@ -9,6 +9,7 @@ import ServiceExplorer from './components/ServiceExplorer'
 import Details from './components/Details'
 import MemoryView from './components/MemoryView'
 import NoisyNeighbors from './components/NoisyNeighbors'
+import PatternExplorer from './components/PatternExplorer'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -140,6 +141,12 @@ function App() {
             Logs
           </button>
           <button 
+            className={`tab ${activeTab === 'pattern-explorer' ? 'active' : ''}`}
+            onClick={() => setActiveTab('pattern-explorer')}
+          >
+            Pattern Explorer
+          </button>
+          <button 
             className={`tab ${activeTab === 'comparison' ? 'active' : ''}`}
             onClick={() => setActiveTab('comparison')}
           >
@@ -178,6 +185,10 @@ function App() {
 
       {activeTab === 'logs' && (
         <LogsView onViewDetails={handleViewDetails} />
+      )}
+
+      {activeTab === 'pattern-explorer' && (
+        <PatternExplorer />
       )}
 
       {activeTab === 'comparison' && (

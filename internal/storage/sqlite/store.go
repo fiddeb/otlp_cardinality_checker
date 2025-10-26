@@ -1157,7 +1157,7 @@ func (s *Store) GetLogPatterns(ctx context.Context, minCount int64, minServices 
 		if _, exists := patternMap[template]; !exists {
 			patternMap[template] = &models.PatternGroup{
 				Template:          template,
-				ExampleBody:       example,
+				ExampleBody:       example, // Keep first example we find
 				TotalCount:        0,
 				SeverityBreakdown: make(map[string]int64),
 				Services:          []models.ServicePatternInfo{},
@@ -1166,6 +1166,10 @@ func (s *Store) GetLogPatterns(ctx context.Context, minCount int64, minServices 
 		}
 		
 		pg := patternMap[template]
+		// Keep the first non-empty example
+		if pg.ExampleBody == "" && example != "" {
+			pg.ExampleBody = example
+		}
 		pg.TotalCount += count
 		pg.SeverityBreakdown[severity] += count
 		
