@@ -1509,4 +1509,70 @@ func (s *Store) GetHighCardinalityKeys(ctx context.Context, threshold int, limit
 	}, nil
 }
 
+// GetMetadataComplexity returns signals with high metadata complexity (many keys).
+func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit int) (*models.MetadataComplexityResponse, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+		SELECT 
+			signal_type,
+			signal_name,
+			COUNT(*) as total_keys,
+			SUM(CASE WHEN key_scope IN ('attribute', 'label') THEN 1 ELSE 0 END) as attribute_keys,
+			SUM(CASE WHEN key_scope = 'resource' THEN 1 ELSE 0 END) as resource_keys,
+			SUM(CASE WHEN key_scope = 'event' THEN 1 ELSE 0 END) as event_keys,
+			SUM(CASE WHEN key_scope = 'link' THEN 1 ELSE 0 END) as link_keys,
+			MAX(estimated_cardinality) as max_cardinality,
+			SUM(CASE WHEN estimated_cardinality > 100 THEN 1 ELSE 0 END) as high_card_count
+		FROM signal_keys
+		GROUP BY signal_type, signal_name
+		HAVING total_keys >= ?
+		ORDER BY total_keys DESC, max_cardinality DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, threshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying metadata complexity: %w", err)
+	}
+	defer rows.Close()
+
+	var signals []models.SignalComplexity
+	for rows.Next() {
+		var sig models.SignalComplexity
+
+		if err := rows.Scan(
+			&sig.SignalType,
+			&sig.SignalName,
+			&sig.TotalKeys,
+			&sig.AttributeKeyCount,
+			&sig.ResourceKeyCount,
+			&sig.EventKeyCount,
+			&sig.LinkKeyCount,
+			&sig.MaxCardinality,
+			&sig.HighCardinalityCount,
+		); err != nil {
+			return nil, fmt.Errorf("scanning complexity: %w", err)
+		}
+
+		// Calculate complexity score: total keys × max cardinality
+		sig.ComplexityScore = sig.TotalKeys * sig.MaxCardinality
+
+		signals = append(signals, sig)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &models.MetadataComplexityResponse{
+		Signals:   signals,
+		Total:     len(signals),
+		Threshold: threshold,
+	}, nil
+}
+
+
 
