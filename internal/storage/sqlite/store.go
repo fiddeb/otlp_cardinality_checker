@@ -18,7 +18,10 @@ import (
 )
 
 //go:embed migrations/001_initial_schema.up.sql
-var migrationSQL string
+var migration001SQL string
+
+//go:embed migrations/002_unified_signal_keys.up.sql
+var migration002SQL string
 
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
@@ -92,10 +95,13 @@ func New(cfg Config) (*Store, error) {
 		}
 	}
 
-	// Run migrations
-	if _, err := db.Exec(migrationSQL); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("running migrations: %w", err)
+	// Run migrations in order
+	migrations := []string{migration001SQL, migration002SQL}
+	for i, migration := range migrations {
+		if _, err := db.Exec(migration); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("running migration %d: %w", i+1, err)
+		}
 	}
 
 	store := &Store{
@@ -926,6 +932,25 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 		if err != nil {
 			return fmt.Errorf("upserting key %s: %w", keyName, err)
 		}
+
+		// Also write to unified signal_keys table
+		_, err = tx.Exec(`
+			INSERT INTO signal_keys (
+				signal_type, signal_name, key_scope, key_name, event_name,
+				key_count, key_percentage, estimated_cardinality, value_samples, hll_sketch
+			) VALUES ('log', ?, ?, ?, '', ?, ?, ?, ?, ?)
+			ON CONFLICT(signal_type, signal_name, key_scope, key_name, event_name) DO UPDATE SET
+				key_count = key_count + excluded.key_count,
+				key_percentage = excluded.key_percentage,
+				estimated_cardinality = excluded.estimated_cardinality,
+				value_samples = excluded.value_samples,
+				hll_sketch = excluded.hll_sketch
+		`, severity, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
+			keyMeta.EstimatedCardinality, samples, nil)
+
+		if err != nil {
+			return fmt.Errorf("upserting signal key %s: %w", keyName, err)
+		}
 	}
 	return nil
 }
@@ -1274,8 +1299,9 @@ func (s *Store) getKeysForPatternService(ctx context.Context, severities []strin
 			key_name,
 			estimated_cardinality,
 			value_samples
-		FROM log_keys
-		WHERE severity IN (` + placeholders + `)
+		FROM signal_keys
+		WHERE signal_type = 'log'
+		AND signal_name IN (` + placeholders + `)
 		AND key_scope = ?
 		ORDER BY estimated_cardinality DESC
 	`
