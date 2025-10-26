@@ -91,6 +91,37 @@ h1 {
   font-size: 14px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.clear-button {
+  padding: 8px 16px;
+  border: 1px solid #dc2626;
+  background: var(--bg-tertiary);
+  color: #dc2626;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.clear-button:hover:not(:disabled) {
+  background: #dc2626;
+  color: white;
+}
+
+.clear-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .dark-mode-toggle {
   padding: 8px 16px;
   border: 1px solid var(--border-color);

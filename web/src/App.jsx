@@ -14,6 +14,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedService, setSelectedService] = useState(null)
+  const [isClearing, setIsClearing] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode')
@@ -36,6 +37,32 @@ function App() {
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode)
+  }
+
+  const handleClearData = async () => {
+    if (!confirm('Are you sure you want to clear ALL data? This cannot be undone!')) {
+      return
+    }
+
+    setIsClearing(true)
+    try {
+      const response = await fetch('/api/v1/admin/clear', {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        alert('All data cleared successfully!')
+        // Refresh the current view
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        alert(`Failed to clear data: ${data.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      alert(`Failed to clear data: ${error.message}`)
+    } finally {
+      setIsClearing(false)
+    }
   }
 
   const handleViewDetails = (type, name) => {
@@ -61,13 +88,23 @@ function App() {
           <h1>OTLP Cardinality Checker</h1>
           <p className="subtitle">Analyze metadata structure from OpenTelemetry signals</p>
         </div>
-        <button 
-          className="dark-mode-toggle" 
-          onClick={toggleDarkMode}
-          title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {darkMode ? '☀️' : '🌙'}
-        </button>
+        <div className="header-actions">
+          <button 
+            className="clear-button" 
+            onClick={handleClearData}
+            disabled={isClearing}
+            title="Clear all data from database"
+          >
+            {isClearing ? '🔄' : '🗑️'} Clear Data
+          </button>
+          <button 
+            className="dark-mode-toggle" 
+            onClick={toggleDarkMode}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
       </header>
 
       {!selectedItem && !selectedService && (
