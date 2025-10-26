@@ -425,3 +425,8 @@ func (s *Store) trackServices(services map[string]int64) {
 		s.services[service] = struct{}{}
 	}
 }
+
+// Close cleans up resources (no-op for in-memory store).
+func (s *Store) Close() error {
+	return nil
+}
