@@ -16,6 +16,7 @@ type LogTemplate struct {
 	Hash         uint64            `json:"hash"`
 	Count        int64             `json:"count"`
 	Percentage   float64           `json:"percentage"`
+	ExampleBody  string            `json:"example_body"`            // Example log message matching this template
 	SampleValues map[string]string `json:"sample_values,omitempty"` // First occurrence of each placeholder
 }
 

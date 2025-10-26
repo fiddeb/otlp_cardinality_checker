@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer"
+	"github.com/fidde/otlp_cardinality_checker/internal/config"
 	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
@@ -43,11 +45,26 @@ type HTTPReceiver struct {
 
 // NewHTTPReceiver creates a new HTTP receiver.
 func NewHTTPReceiver(addr string, store *memory.Store) *HTTPReceiver {
+	// Load patterns from config
+	patterns, err := config.LoadPatterns("config/patterns.yaml")
+	if err != nil {
+		log.Printf("Warning: Failed to load patterns: %v", err)
+		patterns = nil
+	}
+	
+	// Create logs analyzer based on store configuration
+	var logsAnalyzer *analyzer.LogsAnalyzer
+	if store.UseAutoTemplate() {
+		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplateAndPatterns(store.AutoTemplateCfg(), patterns)
+	} else {
+		logsAnalyzer = analyzer.NewLogsAnalyzer()
+	}
+	
 	r := &HTTPReceiver{
 		store:           store,
 		metricsAnalyzer: analyzer.NewMetricsAnalyzer(),
 		tracesAnalyzer:  analyzer.NewTracesAnalyzer(),
-		logsAnalyzer:    analyzer.NewLogsAnalyzer(),
+		logsAnalyzer:    logsAnalyzer,
 	}
 
 	mux := http.NewServeMux()
