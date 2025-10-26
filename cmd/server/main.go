@@ -20,7 +20,7 @@ func main() {
 	log.Println("Starting OTLP Cardinality Checker...")
 
 	// Configure storage from environment
-	storageBackend := getEnv("STORAGE_BACKEND", "memory")
+	storageBackend := getEnv("STORAGE_BACKEND", "sqlite")
 	sqliteDBPath := getEnv("SQLITE_DB_PATH", "data/otlp_metadata.db")
 	useAutoTemplate := getEnvBool("USE_AUTOTEMPLATE", false)
 

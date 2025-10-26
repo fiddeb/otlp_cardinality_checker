@@ -30,7 +30,7 @@ func DefaultConfig() Config {
 	cfg.SimThreshold = 0.7
 
 	return Config{
-		Backend:         "memory",
+		Backend:         "sqlite",
 		SQLiteDBPath:    "data/otlp_metadata.db",
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
