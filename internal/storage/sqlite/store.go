@@ -62,8 +62,8 @@ func DefaultConfig(dbPath string) Config {
 		DBPath:          dbPath,
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
-		BatchSize:       500,        // Larger batches for better throughput
-		FlushInterval:   10 * time.Millisecond, // More frequent flushes
+		BatchSize:       100,        // Smaller batches for lower memory usage
+		FlushInterval:   5 * time.Millisecond, // Faster flush for lower latency
 	}
 }
 
@@ -100,7 +100,7 @@ func New(cfg Config) (*Store, error) {
 
 	store := &Store{
 		db:              db,
-		writeCh:         make(chan writeOp, 1000),
+		writeCh:         make(chan writeOp, 500), // Reduced buffer for lower memory
 		flushCh:         make(chan chan struct{}),
 		closeCh:         make(chan struct{}),
 		useAutoTemplate: cfg.UseAutoTemplate,
