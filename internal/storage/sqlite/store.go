@@ -26,6 +26,7 @@ type Store struct {
 
 	// Batch writer
 	writeCh   chan writeOp
+	flushCh   chan chan struct{} // Channel to request immediate flush
 	closeCh   chan struct{}
 	closeOnce sync.Once
 	wg        sync.WaitGroup
@@ -61,8 +62,8 @@ func DefaultConfig(dbPath string) Config {
 		DBPath:          dbPath,
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
-		BatchSize:       100,
-		FlushInterval:   100 * time.Millisecond,
+		BatchSize:       500,        // Larger batches for better throughput
+		FlushInterval:   10 * time.Millisecond, // More frequent flushes
 	}
 }
 
@@ -100,6 +101,7 @@ func New(cfg Config) (*Store, error) {
 	store := &Store{
 		db:              db,
 		writeCh:         make(chan writeOp, 1000),
+		flushCh:         make(chan chan struct{}),
 		closeCh:         make(chan struct{}),
 		useAutoTemplate: cfg.UseAutoTemplate,
 		autoTemplateCfg: cfg.AutoTemplateCfg,
@@ -149,6 +151,10 @@ func (s *Store) batchWriter(batchSize int, flushInterval time.Duration) {
 
 		case <-ticker.C:
 			flush()
+
+		case doneCh := <-s.flushCh:
+			flush()
+			close(doneCh) // Signal flush completed
 
 		case <-s.closeCh:
 			// Drain remaining ops
@@ -208,6 +214,18 @@ func (s *Store) Close() error {
 		err = s.db.Close()
 	})
 	return err
+}
+
+// Flush forces an immediate flush of pending writes.
+// This is primarily for testing to ensure async writes complete.
+func (s *Store) Flush() {
+	doneCh := make(chan struct{})
+	select {
+	case s.flushCh <- doneCh:
+		<-doneCh // Wait for flush to complete
+	case <-s.closeCh:
+		// Store is closing, no need to flush
+	}
 }
 
 // UseAutoTemplate returns whether autotemplate is enabled.
@@ -286,16 +304,10 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // StoreMetric stores or updates metric metadata.
 func (s *Store) StoreMetric(ctx context.Context, metric *models.MetricMetadata) error {
-	done := make(chan error, 1)
-
+	// Fire-and-forget: send to batch writer without waiting
 	select {
-	case s.writeCh <- writeOp{opType: "StoreMetric", data: metric, done: done}:
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	case s.writeCh <- writeOp{opType: "StoreMetric", data: metric, done: nil}:
+		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-s.closeCh:
@@ -512,16 +524,10 @@ func (s *Store) ListMetrics(ctx context.Context, serviceName string) ([]*models.
 
 // StoreSpan stores or updates span metadata.
 func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error {
-	done := make(chan error, 1)
-
+	// Fire-and-forget: send to batch writer without waiting
 	select {
-	case s.writeCh <- writeOp{opType: "StoreSpan", data: span, done: done}:
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	case s.writeCh <- writeOp{opType: "StoreSpan", data: span, done: nil}:
+		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-s.closeCh:
@@ -815,16 +821,10 @@ func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.Sp
 
 // StoreLog stores or updates log metadata.
 func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
-	done := make(chan error, 1)
-
+	// Fire-and-forget: send to batch writer without waiting
 	select {
-	case s.writeCh <- writeOp{opType: "StoreLog", data: log, done: done}:
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	case s.writeCh <- writeOp{opType: "StoreLog", data: log, done: nil}:
+		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-s.closeCh:

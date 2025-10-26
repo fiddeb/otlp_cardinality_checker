@@ -27,8 +27,8 @@ func setupTestStore(t *testing.T) (*Store, func()) {
 			Shards:       4,
 			SimThreshold: 0.7,
 		},
-		BatchSize:     100,
-		FlushInterval: 100 * time.Millisecond,
+		BatchSize:     1,  // Flush immediately in tests
+		FlushInterval: 1 * time.Millisecond,  // Flush very frequently
 	}
 
 	store, err := New(cfg)
@@ -81,6 +81,7 @@ func TestStoreMetric(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StoreMetric failed: %v", err)
 	}
+	store.Flush() // Ensure async write completes
 
 	// Retrieve metric
 	retrieved, err := store.GetMetric(ctx, "http_requests_total")
@@ -144,6 +145,7 @@ func TestStoreMetricUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StoreMetric failed: %v", err)
 	}
+	store.Flush() // Ensure async write completes
 
 	// Store update with new label key and different service
 	metric2 := &models.MetricMetadata{
@@ -169,6 +171,7 @@ func TestStoreMetricUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StoreMetric update failed: %v", err)
 	}
+	store.Flush() // Ensure async write completes
 
 	// Retrieve and verify merged result
 	retrieved, err := store.GetMetric(ctx, "cpu_usage")
@@ -238,6 +241,7 @@ func TestStoreSpan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StoreSpan failed: %v", err)
 	}
+	store.Flush() // Ensure async write completes
 
 	// Retrieve span
 	retrieved, err := store.GetSpan(ctx, "GET /api/users")
@@ -296,6 +300,7 @@ func TestStoreLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StoreLog failed: %v", err)
 	}
+	store.Flush() // Ensure async write completes
 
 	// Retrieve log
 	retrieved, err := store.GetLog(ctx, "ERROR")
@@ -368,8 +373,9 @@ func TestListServices(t *testing.T) {
 	if err := store.StoreLog(ctx, log); err != nil {
 		t.Fatalf("StoreLog failed: %v", err)
 	}
+	store.Flush() // Ensure all async writes complete
 
-	// List all services
+	// List services
 	services, err := store.ListServices(ctx)
 	if err != nil {
 		t.Fatalf("ListServices failed: %v", err)
@@ -426,6 +432,7 @@ func TestGetServiceOverview(t *testing.T) {
 	if err := store.StoreLog(ctx, log); err != nil {
 		t.Fatalf("StoreLog failed: %v", err)
 	}
+	store.Flush() // Ensure all async writes complete
 
 	// Get service overview
 	overview, err := store.GetServiceOverview(ctx, serviceName)
@@ -496,6 +503,7 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 	}
 
 	wg.Wait()
+	store.Flush() // Ensure all async writes complete before verification
 
 	// Verify final state
 	services, err := store.ListServices(ctx)
@@ -548,6 +556,7 @@ func TestClear(t *testing.T) {
 	if err := store.StoreMetric(ctx, metric); err != nil {
 		t.Fatalf("StoreMetric failed: %v", err)
 	}
+	store.Flush() // Ensure async write completes
 
 	// Verify data exists
 	_, err := store.GetMetric(ctx, "test_metric")
