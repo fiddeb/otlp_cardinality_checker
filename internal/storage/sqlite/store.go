@@ -1445,3 +1445,68 @@ func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*mo
 	}, nil
 }
 
+// GetHighCardinalityKeys returns high-cardinality keys across all signal types.
+func (s *Store) GetHighCardinalityKeys(ctx context.Context, threshold int, limit int) (*models.CrossSignalCardinalityResponse, error) {
+	if limit <= 0 {
+		limit = 100 // Default limit
+	}
+
+	query := `
+		SELECT 
+			signal_type,
+			signal_name,
+			key_scope,
+			key_name,
+			event_name,
+			estimated_cardinality,
+			key_count,
+			value_samples
+		FROM signal_keys
+		WHERE estimated_cardinality >= ?
+		ORDER BY estimated_cardinality DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, threshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying high-cardinality keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []models.SignalKey
+	for rows.Next() {
+		var key models.SignalKey
+		var samplesJSON string
+
+		if err := rows.Scan(
+			&key.SignalType,
+			&key.SignalName,
+			&key.KeyScope,
+			&key.KeyName,
+			&key.EventName,
+			&key.EstimatedCardinality,
+			&key.KeyCount,
+			&samplesJSON,
+		); err != nil {
+			return nil, fmt.Errorf("scanning key: %w", err)
+		}
+
+		if err := decodeJSON(samplesJSON, &key.ValueSamples); err != nil {
+			return nil, fmt.Errorf("decoding samples for key %s: %w", key.KeyName, err)
+		}
+
+		keys = append(keys, key)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &models.CrossSignalCardinalityResponse{
+		HighCardinalityKeys: keys,
+		Total:               len(keys),
+		Threshold:           threshold,
+	}, nil
+}
+
+
