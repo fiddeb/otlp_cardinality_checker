@@ -969,3 +969,294 @@ body.dark-mode .high-warning {
   color: var(--text-secondary);
   font-style: italic;
 }
+
+/* CrossSignalCardinality Component */
+.cross-signal-cardinality {
+  padding: 20px;
+}
+
+.cross-signal-cardinality .header {
+  margin-bottom: 24px;
+}
+
+.cross-signal-cardinality .header h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.cross-signal-cardinality .header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.cross-signal-cardinality .controls {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.cross-signal-cardinality .control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cross-signal-cardinality .control-group label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cross-signal-cardinality .control-group input {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  width: 150px;
+}
+
+.cross-signal-cardinality .keys-table {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+.cross-signal-cardinality table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cross-signal-cardinality th,
+.cross-signal-cardinality td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cross-signal-cardinality th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.cross-signal-cardinality .signal-type-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}
+
+.cross-signal-cardinality .signal-name {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.cross-signal-cardinality .key-scope {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.cross-signal-cardinality .key-name code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.cross-signal-cardinality .event-name {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.cross-signal-cardinality .sample-values {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cross-signal-cardinality .sample-value {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  color: var(--text-secondary);
+}
+
+.cross-signal-cardinality .no-samples {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.cross-signal-cardinality .no-results {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+/* MetadataComplexity Component */
+.metadata-complexity {
+  padding: 20px;
+}
+
+.metadata-complexity .header {
+  margin-bottom: 24px;
+}
+
+.metadata-complexity .header h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.metadata-complexity .header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.metadata-complexity .controls {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.metadata-complexity .control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metadata-complexity .control-group label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.metadata-complexity .control-group input {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  width: 150px;
+}
+
+.metadata-complexity .complexity-table {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+.metadata-complexity table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.metadata-complexity th,
+.metadata-complexity td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.metadata-complexity th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.metadata-complexity th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.metadata-complexity th.sortable:hover {
+  background: var(--bg-hover);
+}
+
+.metadata-complexity .signal-type-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}
+
+.metadata-complexity .signal-name code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.metadata-complexity .warning-badge {
+  background: #ff9800;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.metadata-complexity .ok-badge {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.metadata-complexity .legend {
+  margin-top: 32px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.metadata-complexity .legend h3 {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.metadata-complexity .legend ul {
+  list-style: none;
+  margin: 12px 0;
+}
+
+.metadata-complexity .legend li {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.metadata-complexity .legend p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.metadata-complexity .no-results {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-top: 20px;
+}

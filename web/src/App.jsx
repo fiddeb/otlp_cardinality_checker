@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import HighCardinality from './components/HighCardinality'
+import CrossSignalCardinality from './components/CrossSignalCardinality'
+import MetadataComplexity from './components/MetadataComplexity'
 import MetricsView from './components/MetricsView'
 import TracesView from './components/TracesView'
 import LogsView from './components/LogsView'
@@ -123,6 +125,18 @@ function App() {
             High Cardinality
           </button>
           <button 
+            className={`tab ${activeTab === 'cross-signal-cardinality' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cross-signal-cardinality')}
+          >
+            Cross-Signal Keys
+          </button>
+          <button 
+            className={`tab ${activeTab === 'metadata-complexity' ? 'active' : ''}`}
+            onClick={() => setActiveTab('metadata-complexity')}
+          >
+            Metadata Complexity
+          </button>
+          <button 
             className={`tab ${activeTab === 'metrics' ? 'active' : ''}`}
             onClick={() => setActiveTab('metrics')}
           >
@@ -173,6 +187,14 @@ function App() {
 
       {activeTab === 'high-cardinality' && (
         <HighCardinality onViewDetails={handleViewDetails} />
+      )}
+
+      {activeTab === 'cross-signal-cardinality' && (
+        <CrossSignalCardinality />
+      )}
+
+      {activeTab === 'metadata-complexity' && (
+        <MetadataComplexity />
       )}
 
       {activeTab === 'metrics' && (
