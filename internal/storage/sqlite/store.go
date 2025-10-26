@@ -1012,6 +1012,49 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 		}
 
 		// Also write to unified signal_keys table
+		// First, check if key exists and merge samples
+		var existingSamplesJSON string
+		var existingCard int64
+		err = tx.QueryRow(`
+			SELECT COALESCE(value_samples, '[]'), estimated_cardinality
+			FROM signal_keys
+			WHERE signal_type = 'log' AND signal_name = ? AND key_scope = ? AND key_name = ? AND event_name = ''
+		`, severity, keyScope, keyName).Scan(&existingSamplesJSON, &existingCard)
+		
+		mergedSamples := samples
+		mergedCard := int64(keyMeta.EstimatedCardinality)
+		
+		if err == nil {
+			// Key exists, merge samples
+			var existingSamples []string
+			if existingSamplesJSON != "" && existingSamplesJSON != "[]" {
+				if err := decodeJSON(existingSamplesJSON, &existingSamples); err == nil {
+					// Merge samples (union)
+					sampleSet := make(map[string]bool)
+					for _, s := range existingSamples {
+						sampleSet[s] = true
+					}
+					for _, s := range keyMeta.ValueSamples {
+						sampleSet[s] = true
+					}
+					
+					// Convert back to slice (limit to MaxSamples)
+					merged := make([]string, 0, len(sampleSet))
+					for s := range sampleSet {
+						merged = append(merged, s)
+						if len(merged) >= 10 { // MaxSamples
+							break
+						}
+					}
+					mergedSamples, _ = encodeJSON(merged)
+					mergedCard = int64(len(sampleSet))
+					if mergedCard < existingCard {
+						mergedCard = existingCard
+					}
+				}
+			}
+		}
+		
 		_, err = tx.Exec(`
 			INSERT INTO signal_keys (
 				signal_type, signal_name, key_scope, key_name, event_name,
@@ -1024,7 +1067,7 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
 		`, severity, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
-			keyMeta.EstimatedCardinality, samples, nil)
+			mergedCard, mergedSamples, nil)
 
 		if err != nil {
 			return fmt.Errorf("upserting signal key %s: %w", keyName, err)

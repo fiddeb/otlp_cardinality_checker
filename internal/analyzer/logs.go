@@ -60,7 +60,12 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 		return nil, fmt.Errorf("request cannot be nil")
 	}
 
+	// Map: service+severity -> LogMetadata
+	// Key format: "service|severity"
 	logMap := make(map[string]*models.LogMetadata)
+	
+	// Track which services have which severities for body template processing
+	serviceSeverities := make(map[string]map[string]bool) // service -> {severity -> true}
 
 	for _, resourceLogs := range req.ResourceLogs {
 		// Extract resource attributes
@@ -79,25 +84,31 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 					severityText = "UNSET"
 				}
 
-				if _, exists := logMap[severityText]; !exists {
-					logMap[severityText] = models.NewLogMetadata(severityText)
-					logMap[severityText].ScopeInfo = scopeInfo
+				// Create unique key per service+severity
+				key := serviceName + "|" + severityText
 
-					// Add resource keys
+				if _, exists := logMap[key]; !exists {
+					logMap[key] = models.NewLogMetadata(severityText)
+					logMap[key].ScopeInfo = scopeInfo
+					logMap[key].Services[serviceName] = 0
+
+					// Add resource keys for this service
 					for resKey := range resourceAttrs {
-						if logMap[severityText].ResourceKeys[resKey] == nil {
-							logMap[severityText].ResourceKeys[resKey] = models.NewKeyMetadata()
+						if logMap[key].ResourceKeys[resKey] == nil {
+							logMap[key].ResourceKeys[resKey] = models.NewKeyMetadata()
 						}
 					}
 				}
 
-				metadata := logMap[severityText]
+				metadata := logMap[key]
 				metadata.SampleCount++
-
-				// Track service
-				if serviceName != "" {
-					metadata.Services[serviceName]++
+				metadata.Services[serviceName]++
+				
+				// Track service-severity combination
+				if serviceSeverities[serviceName] == nil {
+					serviceSeverities[serviceName] = make(map[string]bool)
 				}
+				serviceSeverities[serviceName][severityText] = true
 				
 				// Extract body template (create analyzer per severity if needed)
 				body := logRecord.GetBody().GetStringValue()
@@ -108,24 +119,26 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 					a.bodyAnalyzers[severityText].AddMessage(body)
 				}
 
-			// Extract log record attributes
-			logAttrs := extractAttributes(logRecord.Attributes)
-			for attrKey, attrValue := range logAttrs {
-				if metadata.AttributeKeys[attrKey] == nil {
-					metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+				// Extract log record attributes
+				logAttrs := extractAttributes(logRecord.Attributes)
+				for attrKey, attrValue := range logAttrs {
+					if metadata.AttributeKeys[attrKey] == nil {
+						metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+					}
+					metadata.AttributeKeys[attrKey].AddValue(attrValue)
 				}
-				metadata.AttributeKeys[attrKey].AddValue(attrValue)
-		}				// Update resource key counts
-			for resKey, resValue := range resourceAttrs {
-				if metadata.ResourceKeys[resKey] != nil {
-					metadata.ResourceKeys[resKey].AddValue(resValue)
+				
+				// Update resource key counts
+				for resKey, resValue := range resourceAttrs {
+					if metadata.ResourceKeys[resKey] != nil {
+						metadata.ResourceKeys[resKey].AddValue(resValue)
+					}
 				}
 			}
 		}
-	}
-}	// Convert map to slice and calculate percentages
+	}	// Convert map to slice and calculate percentages
 	results := make([]*models.LogMetadata, 0, len(logMap))
-	for severityText, metadata := range logMap {
+	for _, metadata := range logMap {
 		// Calculate percentages for attribute keys
 		for _, keyMeta := range metadata.AttributeKeys {
 			if metadata.SampleCount > 0 {
@@ -140,7 +153,8 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 			}
 		}
 		
-		// Add body templates for this severity level
+		// Add body templates for this severity level (shared across services)
+		severityText := metadata.Severity
 		if analyzer, exists := a.bodyAnalyzers[severityText]; exists {
 			templates := analyzer.GetTemplates()
 			metadata.BodyTemplates = make([]*models.BodyTemplate, 0, len(templates))
