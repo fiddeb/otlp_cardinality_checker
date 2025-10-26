@@ -68,13 +68,13 @@ CREATE TABLE span_keys (
     span_name TEXT NOT NULL,
     key_scope TEXT NOT NULL,  -- 'attribute', 'resource', 'event', 'link'
     key_name TEXT NOT NULL,
-    event_name TEXT,  -- Only for key_scope='event', else NULL
+    event_name TEXT NOT NULL DEFAULT '',  -- Only for key_scope='event', else empty string
     key_count INTEGER DEFAULT 0,
     key_percentage REAL DEFAULT 0.0,
     estimated_cardinality INTEGER DEFAULT 0,
     value_samples TEXT,  -- JSON array
     hll_sketch BLOB,
-    PRIMARY KEY (span_name, key_scope, key_name, COALESCE(event_name, '')),
+    PRIMARY KEY (span_name, key_scope, key_name, event_name),
     FOREIGN KEY (span_name) REFERENCES spans(name) ON DELETE CASCADE
 ) STRICT;
 

@@ -313,7 +313,7 @@ func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
 			type = excluded.type,
 			unit = COALESCE(excluded.unit, unit),
 			description = COALESCE(excluded.description, description),
-			total_sample_count = total_sample_count + excluded.sample_count
+			total_sample_count = total_sample_count + excluded.total_sample_count
 	`, metric.Name, metric.Type, metric.Unit, metric.Description, metric.SampleCount)
 	if err != nil {
 		return fmt.Errorf("upserting metric: %w", err)
@@ -606,13 +606,13 @@ func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys ma
 				span_name, key_scope, key_name, event_name, key_count, key_percentage,
 				estimated_cardinality, value_samples, hll_sketch
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(span_name, key_scope, key_name, COALESCE(event_name, '')) DO UPDATE SET
+			ON CONFLICT(span_name, key_scope, key_name, event_name) DO UPDATE SET
 				key_count = key_count + excluded.key_count,
 				key_percentage = excluded.key_percentage,
 				estimated_cardinality = excluded.estimated_cardinality,
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
-		`, spanName, keyScope, keyName, nullString(eventName), keyMeta.Count, keyMeta.Percentage,
+		`, spanName, keyScope, keyName, eventNameOrEmpty(eventName), keyMeta.Count, keyMeta.Percentage,
 			keyMeta.EstimatedCardinality, samples, nil)
 
 		if err != nil {
@@ -623,9 +623,11 @@ func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys ma
 }
 
 // nullString returns nil if s is empty, otherwise returns s.
-func nullString(s string) interface{} {
+// eventNameOrEmpty returns empty string if s is empty, otherwise returns s.
+// Used for span event_name field which is NOT NULL DEFAULT ''.
+func eventNameOrEmpty(s string) string {
 	if s == "" {
-		return nil
+		return ""
 	}
 	return s
 }
