@@ -331,6 +331,93 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 	return logs, nil
 }
 
+// GetLogPatterns returns an advanced pattern analysis view.
+// Note: In-memory store has limited pattern analysis capabilities compared to SQLite.
+func (s *Store) GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error) {
+	s.logsmu.RLock()
+	defer s.logsmu.RUnlock()
+	
+	// Build pattern groups from in-memory data
+	patternMap := make(map[string]*models.PatternGroup)
+	
+	for severity, logMeta := range s.logs {
+		for _, template := range logMeta.BodyTemplates {
+			// Apply count filter
+			if template.Count < minCount {
+				continue
+			}
+			
+			// Initialize pattern group if needed
+			if _, exists := patternMap[template.Template]; !exists {
+				patternMap[template.Template] = &models.PatternGroup{
+					Template:          template.Template,
+					ExampleBody:       template.Example,
+					TotalCount:        0,
+					SeverityBreakdown: make(map[string]int64),
+					Services:          []models.ServicePatternInfo{},
+				}
+			}
+			
+			pg := patternMap[template.Template]
+			pg.TotalCount += template.Count
+			pg.SeverityBreakdown[severity] += template.Count
+			
+			// Build service info from log metadata services
+			for serviceName, sampleCount := range logMeta.Services {
+				if serviceName == "" {
+					serviceName = "unknown"
+				}
+				
+				// Convert resource keys
+				resourceKeys := make([]models.KeyInfo, 0, len(logMeta.ResourceKeys))
+				for keyName, keyMeta := range logMeta.ResourceKeys {
+					resourceKeys = append(resourceKeys, models.KeyInfo{
+						Name:         keyName,
+						Cardinality:  int(keyMeta.EstimatedCardinality),
+						SampleValues: keyMeta.ValueSamples,
+					})
+				}
+				
+				// Convert attribute keys
+				attrKeys := make([]models.KeyInfo, 0, len(logMeta.AttributeKeys))
+				for keyName, keyMeta := range logMeta.AttributeKeys {
+					attrKeys = append(attrKeys, models.KeyInfo{
+						Name:         keyName,
+						Cardinality:  int(keyMeta.EstimatedCardinality),
+						SampleValues: keyMeta.ValueSamples,
+					})
+				}
+				
+				pg.Services = append(pg.Services, models.ServicePatternInfo{
+					ServiceName:   serviceName,
+					SampleCount:   sampleCount,
+					Severities:    []string{severity},
+					ResourceKeys:  resourceKeys,
+					AttributeKeys: attrKeys,
+				})
+			}
+		}
+	}
+	
+	// Filter by minServices and convert to slice
+	var patterns []models.PatternGroup
+	for _, pg := range patternMap {
+		if len(pg.Services) >= minServices {
+			patterns = append(patterns, *pg)
+		}
+	}
+	
+	// Sort by total count descending
+	sort.Slice(patterns, func(i, j int) bool {
+		return patterns[i].TotalCount > patterns[j].TotalCount
+	})
+	
+	return &models.PatternExplorerResponse{
+		Patterns: patterns,
+		Total:    len(patterns),
+	}, nil
+}
+
 // ListServices returns all service names seen.
 func (s *Store) ListServices(ctx context.Context) ([]string, error) {
 	s.servicesmu.RLock()

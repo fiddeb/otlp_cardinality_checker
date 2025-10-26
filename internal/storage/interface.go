@@ -25,6 +25,9 @@ type Storage interface {
 	StoreLog(ctx context.Context, log *models.LogMetadata) error
 	GetLog(ctx context.Context, severityText string) (*models.LogMetadata, error)
 	ListLogs(ctx context.Context, serviceName string) ([]*models.LogMetadata, error)
+	
+	// Pattern explorer - advanced log pattern analysis
+	GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error)
 
 	// Service operations
 	ListServices(ctx context.Context) ([]string, error)
