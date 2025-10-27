@@ -1,0 +1,181 @@
+{
+  "name": "container_network_receive_errors_total",
+  "sample_count": 164555,
+  "label_keys": [
+    {
+      "key": "endpoint",
+      "estimated_cardinality": 1,
+      "count": 164555,
+      "samples": [
+        "https-metrics"
+      ]
+    },
+    {
+      "key": "id",
+      "estimated_cardinality": 6439,
+      "count": 164555,
+      "samples": [
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod27f740fd_e823_4b17_a5e7_0de10c9eee42.slice/cri-containerd-eb15835b40235eb2397e3f00f9a9f9b609699a43a474835718df079ebe6674cd.scope",
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod432d1293_0cf3_43d7_9d08_004038c14071.slice/cri-containerd-44eef16972db31b6367040011aad7ef58f762ee439b345d5ee21bc543dfba434.scope",
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod68a7fb59_d9b3_4a28_b7ef_4524190e0102.slice/cri-containerd-ae1ff2b725ac71fceade08496bbe549d2309879f98e759468d8c93830a4ae980.scope",
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podabd0948c_8e03_4e6e_ab25_44da6e0f370b.slice/cri-containerd-921a8e917607f1362594b987ae82d57fe581a1912599c41d046ee19c728c9db8.scope",
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podb20ba55a_2ee6_41f9_8ff5_b53c1b838ac9.slice/cri-containerd-ea5e66eb48bf5b88b766f0a791ac0e121c067da81b388e9b4dfabf11e81e6a39.scope",
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podb81b0b15_4c3a_4fe1_8a38_fbd5a6a478af.slice/cri-containerd-dbf3671ac6b742bbdb6e9f2db9c3ca79e51951e821d84927326bd2c9f3988f09.scope",
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podc48bdfb7_4ab0_4655_a280_3ff86b09eed1.slice/cri-containerd-ee41dc8aaf81e32ba5dec5ea2704aa6601571b8ea5d4bff7dc9b59d71aac3125.scope",
+        "/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-poddac9c752_89b1_4834_a994_3cf4e1957d78.slice/cri-containerd-9ec0995585fa16703339e9cc0ff1d5f6d01314445e9c296da642c56f5589d80e.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod024f46ea_7196_411e_b2c5_eec0f46ef239.slice/cri-containerd-0d070c03c86c74a6e47df11ca58980be7326bd4c9c7a6a0176f0c088f646c0ff.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod03e1fad7_265a_47fe_b68d_fbd297641bb0.slice/cri-containerd-e1b4d6c8666bf903e1e2e5a1df0e4a30b90458191135bc78b5c907a14c3e9f59.scope"
+      ]
+    },
+    {
+      "key": "image",
+      "estimated_cardinality": 1,
+      "count": 164555,
+      "samples": [
+        "docker.io/rancher/mirrored-pause:3.6"
+      ]
+    },
+    {
+      "key": "interface",
+      "estimated_cardinality": 3620,
+      "count": 164555,
+      "samples": [
+        "cilium_host",
+        "cilium_net",
+        "cilium_vxlan",
+        "cilium_wg0",
+        "eno5np0",
+        "eno6np1",
+        "eth0",
+        "lxc01eea89e9fef",
+        "lxc02f87e46e1f0",
+        "lxc031c25a4acdb"
+      ]
+    },
+    {
+      "key": "name",
+      "estimated_cardinality": 6439,
+      "count": 164555,
+      "samples": [
+        "0d070c03c86c74a6e47df11ca58980be7326bd4c9c7a6a0176f0c088f646c0ff",
+        "44eef16972db31b6367040011aad7ef58f762ee439b345d5ee21bc543dfba434",
+        "921a8e917607f1362594b987ae82d57fe581a1912599c41d046ee19c728c9db8",
+        "9ec0995585fa16703339e9cc0ff1d5f6d01314445e9c296da642c56f5589d80e",
+        "ae1ff2b725ac71fceade08496bbe549d2309879f98e759468d8c93830a4ae980",
+        "dbf3671ac6b742bbdb6e9f2db9c3ca79e51951e821d84927326bd2c9f3988f09",
+        "e1b4d6c8666bf903e1e2e5a1df0e4a30b90458191135bc78b5c907a14c3e9f59",
+        "ea5e66eb48bf5b88b766f0a791ac0e121c067da81b388e9b4dfabf11e81e6a39",
+        "eb15835b40235eb2397e3f00f9a9f9b609699a43a474835718df079ebe6674cd",
+        "ee41dc8aaf81e32ba5dec5ea2704aa6601571b8ea5d4bff7dc9b59d71aac3125"
+      ]
+    },
+    {
+      "key": "namespace",
+      "estimated_cardinality": 2647,
+      "count": 164555,
+      "samples": [
+        "aaxe-aspire-test-dev",
+        "cattle-monitoring-system",
+        "cms-consume-spela-dev-test3",
+        "coredb-playground-dev",
+        "iadu-microservice-dev",
+        "kube-system",
+        "rook-ceph",
+        "spire-system",
+        "svs-operators",
+        "vegas-dfg-writer-dev"
+      ]
+    },
+    {
+      "key": "pod",
+      "estimated_cardinality": 6439,
+      "count": 164555,
+      "samples": [
+        "core-dump-handler-4wpwv",
+        "coredb-playground-dev-deployment-647995f788-prvs8",
+        "kured-q77vk",
+        "pushprox-kube-proxy-client-26vb5",
+        "pushprox-kube-scheduler-proxy-57f46b845b-w9glv",
+        "spiffe-csi-driver-downstream-kvvtt",
+        "spiffe-csi-driver-upstream-qmbg9",
+        "spire-child-agent-downstream-w4gt6",
+        "spire-child-agent-upstream-254kw",
+        "vegas-dfg-writer-77464d56c7-s5hd6"
+      ]
+    },
+    {
+      "key": "service",
+      "estimated_cardinality": 1,
+      "count": 164555,
+      "samples": [
+        "rancher-monitoring-kubelet"
+      ]
+    }
+  ],
+  "resource_keys": [
+    {
+      "key": "k8s.cluster.name",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "elzaservices-dev-svsg1"
+      ]
+    },
+    {
+      "key": "k8s.namespace.name",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "kube-system"
+      ]
+    },
+    {
+      "key": "server.address",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "10.151.33.15"
+      ]
+    },
+    {
+      "key": "server.port",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "10250"
+      ]
+    },
+    {
+      "key": "service.instance.id",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "10.151.33.15:10250"
+      ]
+    },
+    {
+      "key": "service.name",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "target-allocator"
+      ]
+    },
+    {
+      "key": "tenant",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "podmetrics"
+      ]
+    },
+    {
+      "key": "url.scheme",
+      "estimated_cardinality": 1,
+      "count": 622,
+      "samples": [
+        "https"
+      ]
+    }
+  ]
+}

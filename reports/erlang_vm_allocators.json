@@ -1,0 +1,184 @@
+{
+  "name": "erlang_vm_allocators",
+  "sample_count": 2980194,
+  "label_keys": [
+    {
+      "key": "alloc",
+      "estimated_cardinality": 10,
+      "count": 2980194,
+      "samples": [
+        "binary_alloc",
+        "driver_alloc",
+        "eheap_alloc",
+        "ets_alloc",
+        "fix_alloc",
+        "literal_alloc",
+        "ll_alloc",
+        "sl_alloc",
+        "std_alloc",
+        "temp_alloc"
+      ]
+    },
+    {
+      "key": "clustername",
+      "estimated_cardinality": 10,
+      "count": 2980194,
+      "samples": [
+        "coredbtest",
+        "corporaterabbit",
+        "cpsrabbit",
+        "kontosportrabbit",
+        "kontoturrabbit",
+        "martechrabbit",
+        "officerabbit",
+        "retailrabbit",
+        "turproduktrabbit",
+        "txrabbit"
+      ]
+    },
+    {
+      "key": "instance_no",
+      "estimated_cardinality": 5284,
+      "count": 2980194,
+      "samples": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    {
+      "key": "kind",
+      "estimated_cardinality": 3,
+      "count": 2980194,
+      "samples": [
+        "mbcs",
+        "mbcs_pool",
+        "sbcs"
+      ]
+    },
+    {
+      "key": "team",
+      "estimated_cardinality": 1,
+      "count": 2980194,
+      "samples": [
+        "coredb"
+      ]
+    },
+    {
+      "key": "usage",
+      "estimated_cardinality": 4,
+      "count": 2980194,
+      "samples": [
+        "blocks",
+        "blocks_size",
+        "carriers",
+        "carriers_size"
+      ]
+    }
+  ],
+  "resource_keys": [
+    {
+      "key": "host.name",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "lmq01"
+      ]
+    },
+    {
+      "key": "http.scheme",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "http"
+      ]
+    },
+    {
+      "key": "net.host.name",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "lmq01.test.svenskaspel.se"
+      ]
+    },
+    {
+      "key": "net.host.port",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "15692"
+      ]
+    },
+    {
+      "key": "os.type",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "linux"
+      ]
+    },
+    {
+      "key": "receiver",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "otlp"
+      ]
+    },
+    {
+      "key": "server.address",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "lmq01.test.svenskaspel.se"
+      ]
+    },
+    {
+      "key": "server.port",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "15692"
+      ]
+    },
+    {
+      "key": "server.type",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "vmware"
+      ]
+    },
+    {
+      "key": "service.instance.id",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "lmq01.test.svenskaspel.se:15692"
+      ]
+    },
+    {
+      "key": "service.name",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "rabbitmq-exporter"
+      ]
+    },
+    {
+      "key": "url.scheme",
+      "estimated_cardinality": 1,
+      "count": 854,
+      "samples": [
+        "http"
+      ]
+    }
+  ]
+}

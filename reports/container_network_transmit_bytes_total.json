@@ -1,0 +1,287 @@
+{
+  "name": "container_network_transmit_bytes_total",
+  "sample_count": 165850,
+  "label_keys": [
+    {
+      "key": "container_label_se_svenskaspel_build_number",
+      "estimated_cardinality": 3,
+      "count": 159,
+      "samples": [
+        "19",
+        "22",
+        "59"
+      ]
+    },
+    {
+      "key": "container_label_se_svenskaspel_build_slave",
+      "estimated_cardinality": 2,
+      "count": 159,
+      "samples": [
+        "tbs05",
+        "tbs06"
+      ]
+    },
+    {
+      "key": "container_label_se_svenskaspel_deployment_id",
+      "estimated_cardinality": 3,
+      "count": 159,
+      "samples": [
+        "0bd5789e-f378-573a-b1d9-b69880b97c3d",
+        "d5e0c66c-76c6-5e9a-809e-f38139967892",
+        "d5f584f7-dd0e-5497-a940-88cd83775baa"
+      ]
+    },
+    {
+      "key": "container_label_se_svenskaspel_job_url",
+      "estimated_cardinality": 2,
+      "count": 159,
+      "samples": [
+        "\"https://jenkins.ocean.svenskaspel.se/job/devops_svs-encmerger_pipeline/\"",
+        "\"https://jenkins.ocean.svenskaspel.se/job/puppet_puppet-webhook_pipeline/\""
+      ]
+    },
+    {
+      "key": "endpoint",
+      "estimated_cardinality": 1,
+      "count": 165585,
+      "samples": [
+        "https-metrics"
+      ]
+    },
+    {
+      "key": "id",
+      "estimated_cardinality": 6599,
+      "count": 165850,
+      "samples": [
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podbf66b6b6_bd2f_463d_9ab9_b46862f02616.slice/cri-containerd-7c1df96fb6d0d415f813612a953c83e88e9b8597e3514e294431568d880dd742.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podc04c840b_2815_4801_8534_ab88213df56f.slice/cri-containerd-27cdc524e6025b0024981ea94ac03d30e49f2227246186cfa7a4d245a0ba1a77.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podc1c8c33a_14d7_4487_a0f4_cd1a5ff2b7ba.slice/cri-containerd-61f186cac02692fda8a52e0baea89da4d62f90bee53d60261e12bb42fd1bbec4.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podc602a3d1_98f7_4529_8b38_6fca958227f4.slice/cri-containerd-5005f418ba769686676695efe7d039d3a138fb80412105287ce5cd11f749cd67.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podc9452c8e_ff63_4fc3_934a_b8ba6bc5bf8f.slice/cri-containerd-977cf1d3719034fd269496ffb59656cbf3a8c6db8b18ccca09cac21bffe921a8.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podcfb09e5f_b63c_48cc_bb4b_4736b0391301.slice/cri-containerd-f3ce211e8109c0493a2d23b2cd984367fdfda418213c394ee19ce29ef02a6cb5.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podd07723b0_d1fa_43f4_a01d_d54e7b2145f5.slice/cri-containerd-272c17b783455c1b0d0c228d2c0f4f4fc5faeaf384d664550b5f63d4b1dbf85a.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podd29d68dc_e4d1_4de5_b363_aa2ffdee5894.slice/cri-containerd-26678c985c021cab720f7648e341649b0cdb9082b1e3acb7dc9d11370237ee30.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podd3aa5122_ef16_4ab2_8b2f_0c2daba9755c.slice/cri-containerd-80e2b7da1086c0b33c5481a72cb404d8dcc5de5412fd59c26af8d5b416e9f3d6.scope",
+        "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-poddbc5049d_aef1_49a5_8cb7_2529a5166ddf.slice/cri-containerd-e35d8df12b553f228e425e2db53dabc08d6ff98ec9eff1c13bce933931353e2c.scope"
+      ]
+    },
+    {
+      "key": "image",
+      "estimated_cardinality": 5,
+      "count": 165797,
+      "samples": [
+        "docker.io/rancher/mirrored-pause:3.6",
+        "docker.vby.svenskaspel.se:8181/cadvisor/master:v0.46.0-3457",
+        "docker.vby.svenskaspel.se:8181/puppet-webhook/master:0.1.0-19",
+        "docker.vby.svenskaspel.se:8181/puppet-webhook/master:latest",
+        "docker.vby.svenskaspel.se:8181/svs-encmerger/master:latest"
+      ]
+    },
+    {
+      "key": "interface",
+      "estimated_cardinality": 6556,
+      "count": 165850,
+      "samples": [
+        "lxc32c239b8c9e2",
+        "lxc32cf2904e00a",
+        "lxc3a650f0bc859",
+        "lxc3bc58e346ffd",
+        "lxc3be6d9882e85",
+        "lxc3d94c441e9d2",
+        "lxc4050fd128095",
+        "lxc485e0c813f48",
+        "lxc48c08888083a",
+        "lxc4916e38bba46"
+      ]
+    },
+    {
+      "key": "name",
+      "estimated_cardinality": 6546,
+      "count": 165797,
+      "samples": [
+        "26678c985c021cab720f7648e341649b0cdb9082b1e3acb7dc9d11370237ee30",
+        "272c17b783455c1b0d0c228d2c0f4f4fc5faeaf384d664550b5f63d4b1dbf85a",
+        "27cdc524e6025b0024981ea94ac03d30e49f2227246186cfa7a4d245a0ba1a77",
+        "5005f418ba769686676695efe7d039d3a138fb80412105287ce5cd11f749cd67",
+        "61f186cac02692fda8a52e0baea89da4d62f90bee53d60261e12bb42fd1bbec4",
+        "7c1df96fb6d0d415f813612a953c83e88e9b8597e3514e294431568d880dd742",
+        "80e2b7da1086c0b33c5481a72cb404d8dcc5de5412fd59c26af8d5b416e9f3d6",
+        "977cf1d3719034fd269496ffb59656cbf3a8c6db8b18ccca09cac21bffe921a8",
+        "e35d8df12b553f228e425e2db53dabc08d6ff98ec9eff1c13bce933931353e2c",
+        "f3ce211e8109c0493a2d23b2cd984367fdfda418213c394ee19ce29ef02a6cb5"
+      ]
+    },
+    {
+      "key": "namespace",
+      "estimated_cardinality": 3681,
+      "count": 165585,
+      "samples": [
+        "cattle-monitoring-system",
+        "cicd-example-microservice-dev",
+        "cicd-example-microservice-review-24",
+        "daho-dev-envs-daho-dev-env-3-review-1",
+        "daho-dev-envs-review-1",
+        "data-catalog-tooling-dev-utv",
+        "gacj-test-dev",
+        "kong-client-tur-dev-test3",
+        "kube-system",
+        "retail-partner-dev"
+      ]
+    },
+    {
+      "key": "pod",
+      "estimated_cardinality": 6334,
+      "count": 165585,
+      "samples": [
+        "cicd-example-application2-745c487c78-qqbnv",
+        "cilium-dwq7q",
+        "common-secret-mounter-6c57648dbd-tpb72",
+        "daho-dev-env-3-67c4f6f66d-7w6lz",
+        "daho-dev-env-3-67c4f6f66d-npwpb",
+        "dataplane-kong-dp-kong-trinidadtb-config-dev-test3-wk2mc-cqxnd2",
+        "envoy-cicd-example-microservice-review-24-cicd-example-f22hkccj",
+        "envoy-gateway-6cbc756cf8-9kxsg",
+        "gateway-7c87fd5dd4-54qks",
+        "prometheus-rancher-monitoring-prometheus-0"
+      ]
+    },
+    {
+      "key": "service",
+      "estimated_cardinality": 1,
+      "count": 165585,
+      "samples": [
+        "rancher-monitoring-kubelet"
+      ]
+    },
+    {
+      "key": "team",
+      "estimated_cardinality": 1,
+      "count": 265,
+      "samples": [
+        "team_managed_services"
+      ]
+    }
+  ],
+  "resource_keys": [
+    {
+      "key": "host.name",
+      "estimated_cardinality": 1,
+      "count": 53,
+      "samples": [
+        "tpm02"
+      ]
+    },
+    {
+      "key": "http.scheme",
+      "estimated_cardinality": 1,
+      "count": 53,
+      "samples": [
+        "http"
+      ]
+    },
+    {
+      "key": "k8s.cluster.name",
+      "estimated_cardinality": 1,
+      "count": 633,
+      "samples": [
+        "elzaservices-dev-svsg1"
+      ]
+    },
+    {
+      "key": "k8s.namespace.name",
+      "estimated_cardinality": 1,
+      "count": 633,
+      "samples": [
+        "kube-system"
+      ]
+    },
+    {
+      "key": "net.host.name",
+      "estimated_cardinality": 1,
+      "count": 53,
+      "samples": [
+        "tpm02.test.svenskaspel.se"
+      ]
+    },
+    {
+      "key": "net.host.port",
+      "estimated_cardinality": 1,
+      "count": 53,
+      "samples": [
+        "4194"
+      ]
+    },
+    {
+      "key": "os.type",
+      "estimated_cardinality": 1,
+      "count": 53,
+      "samples": [
+        "linux"
+      ]
+    },
+    {
+      "key": "receiver",
+      "estimated_cardinality": 1,
+      "count": 53,
+      "samples": [
+        "otlp"
+      ]
+    },
+    {
+      "key": "server.address",
+      "estimated_cardinality": 1,
+      "count": 686,
+      "samples": [
+        "10.151.33.15"
+      ]
+    },
+    {
+      "key": "server.port",
+      "estimated_cardinality": 1,
+      "count": 686,
+      "samples": [
+        "10250"
+      ]
+    },
+    {
+      "key": "server.type",
+      "estimated_cardinality": 1,
+      "count": 53,
+      "samples": [
+        "vmware"
+      ]
+    },
+    {
+      "key": "service.instance.id",
+      "estimated_cardinality": 1,
+      "count": 686,
+      "samples": [
+        "10.151.33.15:10250"
+      ]
+    },
+    {
+      "key": "service.name",
+      "estimated_cardinality": 1,
+      "count": 686,
+      "samples": [
+        "target-allocator"
+      ]
+    },
+    {
+      "key": "tenant",
+      "estimated_cardinality": 1,
+      "count": 633,
+      "samples": [
+        "podmetrics"
+      ]
+    },
+    {
+      "key": "url.scheme",
+      "estimated_cardinality": 1,
+      "count": 686,
+      "samples": [
+        "https"
+      ]
+    }
+  ]
+}

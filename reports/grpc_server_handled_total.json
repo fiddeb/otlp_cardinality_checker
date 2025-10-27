@@ -1,0 +1,294 @@
+{
+  "name": "grpc_server_handled_total",
+  "sample_count": 162011,
+  "label_keys": [
+    {
+      "key": "cluster_id",
+      "estimated_cardinality": 10,
+      "count": 90259,
+      "samples": [
+        "c-m-468cqcz9",
+        "c-m-4lfcg5mt",
+        "c-m-57htlmm9",
+        "c-m-5n54g9st",
+        "c-m-6bqrwrwg",
+        "c-m-h64x9h9d",
+        "c-m-hl986wrc",
+        "c-m-p6hkknsq",
+        "c-m-qfljtwbs",
+        "c-m-sm7wwvg5"
+      ]
+    },
+    {
+      "key": "cluster_name",
+      "estimated_cardinality": 10,
+      "count": 90259,
+      "samples": [
+        "elzaedge-dev-svsg1",
+        "elzaedge-stage-svsg1",
+        "elzaservices-dev-svsg1",
+        "elzaservices-stage-svsg1",
+        "operationservices-dev-svsg1",
+        "operationservices-stage-svsg1",
+        "termitmanagedservices-dev-svsg1",
+        "termitmanagedservices-stage-svsg1",
+        "termitplatform-dev-svsg1",
+        "termitplatform-stage-svsg1"
+      ]
+    },
+    {
+      "key": "component",
+      "estimated_cardinality": 1,
+      "count": 90259,
+      "samples": [
+        "kube-etcd"
+      ]
+    },
+    {
+      "key": "container",
+      "estimated_cardinality": 2,
+      "count": 71752,
+      "samples": [
+        "dex-server",
+        "server"
+      ]
+    },
+    {
+      "key": "endpoint",
+      "estimated_cardinality": 2,
+      "count": 162011,
+      "samples": [
+        "http-metrics",
+        "metrics"
+      ]
+    },
+    {
+      "key": "grpc_code",
+      "estimated_cardinality": 441,
+      "count": 162011,
+      "samples": [
+        "Aborted",
+        "AlreadyExists",
+        "Canceled",
+        "DataLoss",
+        "DeadlineExceeded",
+        "FailedPrecondition",
+        "Internal",
+        "InvalidArgument",
+        "NotFound",
+        "OK"
+      ]
+    },
+    {
+      "key": "grpc_method",
+      "estimated_cardinality": 1564,
+      "count": 162011,
+      "samples": [
+        "Alarm",
+        "AuthDisable",
+        "AuthEnable",
+        "AuthStatus",
+        "Authenticate",
+        "Check",
+        "Compact",
+        "Defragment",
+        "DeleteRange",
+        "Downgrade"
+      ]
+    },
+    {
+      "key": "grpc_service",
+      "estimated_cardinality": 393,
+      "count": 162011,
+      "samples": [
+        "account.AccountService",
+        "application.ApplicationService",
+        "applicationset.ApplicationSetService",
+        "etcdserverpb.Auth",
+        "etcdserverpb.Cluster",
+        "etcdserverpb.KV",
+        "etcdserverpb.Lease",
+        "etcdserverpb.Maintenance",
+        "etcdserverpb.Watch",
+        "grpc.health.v1.Health"
+      ]
+    },
+    {
+      "key": "grpc_type",
+      "estimated_cardinality": 4,
+      "count": 162011,
+      "samples": [
+        "bidi_stream",
+        "client_stream",
+        "server_stream",
+        "unary"
+      ]
+    },
+    {
+      "key": "namespace",
+      "estimated_cardinality": 2,
+      "count": 162011,
+      "samples": [
+        "argocd",
+        "cattle-monitoring-system"
+      ]
+    },
+    {
+      "key": "pod",
+      "estimated_cardinality": 180,
+      "count": 162011,
+      "samples": [
+        "argocd-deployment-app-dex-server-b6d4ff944-f7r6n",
+        "argocd-deployment-app-server-5cd9c86c89-mgf2t",
+        "argocd-deployment-app-server-64d665b678-x7rl7",
+        "argocd-deployment-app-server-7478874bdf-vrk4s",
+        "pushprox-kube-etcd-client-6z4cr",
+        "pushprox-kube-etcd-client-c2kz2",
+        "pushprox-kube-etcd-client-dv2mz",
+        "pushprox-kube-etcd-client-f7qcx",
+        "pushprox-kube-etcd-client-fxwcs",
+        "pushprox-kube-etcd-client-hzcf6"
+      ]
+    },
+    {
+      "key": "service",
+      "estimated_cardinality": 3,
+      "count": 162011,
+      "samples": [
+        "argocd-deployment-app-dex-server",
+        "argocd-deployment-app-server-metrics",
+        "pushprox-kube-etcd-client"
+      ]
+    }
+  ],
+  "resource_keys": [
+    {
+      "key": "k8s.cluster.name",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "elzaservices-dev-svsg1"
+      ]
+    },
+    {
+      "key": "k8s.container.name",
+      "estimated_cardinality": 1,
+      "count": 90,
+      "samples": [
+        "server"
+      ]
+    },
+    {
+      "key": "k8s.daemonset.name",
+      "estimated_cardinality": 1,
+      "count": 139,
+      "samples": [
+        "pushprox-kube-etcd-client"
+      ]
+    },
+    {
+      "key": "k8s.deployment.name",
+      "estimated_cardinality": 1,
+      "count": 25,
+      "samples": [
+        "argocd-deployment-app-server"
+      ]
+    },
+    {
+      "key": "k8s.namespace.name",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "cattle-monitoring-system"
+      ]
+    },
+    {
+      "key": "k8s.node.name",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "kesd01"
+      ]
+    },
+    {
+      "key": "k8s.pod.name",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "pushprox-kube-etcd-client-f7qcx"
+      ]
+    },
+    {
+      "key": "k8s.pod.start_time",
+      "estimated_cardinality": 1,
+      "count": 25,
+      "samples": [
+        "2025-10-15T08:12:48Z"
+      ]
+    },
+    {
+      "key": "k8s.pod.uid",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "c4427c4b-161f-4151-b3dc-54a1bc577e63"
+      ]
+    },
+    {
+      "key": "k8s.replicaset.name",
+      "estimated_cardinality": 1,
+      "count": 90,
+      "samples": [
+        "argocd-deployment-app-server-5cd9c86c89"
+      ]
+    },
+    {
+      "key": "server.address",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "10.151.31.11"
+      ]
+    },
+    {
+      "key": "server.port",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "2381"
+      ]
+    },
+    {
+      "key": "service.instance.id",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "10.151.31.11:2381"
+      ]
+    },
+    {
+      "key": "service.name",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "target-allocator"
+      ]
+    },
+    {
+      "key": "tenant",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "podmetrics"
+      ]
+    },
+    {
+      "key": "url.scheme",
+      "estimated_cardinality": 1,
+      "count": 229,
+      "samples": [
+        "http"
+      ]
+    }
+  ]
+}

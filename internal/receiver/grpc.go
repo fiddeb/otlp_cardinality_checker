@@ -14,6 +14,7 @@ import (
 	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/encoding/gzip" // Install gzip compressor
 	"google.golang.org/grpc/reflection"
 )
 
@@ -63,7 +64,10 @@ func (r *GRPCReceiver) Start() error {
 	}
 	r.listener = lis
 
-	r.server = grpc.NewServer()
+	// Enable gzip compression support
+	r.server = grpc.NewServer(
+		grpc.MaxRecvMsgSize(100*1024*1024), // 100MB max message size
+	)
 
 	// Register OTLP services with wrapper types to avoid method name conflicts
 	colmetricspb.RegisterMetricsServiceServer(r.server, r)
