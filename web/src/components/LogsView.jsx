@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 
-function LogsView({ onViewTemplate }) {
-  const [logs, setLogs] = useState([])
-  const [selectedLog, setSelectedLog] = useState(null)
-  const [templates, setTemplates] = useState([])
-  const [loadingTemplates, setLoadingTemplates] = useState(false)
+function LogsView({ onViewServiceDetails }) {
+  const [services, setServices] = useState([])
+  const [expandedService, setExpandedService] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -15,11 +13,11 @@ function LogsView({ onViewTemplate }) {
   const itemsPerPage = 100
 
   useEffect(() => {
-    fetch('/api/v1/logs?limit=100')
+    fetch('/api/v1/logs/by-service?limit=1000')
       .then(r => r.json())
       .then(result => {
-        const logsData = result.data || []
-        setLogs(logsData)
+        const servicesData = result.data || []
+        setServices(servicesData)
         setLoading(false)
       })
       .catch(err => {
@@ -27,31 +25,6 @@ function LogsView({ onViewTemplate }) {
         setLoading(false)
       })
   }, [])
-
-  const loadTemplates = async (severity) => {
-    setLoadingTemplates(true)
-    setSelectedLog(severity)
-    try {
-      const response = await fetch(`/api/v1/logs/${encodeURIComponent(severity)}`)
-      const data = await response.json()
-      setTemplates(data.body_templates || [])
-    } catch (err) {
-      console.error('Failed to load templates:', err)
-      setTemplates([])
-    } finally {
-      setLoadingTemplates(false)
-    }
-  }
-
-  const filteredLogs = (logs || []).filter(log => {
-    if (log.sample_count < filter.minSamples) return false
-    return true
-  })
-
-  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const currentLogs = filteredLogs.slice(startIndex, endIndex)
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -76,15 +49,36 @@ function LogsView({ onViewTemplate }) {
     return colors[severity] || '#666'
   }
 
-  if (loading) return <div className="loading">Loading...</div>
-  if (error) return <div className="error">Error: {error}</div>
+  if (loading) return <div className="loading">Loading logs...</div>
+  if (error) return <div className="error">Error loading logs: {error}</div>
+  if (!services || services.length === 0) return <div className="error">No logs found</div>
 
-  const totalSamples = logs.reduce((sum, log) => sum + log.sample_count, 0)
-  const totalTemplates = logs.reduce((sum, log) => sum + (log.template_count || 0), 0)
+  const totalSamples = services.reduce((sum, svc) => sum + svc.sample_count, 0)
+
+  // Apply filters
+  const filteredServices = (services || []).filter(svc => {
+    if (svc.sample_count < filter.minSamples) return false
+    return true
+  })
+
+  // Group services by service_name
+  const serviceGroups = {}
+  filteredServices.forEach(svc => {
+    if (!serviceGroups[svc.service_name]) {
+      serviceGroups[svc.service_name] = []
+    }
+    serviceGroups[svc.service_name].push(svc)
+  })
+
+  const uniqueServices = Object.keys(serviceGroups).sort()
+  const totalPages = Math.ceil(uniqueServices.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentServices = uniqueServices.slice(startIndex, endIndex)
 
   return (
     <div className="card">
-      <h2>Log Severities</h2>
+      <h2>Log Services</h2>
       
       <div className="filter-group">
         <div className="threshold-input">
@@ -99,130 +93,112 @@ function LogsView({ onViewTemplate }) {
       </div>
 
       <p style={{ marginTop: '10px' }} className="template-count-text">
-        Showing {startIndex + 1}-{Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} severities
+        Showing {startIndex + 1}-{Math.min(endIndex, uniqueServices.length)} of {uniqueServices.length} services
         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginTop: '20px' }}>
         <div className="stat-card">
-          <div className="stat-label">Total Severities</div>
-          <div className="stat-value">{filteredLogs.length}</div>
+          <div className="stat-label">Total Services</div>
+          <div className="stat-value">{uniqueServices.length}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Total Logs</div>
+          <div className="stat-label">Service×Severity Combos</div>
+          <div className="stat-value">{services.length}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Total Log Messages</div>
           <div className="stat-value">{totalSamples.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Total Patterns</div>
-          <div className="stat-value">{totalTemplates.toLocaleString()}</div>
         </div>
       </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Log Severities</h3>
+      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Services</h3>
       
-      <table>
-        <thead>
-          <tr>
-            <th>Severity</th>
-            <th>Log Samples</th>
-            <th>Services</th>
-            <th>Unique Patterns</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {currentLogs
-            .sort((a, b) => b.sample_count - a.sample_count)
-            .map((log, i) => {
-              const serviceCount = Object.keys(log.services || {}).length
-              return (
-                <tr key={i}>
-                  <td>
-                    <span 
-                      style={{ 
-                        fontWeight: 'bold',
-                        color: getSeverityColor(log.severity)
-                      }}
-                    >
-                      {log.severity}
-                    </span>
-                  </td>
-                  <td>{log.sample_count.toLocaleString()}</td>
-                  <td>{serviceCount}</td>
-                  <td>{(log.template_count || 0).toLocaleString()}</td>
-                  <td>
-                    <button 
-                      onClick={() => loadTemplates(log.severity)}
-                      disabled={loadingTemplates && selectedLog === log.severity}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        background: 'var(--primary-color)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px'
-                      }}
-                    >
-                      {loadingTemplates && selectedLog === log.severity ? 'Loading...' : 'View Patterns'}
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-        </tbody>
-      </table>
+      <div style={{ marginTop: '15px' }}>
+        {currentServices.map((serviceName) => {
+          const severities = serviceGroups[serviceName]
+          const totalForService = severities.reduce((sum, s) => sum + s.sample_count, 0)
+          const isExpanded = expandedService === serviceName
 
-      {selectedLog && templates.length > 0 && (
-        <div style={{ marginTop: '30px', borderTop: '2px solid var(--border-color)', paddingTop: '20px' }}>
-          <h3>Patterns for {selectedLog} ({templates.length.toLocaleString()} total)</h3>
-          <p className="template-count-text">
-            Showing top {Math.min(100, templates.length)} patterns
-          </p>
-          <table style={{ marginTop: '15px' }}>
-            <thead>
-              <tr>
-                <th style={{ width: '50%' }}>Pattern Template</th>
-                <th>Count</th>
-                <th>Percentage</th>
-                <th>Example</th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.slice(0, 100).map((tmpl, i) => (
-                <tr 
-                  key={i}
-                  onClick={() => onViewTemplate && onViewTemplate(selectedLog, tmpl.template)}
-                  style={{ cursor: onViewTemplate ? 'pointer' : 'default' }}
-                  className={onViewTemplate ? 'clickable-row' : ''}
-                >
-                  <td>
-                    <code className="template-code" style={{ 
-                      fontSize: '13px',
-                      wordBreak: 'break-word',
-                      display: 'block',
-                      padding: '8px',
-                      background: 'var(--bg-tertiary)',
-                      borderRadius: '4px'
-                    }}>
-                      {tmpl.template}
-                    </code>
-                  </td>
-                  <td>{tmpl.count.toLocaleString()}</td>
-                  <td>{tmpl.percentage.toFixed(1)}%</td>
-                  <td className="template-count-text-small" style={{ 
-                    fontStyle: 'italic',
-                    maxWidth: '300px',
-                    wordBreak: 'break-word'
-                  }}>
-                    {tmpl.example}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}      {totalPages > 1 && (
+          return (
+            <div key={serviceName} style={{ 
+              marginBottom: '10px',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              overflow: 'hidden'
+            }}>
+              <div
+                onClick={() => setExpandedService(isExpanded ? null : serviceName)}
+                style={{
+                  padding: '12px 16px',
+                  background: isExpanded ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontWeight: '500'
+                }}
+              >
+                <span>
+                  {isExpanded ? '▼' : '▶'} {serviceName}
+                </span>
+                <span className="template-count-text">
+                  {severities.length} severities · {totalForService.toLocaleString()} logs
+                </span>
+              </div>
+
+              {isExpanded && (
+                <div style={{ padding: '0' }}>
+                  <table style={{ width: '100%', margin: 0 }}>
+                    <thead>
+                      <tr>
+                        <th>Severity</th>
+                        <th>Log Count</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {severities
+                        .sort((a, b) => b.sample_count - a.sample_count)
+                        .map((svc, i) => (
+                          <tr key={i}>
+                            <td>
+                              <span style={{ 
+                                fontWeight: 'bold',
+                                color: getSeverityColor(svc.severity)
+                              }}>
+                                {svc.severity}
+                              </span>
+                            </td>
+                            <td>{svc.sample_count.toLocaleString()}</td>
+                            <td>
+                              <button 
+                                onClick={() => onViewServiceDetails && onViewServiceDetails(serviceName, svc.severity)}
+                                style={{
+                                  padding: '6px 12px',
+                                  fontSize: '13px',
+                                  cursor: 'pointer',
+                                  background: 'var(--primary-color)',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px'
+                                }}
+                              >
+                                View Patterns
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {totalPages > 1 && (
         <div style={{ 
           display: 'flex', 
           justifyContent: 'center', 
@@ -261,9 +237,9 @@ function LogsView({ onViewTemplate }) {
         </div>
       )}
 
-      {filteredPatterns.length === 0 && (
+      {currentServices.length === 0 && uniqueServices.length === 0 && (
         <p style={{ textAlign: 'center', padding: '20px' }} className="template-count-text">
-          No patterns match the current filters
+          No logs match the current filters
         </p>
       )}
     </div>

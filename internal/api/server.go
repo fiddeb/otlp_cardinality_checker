@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/storage"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage/sqlite"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -133,10 +135,12 @@ func NewServer(addr string, store storage.Storage) *Server {
 		r.Get("/spans/{name}", s.getSpan)
 
 		// Logs endpoints
-		r.Get("/logs", s.listLogs)
+		r.Get("/logs", s.listLogs) // Lists severities (deprecated - use /logs/by-service)
+		r.Get("/logs/by-service", s.listLogsByService) // NEW: Lists services with log data
 		r.Get("/logs/patterns", s.getLogPatterns)
 		r.Get("/logs/patterns/{severity}/{template}", s.getPatternDetails)
 		r.Get("/logs/{severity}", s.getLog)
+		r.Get("/logs/service/{service}/severity/{severity}", s.getLogByServiceAndSeverity) // NEW
 
 		// Services endpoints
 		r.Get("/services", s.listServices)
@@ -341,6 +345,129 @@ func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.respondJSON(w, http.StatusOK, log)
+}
+
+// listLogsByService returns log data grouped by service_name instead of severity.
+// This provides better performance when dealing with high-cardinality severities like UNSET.
+func (s *Server) listLogsByService(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	params := parsePaginationParams(r)
+
+	// Get database handle (works only with SQLite store)
+	sqliteStore, ok := s.store.(*sqlite.Store)
+	if !ok {
+		s.respondError(w, http.StatusNotImplemented, "operation only supported with SQLite storage")
+		return
+	}
+
+	// Query log_services table directly
+	query := `
+		SELECT service_name, severity, sample_count
+		FROM log_services
+		ORDER BY sample_count DESC
+		LIMIT ? OFFSET ?
+	`
+
+	var rows *sql.Rows
+	var err error
+	rows, err = sqliteStore.DB().QueryContext(ctx, query, params.Limit, params.Offset)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	type ServiceLogData struct {
+		ServiceName string `json:"service_name"`
+		Severity    string `json:"severity"`
+		SampleCount int64  `json:"sample_count"`
+	}
+
+	var data []ServiceLogData
+	for rows.Next() {
+		var d ServiceLogData
+		if err := rows.Scan(&d.ServiceName, &d.Severity, &d.SampleCount); err != nil {
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		data = append(data, d)
+	}
+
+	// Get total count
+	var total int
+	err = sqliteStore.DB().QueryRowContext(ctx, "SELECT COUNT(*) FROM log_services").Scan(&total)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := PaginatedResponse{
+		Data:    data,
+		Total:   total,
+		Limit:   params.Limit,
+		Offset:  params.Offset,
+		HasMore: params.Offset+len(data) < total,
+	}
+
+	s.respondJSON(w, http.StatusOK, response)
+}
+
+// getLogByServiceAndSeverity returns templates for a specific service+severity combination.
+func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	service := chi.URLParam(r, "service")
+	severity := chi.URLParam(r, "severity")
+
+	// Decode URL params
+	service, _ = url.QueryUnescape(service)
+	severity, _ = url.QueryUnescape(severity)
+
+	// Get database handle (works only with SQLite store)
+	sqliteStore, ok := s.store.(*sqlite.Store)
+	if !ok {
+		s.respondError(w, http.StatusNotImplemented, "operation only supported with SQLite storage")
+		return
+	}
+
+	// Get templates for this specific service+severity (FAST - only ~4k rows max per service)
+	query := `
+		SELECT template, example, count, percentage
+		FROM log_body_templates
+		WHERE service_name = ? AND severity = ?
+		ORDER BY count DESC
+		LIMIT 100
+	`
+
+	rows, err := sqliteStore.DB().QueryContext(ctx, query, service, severity)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	type TemplateData struct {
+		Template   string  `json:"template"`
+		Example    string  `json:"example"`
+		Count      int64   `json:"count"`
+		Percentage float64 `json:"percentage"`
+	}
+
+	var templates []TemplateData
+	for rows.Next() {
+		var t TemplateData
+		if err := rows.Scan(&t.Template, &t.Example, &t.Count, &t.Percentage); err != nil {
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		templates = append(templates, t)
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"service_name":   service,
+		"severity":       severity,
+		"body_templates": templates,
+		"template_count": len(templates),
+	})
 }
 
 // getLogPatterns returns advanced pattern analysis view grouped by service.

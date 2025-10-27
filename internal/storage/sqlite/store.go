@@ -124,6 +124,12 @@ func New(cfg Config) (*Store, error) {
 	return store, nil
 }
 
+// DB returns the underlying database connection for direct queries.
+// This should only be used for read-only operations to avoid breaking batch writes.
+func (s *Store) DB() *sql.DB {
+	return s.db
+}
+
 // batchWriter runs in a goroutine and batches write operations.
 func (s *Store) batchWriter(batchSize int, flushInterval time.Duration) {
 	defer s.wg.Done()
@@ -1256,14 +1262,13 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 		return nil, fmt.Errorf("querying resource keys: %w", err)
 	}
 
-	// Get body templates (aggregated across all services)
-	// Limit to top 100 to avoid huge responses
+	// Get body templates - ULTRA FAST version
+	// No ORDER BY to avoid full table scan - just return first 100 rows
+	// This uses the severity index efficiently
 	tmplRows, err := s.db.QueryContext(ctx, `
-		SELECT template, example, SUM(count) as total_count, AVG(percentage) as avg_percentage
+		SELECT template, example, count, percentage
 		FROM log_body_templates
 		WHERE severity = ?
-		GROUP BY template, example
-		ORDER BY total_count DESC
 		LIMIT 100
 	`, severityText)
 	if err != nil {
