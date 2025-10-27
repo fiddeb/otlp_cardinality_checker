@@ -1414,44 +1414,38 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string, limit, offset 
 		servicesMap[severity][serviceName] = count
 	}
 
-	// Batch load top templates for all severities
-	// LIMIT 100 per severity to keep response size manageable
-	templatesMap := make(map[string][]*models.BodyTemplate)
-	templateQuery := `
-		SELECT severity, template, example, count, percentage 
-		FROM (
-			SELECT severity, template, example, count, percentage,
-				   ROW_NUMBER() OVER (PARTITION BY severity ORDER BY count DESC) as rn
-			FROM log_body_templates 
-			WHERE severity IN (` + strings.Join(placeholders, ",") + `)
-		) 
-		WHERE rn <= 100
-	`
-	templateRows, err := s.db.QueryContext(ctx, templateQuery, serviceArgs...)
+	// Batch load template COUNTS (not full templates) for list view performance
+	templateCountMap := make(map[string]int) // severity -> count
+	countQuery = `SELECT severity, COUNT(*) as template_count 
+		FROM log_body_templates 
+		WHERE severity IN (` + strings.Join(placeholders, ",") + `)
+		GROUP BY severity`
+	countRows, err := s.db.QueryContext(ctx, countQuery, serviceArgs...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("querying templates: %w", err)
+		return nil, 0, fmt.Errorf("querying template counts: %w", err)
 	}
-	defer templateRows.Close()
+	defer countRows.Close()
 	
-	for templateRows.Next() {
+	for countRows.Next() {
 		var severity string
-		var tmpl models.BodyTemplate
-		if err := templateRows.Scan(&severity, &tmpl.Template, &tmpl.Example, &tmpl.Count, &tmpl.Percentage); err != nil {
-			return nil, 0, fmt.Errorf("scanning template: %w", err)
+		var count int
+		if err := countRows.Scan(&severity, &count); err != nil {
+			return nil, 0, fmt.Errorf("scanning template count: %w", err)
 		}
-		templatesMap[severity] = append(templatesMap[severity], &tmpl)
+		templateCountMap[severity] = count
 	}
 
-	// Build results
+	// Build results with minimal data for fast list view
 	var results []*models.LogMetadata
 	for _, severity := range severities {
 		log := &models.LogMetadata{
 			Severity:      severity,
 			Services:      servicesMap[severity],
 			SampleCount:   severityData[severity],
+			TemplateCount: templateCountMap[severity],
 			AttributeKeys: make(map[string]*models.KeyMetadata),
 			ResourceKeys:  make(map[string]*models.KeyMetadata),
-			BodyTemplates: templatesMap[severity],
+			BodyTemplates: nil, // Empty in list view - use GetLog for details
 		}
 		results = append(results, log)
 	}

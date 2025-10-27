@@ -84,7 +84,12 @@ type LogMetadata struct {
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
 	
 	// BodyTemplates contains extracted templates from log body text (optional)
+	// Note: This is empty in list views for performance. Use GetLog for full details.
 	BodyTemplates []*BodyTemplate `json:"body_templates,omitempty"`
+	
+	// TemplateCount is the total number of unique templates for this severity
+	// Used in list views to show template count without loading all templates
+	TemplateCount int `json:"template_count,omitempty"`
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
