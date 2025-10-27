@@ -9,18 +9,17 @@ function Dashboard({ onViewService }) {
 
   useEffect(() => {
     // First: Load just counts for quick initial render
-    // Note: Skipping logs count due to performance issues with large datasets
     Promise.all([
       fetch('/api/v1/metrics?limit=1').then(r => r.json()),
       fetch('/api/v1/spans?limit=1').then(r => r.json()),
+      fetch('/api/v1/logs?limit=1').then(r => r.json()),
       fetch('/api/v1/services').then(r => r.json()),
     ])
-      .then(([metrics, spans, services]) => {
+      .then(([metrics, spans, logs, services]) => {
         setStats({
           metrics: metrics.total || 0,
           spans: spans.total || 0,
-          logs: 0, // Temporarily disabled - see logs page for details
-
+          logs: logs.total_sample_count || 0, // Total log messages, not severity count
         })
         setServices(services.data || [])
         setLoading(false)
@@ -37,12 +36,11 @@ function Dashboard({ onViewService }) {
   const loadServiceStats = async () => {
     try {
       // Load in smaller batches with pagination to avoid overwhelming the API
-      // Note: Skipping logs for now as it's very slow with large datasets
-      const [allMetrics, allSpans] = await Promise.all([
+      const [allMetrics, allSpans, allLogs] = await Promise.all([
         fetch('/api/v1/metrics?limit=1000').then(r => r.json()),
         fetch('/api/v1/spans?limit=1000').then(r => r.json()),
+        fetch('/api/v1/logs?limit=1000').then(r => r.json()),
       ])
-      const allLogs = { data: [] } // Temporarily disabled due to performance issues
       
       // Calculate service statistics
       const stats = {}

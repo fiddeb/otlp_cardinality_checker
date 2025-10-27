@@ -33,11 +33,12 @@ type PaginationParams struct {
 
 // PaginatedResponse wraps a paginated response with metadata.
 type PaginatedResponse struct {
-	Data       interface{} `json:"data"`
-	Total      int         `json:"total"`
-	Limit      int         `json:"limit"`
-	Offset     int         `json:"offset"`
-	HasMore    bool        `json:"has_more"`
+	Data             interface{} `json:"data"`
+	Total            int         `json:"total"`
+	TotalSampleCount int64       `json:"total_sample_count,omitempty"` // For logs: total count of all log messages
+	Limit            int         `json:"limit"`
+	Offset           int         `json:"offset"`
+	HasMore          bool        `json:"has_more"`
 }
 
 // parsePaginationParams extracts pagination parameters from request.
@@ -291,13 +292,27 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Calculate total sample count across ALL logs (not just current page)
+	// This is needed for Dashboard to show total log messages
+	var totalSampleCount int64
+	if params.Limit == 1 || params.Offset == 0 {
+		// For initial load, get all logs to calculate total
+		allLogs, _, err := s.store.ListLogs(ctx, serviceName, 10000, 0)
+		if err == nil {
+			for _, log := range allLogs {
+				totalSampleCount += log.SampleCount
+			}
+		}
+	}
+
 	// Build response with actual total from storage
 	response := PaginatedResponse{
-		Data:    logs,
-		Total:   total,
-		Limit:   params.Limit,
-		Offset:  params.Offset,
-		HasMore: params.Offset+len(logs) < total,
+		Data:             logs,
+		Total:            total, // Number of severity levels
+		TotalSampleCount: totalSampleCount, // Total log messages across all severities
+		Limit:            params.Limit,
+		Offset:           params.Offset,
+		HasMore:          params.Offset+len(logs) < total,
 	}
 	
 	s.respondJSON(w, http.StatusOK, response)

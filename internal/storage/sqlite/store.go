@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -1365,23 +1366,94 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string, limit, offset 
 	}
 	defer rows.Close()
 
-	var results []*models.LogMetadata
+	// Collect all severities first
+	var severities []string
+	severityData := make(map[string]int64) // severity -> sample_count
+	
 	for rows.Next() {
-		var log models.LogMetadata
-		if err := rows.Scan(&log.Severity, &log.SampleCount); err != nil {
+		var severity string
+		var sampleCount int64
+		if err := rows.Scan(&severity, &sampleCount); err != nil {
 			return nil, 0, fmt.Errorf("scanning log: %w", err)
 		}
-		
-		// Initialize empty collections for list view
-		log.Services = make(map[string]int64)
-		log.AttributeKeys = make(map[string]*models.KeyMetadata)
-		log.ResourceKeys = make(map[string]*models.KeyMetadata)
-		log.BodyTemplates = []*models.BodyTemplate{}
-		
-		results = append(results, &log)
+		severities = append(severities, severity)
+		severityData[severity] = sampleCount
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
+	}
+
+	if len(severities) == 0 {
+		return []*models.LogMetadata{}, 0, nil
+	}
+
+	// Batch load services for all severities in one query
+	servicesMap := make(map[string]map[string]int64) // severity -> service -> count
+	placeholders := make([]string, len(severities))
+	serviceArgs := make([]interface{}, len(severities))
+	for i, sev := range severities {
+		placeholders[i] = "?"
+		serviceArgs[i] = sev
+		servicesMap[sev] = make(map[string]int64)
+	}
+	
+	serviceQuery := `SELECT severity, service_name, sample_count FROM log_services WHERE severity IN (` + 
+		strings.Join(placeholders, ",") + `)`
+	serviceRows, err := s.db.QueryContext(ctx, serviceQuery, serviceArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("querying services: %w", err)
+	}
+	defer serviceRows.Close()
+	
+	for serviceRows.Next() {
+		var severity, serviceName string
+		var count int64
+		if err := serviceRows.Scan(&severity, &serviceName, &count); err != nil {
+			return nil, 0, fmt.Errorf("scanning service: %w", err)
+		}
+		servicesMap[severity][serviceName] = count
+	}
+
+	// Batch load top templates for all severities
+	// LIMIT 100 per severity to keep response size manageable
+	templatesMap := make(map[string][]*models.BodyTemplate)
+	templateQuery := `
+		SELECT severity, template, example, count, percentage 
+		FROM (
+			SELECT severity, template, example, count, percentage,
+				   ROW_NUMBER() OVER (PARTITION BY severity ORDER BY count DESC) as rn
+			FROM log_body_templates 
+			WHERE severity IN (` + strings.Join(placeholders, ",") + `)
+		) 
+		WHERE rn <= 100
+	`
+	templateRows, err := s.db.QueryContext(ctx, templateQuery, serviceArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("querying templates: %w", err)
+	}
+	defer templateRows.Close()
+	
+	for templateRows.Next() {
+		var severity string
+		var tmpl models.BodyTemplate
+		if err := templateRows.Scan(&severity, &tmpl.Template, &tmpl.Example, &tmpl.Count, &tmpl.Percentage); err != nil {
+			return nil, 0, fmt.Errorf("scanning template: %w", err)
+		}
+		templatesMap[severity] = append(templatesMap[severity], &tmpl)
+	}
+
+	// Build results
+	var results []*models.LogMetadata
+	for _, severity := range severities {
+		log := &models.LogMetadata{
+			Severity:      severity,
+			Services:      servicesMap[severity],
+			SampleCount:   severityData[severity],
+			AttributeKeys: make(map[string]*models.KeyMetadata),
+			ResourceKeys:  make(map[string]*models.KeyMetadata),
+			BodyTemplates: templatesMap[severity],
+		}
+		results = append(results, log)
 	}
 
 	return results, total, nil
