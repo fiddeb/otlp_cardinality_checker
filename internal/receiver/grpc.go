@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer"
 	"github.com/fidde/otlp_cardinality_checker/internal/config"
@@ -105,9 +106,27 @@ func (r *GRPCReceiver) Export(ctx context.Context, req *colmetricspb.ExportMetri
 		return nil, fmt.Errorf("failed to analyze metrics: %w", err)
 	}
 
-	// Store metadata
+	// Store metadata in parallel using goroutines
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(metadata))
+	
 	for _, m := range metadata {
-		r.store.StoreMetric(ctx, m)
+		wg.Add(1)
+		metricCopy := m // Capture loop variable
+		go func() {
+			defer wg.Done()
+			if err := r.store.StoreMetric(ctx, metricCopy); err != nil {
+				errChan <- err
+			}
+		}()
+	}
+	
+	wg.Wait()
+	close(errChan)
+	
+	// Check for errors (log but don't fail the request)
+	for err := range errChan {
+		log.Printf("Warning: failed to store metric: %v", err)
 	}
 
 	// Return success response
@@ -132,9 +151,26 @@ func (s *traceService) Export(ctx context.Context, req *coltracepb.ExportTraceSe
 		return nil, fmt.Errorf("failed to analyze traces: %w", err)
 	}
 
-	// Store metadata
+	// Store metadata in parallel
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(metadata))
+	
 	for _, m := range metadata {
-		s.store.StoreSpan(ctx, m)
+		wg.Add(1)
+		spanCopy := m
+		go func() {
+			defer wg.Done()
+			if err := s.store.StoreSpan(ctx, spanCopy); err != nil {
+				errChan <- err
+			}
+		}()
+	}
+	
+	wg.Wait()
+	close(errChan)
+	
+	for err := range errChan {
+		log.Printf("Warning: failed to store span: %v", err)
 	}
 
 	// Return success response
@@ -159,9 +195,26 @@ func (s *logsService) Export(ctx context.Context, req *collogspb.ExportLogsServi
 		return nil, fmt.Errorf("failed to analyze logs: %w", err)
 	}
 
-	// Store metadata
+	// Store metadata in parallel
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(metadata))
+	
 	for _, m := range metadata {
-		s.store.StoreLog(ctx, m)
+		wg.Add(1)
+		logCopy := m
+		go func() {
+			defer wg.Done()
+			if err := s.store.StoreLog(ctx, logCopy); err != nil {
+				errChan <- err
+			}
+		}()
+	}
+	
+	wg.Wait()
+	close(errChan)
+	
+	for err := range errChan {
+		log.Printf("Warning: failed to store log: %v", err)
 	}
 
 	// Return success response
