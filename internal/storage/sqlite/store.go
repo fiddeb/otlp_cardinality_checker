@@ -1338,22 +1338,24 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string, limit, offset 
 		return nil, 0, fmt.Errorf("counting logs: %w", err)
 	}
 	
-	// Now get the paginated severities
+	// Get paginated list with minimal data (no body_templates/keys for list view)
+	// This makes listing fast, detailed data loaded only when viewing specific log
 	var query string
 	var args []interface{}
 
 	if serviceName != "" {
 		query = `
-			SELECT DISTINCT l.severity
+			SELECT l.severity, l.total_sample_count
 			FROM logs l
 			JOIN log_services ls ON l.severity = ls.severity
 			WHERE ls.service_name = ?
+			GROUP BY l.severity, l.total_sample_count
 			ORDER BY l.severity
 			LIMIT ? OFFSET ?
 		`
 		args = []interface{}{serviceName, limit, offset}
 	} else {
-		query = `SELECT severity FROM logs ORDER BY severity LIMIT ? OFFSET ?`
+		query = `SELECT severity, total_sample_count FROM logs ORDER BY severity LIMIT ? OFFSET ?`
 		args = []interface{}{limit, offset}
 	}
 
@@ -1363,26 +1365,23 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string, limit, offset 
 	}
 	defer rows.Close()
 
-	var severities []string
+	var results []*models.LogMetadata
 	for rows.Next() {
-		var severity string
-		if err := rows.Scan(&severity); err != nil {
-			return nil, 0, fmt.Errorf("scanning severity: %w", err)
+		var log models.LogMetadata
+		if err := rows.Scan(&log.Severity, &log.SampleCount); err != nil {
+			return nil, 0, fmt.Errorf("scanning log: %w", err)
 		}
-		severities = append(severities, severity)
+		
+		// Initialize empty collections for list view
+		log.Services = make(map[string]int64)
+		log.AttributeKeys = make(map[string]*models.KeyMetadata)
+		log.ResourceKeys = make(map[string]*models.KeyMetadata)
+		log.BodyTemplates = []*models.BodyTemplate{}
+		
+		results = append(results, &log)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
-	}
-
-	// Fetch full metadata for each severity (only the paginated ones)
-	var results []*models.LogMetadata
-	for _, severity := range severities {
-		log, err := s.GetLog(ctx, severity)
-		if err != nil {
-			return nil, 0, fmt.Errorf("getting log %s: %w", severity, err)
-		}
-		results = append(results, log)
 	}
 
 	return results, total, nil
