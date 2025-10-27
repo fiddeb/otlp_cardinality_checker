@@ -1087,7 +1087,7 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(severity, service_name, template) DO UPDATE SET
 					example = COALESCE(excluded.example, example),
-					count = count + excluded.count,
+					count = excluded.count,
 					percentage = excluded.percentage,
 					attribute_keys = excluded.attribute_keys,
 					resource_keys = excluded.resource_keys
