@@ -12,12 +12,16 @@ import (
 
 // LogTemplate represents a pattern extracted from log messages
 type LogTemplate struct {
-	Template     string            `json:"template"`
-	Hash         uint64            `json:"hash"`
-	Count        int64             `json:"count"`
-	Percentage   float64           `json:"percentage"`
-	ExampleBody  string            `json:"example_body"`            // Example log message matching this template
-	SampleValues map[string]string `json:"sample_values,omitempty"` // First occurrence of each placeholder
+	Template      string              `json:"template"`
+	Hash          uint64              `json:"hash"`
+	Count         int64               `json:"count"`
+	Percentage    float64             `json:"percentage"`
+	ExampleBody   string              `json:"example_body"`            // Example log message matching this template
+	SampleValues  map[string]string   `json:"sample_values,omitempty"` // First occurrence of each placeholder
+	AttributeKeys map[string]struct{} `json:"-"`                       // Set of attribute keys seen with this template
+	ResourceKeys  map[string]struct{} `json:"-"`                       // Set of resource keys seen with this template
+	
+	mu sync.RWMutex `json:"-"` // Protects AttributeKeys and ResourceKeys maps
 }
 
 // LogBodyAnalyzer extracts templates from log body text
@@ -72,6 +76,11 @@ func hashString(s string) uint64 {
 
 // AddMessage processes a log message and updates templates
 func (a *LogBodyAnalyzer) AddMessage(message string) {
+	a.AddMessageWithKeys(message, nil, nil)
+}
+
+// AddMessageWithKeys processes a log message with its attribute and resource keys
+func (a *LogBodyAnalyzer) AddMessageWithKeys(message string, attributeKeys, resourceKeys []string) {
 	if message == "" {
 		return
 	}
@@ -80,20 +89,37 @@ func (a *LogBodyAnalyzer) AddMessage(message string) {
 	hash := hashString(template)
 	
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	
 	a.total++
 	
-	if existing, ok := a.templates[hash]; ok {
-		existing.Count++
-	} else {
-		a.templates[hash] = &LogTemplate{
-			Template:     template,
-			Hash:         hash,
-			Count:        1,
-			SampleValues: map[string]string{"original": message[:min(len(message), 200)]},
+	existing, ok := a.templates[hash]
+	if !ok {
+		// Create new template with key sets
+		existing = &LogTemplate{
+			Template:      template,
+			Hash:          hash,
+			Count:         1,
+			ExampleBody:   message[:min(len(message), 200)],
+			SampleValues:  map[string]string{"original": message[:min(len(message), 200)]},
+			AttributeKeys: make(map[string]struct{}),
+			ResourceKeys:  make(map[string]struct{}),
 		}
+		a.templates[hash] = existing
 	}
+	
+	a.mu.Unlock()
+	
+	// Now update the template with proper locking
+	existing.mu.Lock()
+	existing.Count++
+	// Add new keys to existing sets
+	for _, key := range attributeKeys {
+		existing.AttributeKeys[key] = struct{}{}
+	}
+	for _, key := range resourceKeys {
+		existing.ResourceKeys[key] = struct{}{}
+	}
+	existing.mu.Unlock()
 }
 
 // GetTemplates returns all templates sorted by count

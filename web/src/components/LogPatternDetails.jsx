@@ -9,18 +9,15 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
     setLoading(true)
     setError(null)
     
-    // Fetch template data and log attributes
-    Promise.all([
-      fetch(`/api/v1/logs/service/${encodeURIComponent(serviceName)}/severity/${encodeURIComponent(severity)}`),
-      fetch(`/api/v1/logs/${encodeURIComponent(severity)}`)
-    ])
-      .then(([templatesRes, logRes]) => {
-        if (!templatesRes.ok || !logRes.ok) {
+    // Fetch template data with pattern-specific attributes
+    fetch(`/api/v1/logs/service/${encodeURIComponent(serviceName)}/severity/${encodeURIComponent(severity)}`)
+      .then(res => {
+        if (!res.ok) {
           throw new Error(`HTTP error`)
         }
-        return Promise.all([templatesRes.json(), logRes.json()])
+        return res.json()
       })
-      .then(([templatesData, logData]) => {
+      .then(templatesData => {
         // Find the specific template
         const templateData = templatesData.body_templates?.find(t => t.template === template)
         
@@ -28,9 +25,9 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
           throw new Error('Template not found')
         }
         
-        // Extract keys from the objects (they are maps, not arrays)
-        const resourceKeys = logData.resource_keys ? Object.keys(logData.resource_keys).sort() : []
-        const bodyKeys = logData.attribute_keys ? Object.keys(logData.attribute_keys).sort() : []
+        // Use pattern-specific attribute and resource keys
+        const resourceKeys = templateData.resource_keys || []
+        const bodyKeys = templateData.attribute_keys || []
         
         setAttributes({
           template: templateData,

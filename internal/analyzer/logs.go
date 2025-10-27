@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/internal/config"
@@ -12,6 +13,7 @@ import (
 // LogBodyAnalyzerInterface defines the interface for log body analyzers
 type LogBodyAnalyzerInterface interface {
 	AddMessage(body string)
+	AddMessageWithKeys(body string, attributeKeys, resourceKeys []string)
 	GetTemplates() []*LogTemplate
 }
 
@@ -116,16 +118,41 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 					if _, exists := a.bodyAnalyzers[severityText]; !exists {
 						a.bodyAnalyzers[severityText] = a.createBodyAnalyzer()
 					}
-					a.bodyAnalyzers[severityText].AddMessage(body)
-				}
-
-				// Extract log record attributes
-				logAttrs := extractAttributes(logRecord.Attributes)
-				for attrKey, attrValue := range logAttrs {
-					if metadata.AttributeKeys[attrKey] == nil {
-						metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+					
+					// Extract log record attributes
+					logAttrs := extractAttributes(logRecord.Attributes)
+					
+					// Collect attribute keys
+					attributeKeys := make([]string, 0, len(logAttrs))
+					for attrKey := range logAttrs {
+						attributeKeys = append(attributeKeys, attrKey)
 					}
-					metadata.AttributeKeys[attrKey].AddValue(attrValue)
+					
+					// Collect resource keys
+					resourceKeys := make([]string, 0, len(resourceAttrs))
+					for resKey := range resourceAttrs {
+						resourceKeys = append(resourceKeys, resKey)
+					}
+					
+					// Add message with its keys to track which attributes appear with which template
+					a.bodyAnalyzers[severityText].AddMessageWithKeys(body, attributeKeys, resourceKeys)
+					
+					// Also update metadata attribute counters
+					for attrKey, attrValue := range logAttrs {
+						if metadata.AttributeKeys[attrKey] == nil {
+							metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+						}
+						metadata.AttributeKeys[attrKey].AddValue(attrValue)
+					}
+				} else {
+					// No body, but still track attributes
+					logAttrs := extractAttributes(logRecord.Attributes)
+					for attrKey, attrValue := range logAttrs {
+						if metadata.AttributeKeys[attrKey] == nil {
+							metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
+						}
+						metadata.AttributeKeys[attrKey].AddValue(attrValue)
+					}
 				}
 				
 				// Update resource key counts
@@ -159,11 +186,31 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 			templates := analyzer.GetTemplates()
 			metadata.BodyTemplates = make([]*models.BodyTemplate, 0, len(templates))
 			for _, tmpl := range templates {
+				// Lock template to safely read its key maps
+				tmpl.mu.RLock()
+				
+				// Convert key sets to sorted slices
+				attributeKeys := make([]string, 0, len(tmpl.AttributeKeys))
+				for key := range tmpl.AttributeKeys {
+					attributeKeys = append(attributeKeys, key)
+				}
+				sort.Strings(attributeKeys)
+				
+				resourceKeys := make([]string, 0, len(tmpl.ResourceKeys))
+				for key := range tmpl.ResourceKeys {
+					resourceKeys = append(resourceKeys, key)
+				}
+				sort.Strings(resourceKeys)
+				
+				tmpl.mu.RUnlock()
+				
 				metadata.BodyTemplates = append(metadata.BodyTemplates, &models.BodyTemplate{
-					Template:   tmpl.Template,
-					Count:      tmpl.Count,
-					Percentage: tmpl.Percentage,
-					Example:    tmpl.ExampleBody,
+					Template:      tmpl.Template,
+					Count:         tmpl.Count,
+					Percentage:    tmpl.Percentage,
+					Example:       tmpl.ExampleBody,
+					AttributeKeys: attributeKeys,
+					ResourceKeys:  resourceKeys,
 				})
 			}
 		}

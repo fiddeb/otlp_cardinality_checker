@@ -1071,14 +1071,27 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 		}
 
 		for _, tmpl := range log.BodyTemplates {
-			_, err := tx.Exec(`
-				INSERT INTO log_body_templates (severity, service_name, template, example, count, percentage)
-				VALUES (?, ?, ?, ?, ?, ?)
+			// Encode keys as JSON
+			attributeKeysJSON, err := encodeJSON(tmpl.AttributeKeys)
+			if err != nil {
+				return fmt.Errorf("encoding attribute keys: %w", err)
+			}
+			
+			resourceKeysJSON, err := encodeJSON(tmpl.ResourceKeys)
+			if err != nil {
+				return fmt.Errorf("encoding resource keys: %w", err)
+			}
+			
+			_, err = tx.Exec(`
+				INSERT INTO log_body_templates (severity, service_name, template, example, count, percentage, attribute_keys, resource_keys)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(severity, service_name, template) DO UPDATE SET
 					example = COALESCE(excluded.example, example),
 					count = count + excluded.count,
-					percentage = excluded.percentage
-			`, log.Severity, firstService, tmpl.Template, tmpl.Example, tmpl.Count, tmpl.Percentage)
+					percentage = excluded.percentage,
+					attribute_keys = excluded.attribute_keys,
+					resource_keys = excluded.resource_keys
+			`, log.Severity, firstService, tmpl.Template, tmpl.Example, tmpl.Count, tmpl.Percentage, attributeKeysJSON, resourceKeysJSON)
 			if err != nil {
 				return fmt.Errorf("upserting body template: %w", err)
 			}

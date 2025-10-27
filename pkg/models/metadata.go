@@ -105,10 +105,12 @@ type LogMetadata struct {
 
 // BodyTemplate represents a pattern extracted from log message bodies
 type BodyTemplate struct {
-	Template   string  `json:"template"`
-	Count      int64   `json:"count"`
-	Percentage float64 `json:"percentage"`
-	Example    string  `json:"example"` // First sample that matched this template
+	Template      string   `json:"template"`
+	Count         int64    `json:"count"`
+	Percentage    float64  `json:"percentage"`
+	Example       string   `json:"example"` // First sample that matched this template
+	AttributeKeys []string `json:"attribute_keys,omitempty"` // Attribute keys seen with this template
+	ResourceKeys  []string `json:"resource_keys,omitempty"`  // Resource keys seen with this template
 }
 
 // KeyMetadata tracks statistics about a specific attribute/label key.

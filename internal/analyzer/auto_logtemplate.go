@@ -43,6 +43,11 @@ func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, patterns [
 
 // ProcessMessage processes a single log body and extracts/updates template
 func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
+	return a.ProcessMessageWithKeys(body, nil, nil)
+}
+
+// ProcessMessageWithKeys processes a log body with its attribute and resource keys
+func (a *AutoLogBodyAnalyzer) ProcessMessageWithKeys(body string, attributeKeys, resourceKeys []string) string {
 	// Pre-mask with regex patterns
 	masked := a.preMask(body)
 	
@@ -51,21 +56,35 @@ func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
 	
 	// Update metadata
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	
 	a.total++
 	
-	if tmpl, exists := a.templates[template]; exists {
-		tmpl.Count++
-	} else {
+	existing, ok := a.templates[template]
+	if !ok {
 		hash := hashString(template)
-		a.templates[template] = &LogTemplate{
-			Template:    template,
-			Hash:        hash,
-			Count:       1,
-			ExampleBody: body, // Store original unmaked body as example
+		existing = &LogTemplate{
+			Template:      template,
+			Hash:          hash,
+			Count:         1,
+			ExampleBody:   body, // Store original unmasked body as example
+			AttributeKeys: make(map[string]struct{}),
+			ResourceKeys:  make(map[string]struct{}),
 		}
+		a.templates[template] = existing
 	}
+	
+	a.mu.Unlock()
+	
+	// Now update the template with proper locking
+	existing.mu.Lock()
+	existing.Count++
+	for _, key := range attributeKeys {
+		existing.AttributeKeys[key] = struct{}{}
+	}
+	for _, key := range resourceKeys {
+		existing.ResourceKeys[key] = struct{}{}
+	}
+	existing.mu.Unlock()
 	
 	return template
 }
@@ -73,6 +92,11 @@ func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
 // AddMessage is an alias for ProcessMessage to match the interface
 func (a *AutoLogBodyAnalyzer) AddMessage(body string) {
 	a.ProcessMessage(body)
+}
+
+// AddMessageWithKeys processes a log message with keys (interface method)
+func (a *AutoLogBodyAnalyzer) AddMessageWithKeys(body string, attributeKeys, resourceKeys []string) {
+	a.ProcessMessageWithKeys(body, attributeKeys, resourceKeys)
 }
 
 // preMask applies regex-based masking before template extraction

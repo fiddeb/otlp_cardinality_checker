@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -431,7 +432,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 
 	// Get templates for this specific service+severity (FAST - only ~4k rows max per service)
 	query := `
-		SELECT template, example, count, percentage
+		SELECT template, example, count, percentage, attribute_keys, resource_keys
 		FROM log_body_templates
 		WHERE service_name = ? AND severity = ?
 		ORDER BY count DESC
@@ -446,19 +447,32 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 
 	type TemplateData struct {
-		Template   string  `json:"template"`
-		Example    string  `json:"example"`
-		Count      int64   `json:"count"`
-		Percentage float64 `json:"percentage"`
+		Template      string   `json:"template"`
+		Example       string   `json:"example"`
+		Count         int64    `json:"count"`
+		Percentage    float64  `json:"percentage"`
+		AttributeKeys []string `json:"attribute_keys"`
+		ResourceKeys  []string `json:"resource_keys"`
 	}
 
 	var templates []TemplateData
 	for rows.Next() {
 		var t TemplateData
-		if err := rows.Scan(&t.Template, &t.Example, &t.Count, &t.Percentage); err != nil {
+		var attributeKeysJSON, resourceKeysJSON string
+		if err := rows.Scan(&t.Template, &t.Example, &t.Count, &t.Percentage, &attributeKeysJSON, &resourceKeysJSON); err != nil {
 			s.respondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		
+		// Decode JSON arrays
+		if err := json.Unmarshal([]byte(attributeKeysJSON), &t.AttributeKeys); err != nil {
+			// Default to empty array if decode fails
+			t.AttributeKeys = []string{}
+		}
+		if err := json.Unmarshal([]byte(resourceKeysJSON), &t.ResourceKeys); err != nil {
+			t.ResourceKeys = []string{}
+		}
+		
 		templates = append(templates, t)
 	}
 
@@ -697,7 +711,7 @@ func (s *Server) clearAllData(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if err := s.store.Clear(ctx); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "Failed to clear data")
+		s.respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to clear data: %v", err))
 		return
 	}
 
