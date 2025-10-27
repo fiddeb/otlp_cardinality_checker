@@ -1,0 +1,109 @@
+# Optimized OpenTelemetry Collector Configuration for Kafka → Cardinality Checker
+# Designed to handle high-volume Kafka topics without memory exhaustion
+
+receivers:
+  kafka/metrics:
+    brokers:
+      - tkflog01.test.svenskaspel.se:9092
+      - tkflog02.test.svenskaspel.se:9092
+      - tkflog03.test.svenskaspel.se:9092
+    protocol_version: 2.0.0
+    client_id: faar-trace-dc1-stage
+    group_id: faar-trace-dc1-stage
+    topic: observability-otlp-metrics-dc1-test
+    encoding: otlp_proto
+    
+    # CRITICAL: Throttle consumption to match export speed
+    session_timeout: 60s
+    heartbeat_interval: 10s
+    
+    # Limit fetch size to prevent memory spikes
+    fetch:
+      min: 1
+      default: 1048576  # 1MB (reduce from default ~50MB)
+    
+    metadata:
+      full: true
+      retry:
+        backoff: 250ms
+        max: 3
+
+processors:
+  # FIRST: Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 2048        # Keep at 2GB - we'll reduce data instead
+    spike_limit_mib: 512
+  
+  # SECOND: Filter out the noisiest metrics BEFORE batching
+  filter/reduce_cardinality:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - '^erlang_vm_allocators$'           # 2.9M samples - HUGE
+          - '^container_network_.*_total$'     # 167K each - multiple metrics
+          - '^grpc_server_handled_total$'      # 162K samples
+  
+  # THIRD: Sample remaining metrics (keep only 20%)
+  probabilistic_sampler:
+    hash_seed: 22
+    sampling_percentage: 20.0  # Only send 20% of remaining metrics
+  
+  # FOURTH: Small batches to reduce memory
+  batch:
+    timeout: 2s            # Faster flush
+    send_batch_size: 128   # MUCH smaller batches
+    send_batch_max_size: 256
+
+exporters:
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  otlp/cardinality:
+    endpoint: localhost:4317
+    tls:
+      insecure: true
+    timeout: 30s           # Reduce from 60s - fail faster
+    compression: gzip
+    sending_queue:
+      enabled: true
+      num_consumers: 10    # Reduce from 20 to lower memory
+      queue_size: 1000     # Reduce from 10000 to lower memory
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 60s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /health
+  
+  # Enable pprof for debugging memory issues
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+service:
+  extensions: [health_check, pprof]
+  
+  # Enable telemetry to monitor Collector itself
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+  
+  pipelines:
+    metrics:
+      receivers: [kafka/metrics]
+      processors: 
+        - memory_limiter          # Protect from OOM
+        - filter/reduce_cardinality  # Drop noisy metrics
+        - probabilistic_sampler   # Sample 20% of rest
+        - batch                   # Small batches
+      exporters: [debug, otlp/cardinality]
