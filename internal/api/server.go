@@ -192,14 +192,21 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("service")
 	params := parsePaginationParams(r)
 
-	metrics, err := s.store.ListMetrics(ctx, serviceName)
+	metrics, total, err := s.store.ListMetrics(ctx, serviceName, params.Limit, params.Offset)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Apply pagination
-	_, response := paginateSlice(metrics, params)
+	// Build response with actual total from storage
+	response := PaginatedResponse{
+		Data:    metrics,
+		Total:   total,
+		Limit:   params.Limit,
+		Offset:  params.Offset,
+		HasMore: params.Offset+len(metrics) < total,
+	}
+	
 	s.respondJSON(w, http.StatusOK, response)
 }
 
@@ -228,14 +235,21 @@ func (s *Server) listSpans(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("service")
 	params := parsePaginationParams(r)
 
-	spans, err := s.store.ListSpans(ctx, serviceName)
+	spans, total, err := s.store.ListSpans(ctx, serviceName, params.Limit, params.Offset)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Apply pagination
-	_, response := paginateSlice(spans, params)
+	// Build response with actual total from storage
+	response := PaginatedResponse{
+		Data:    spans,
+		Total:   total,
+		Limit:   params.Limit,
+		Offset:  params.Offset,
+		HasMore: params.Offset+len(spans) < total,
+	}
+	
 	s.respondJSON(w, http.StatusOK, response)
 }
 
@@ -271,14 +285,21 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 	serviceName := r.URL.Query().Get("service")
 	params := parsePaginationParams(r)
 
-	logs, err := s.store.ListLogs(ctx, serviceName)
+	logs, total, err := s.store.ListLogs(ctx, serviceName, params.Limit, params.Offset)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Apply pagination
-	_, response := paginateSlice(logs, params)
+	// Build response with actual total from storage
+	response := PaginatedResponse{
+		Data:    logs,
+		Total:   total,
+		Limit:   params.Limit,
+		Offset:  params.Offset,
+		HasMore: params.Offset+len(logs) < total,
+	}
+	
 	s.respondJSON(w, http.StatusOK, response)
 }
 

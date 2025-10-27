@@ -506,7 +506,29 @@ func (s *Store) getKeysForMetric(ctx context.Context, metricName, keyScope strin
 }
 
 // ListMetrics lists all metrics, optionally filtered by service.
-func (s *Store) ListMetrics(ctx context.Context, serviceName string) ([]*models.MetricMetadata, error) {
+func (s *Store) ListMetrics(ctx context.Context, serviceName string, limit, offset int) ([]*models.MetricMetadata, int, error) {
+	// First get total count
+	var countQuery string
+	var countArgs []interface{}
+	
+	if serviceName != "" {
+		countQuery = `
+			SELECT COUNT(DISTINCT m.name)
+			FROM metrics m
+			JOIN metric_services ms ON m.name = ms.metric_name
+			WHERE ms.service_name = ?
+		`
+		countArgs = []interface{}{serviceName}
+	} else {
+		countQuery = `SELECT COUNT(*) FROM metrics`
+	}
+	
+	var total int
+	if err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting metrics: %w", err)
+	}
+	
+	// Now get paginated names
 	var query string
 	var args []interface{}
 
@@ -517,15 +539,17 @@ func (s *Store) ListMetrics(ctx context.Context, serviceName string) ([]*models.
 			JOIN metric_services ms ON m.name = ms.metric_name
 			WHERE ms.service_name = ?
 			ORDER BY m.name
+			LIMIT ? OFFSET ?
 		`
-		args = []interface{}{serviceName}
+		args = []interface{}{serviceName, limit, offset}
 	} else {
-		query = `SELECT name FROM metrics ORDER BY name`
+		query = `SELECT name FROM metrics ORDER BY name LIMIT ? OFFSET ?`
+		args = []interface{}{limit, offset}
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("querying metrics: %w", err)
+		return nil, 0, fmt.Errorf("querying metrics: %w", err)
 	}
 	defer rows.Close()
 
@@ -533,25 +557,50 @@ func (s *Store) ListMetrics(ctx context.Context, serviceName string) ([]*models.
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scanning metric name: %w", err)
+			return nil, 0, fmt.Errorf("scanning metric name: %w", err)
 		}
 		names = append(names, name)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	// Fetch full metadata for each metric
+	// Fetch full metadata for each metric (only paginated ones)
 	var results []*models.MetricMetadata
 	for _, name := range names {
 		metric, err := s.GetMetric(ctx, name)
 		if err != nil {
-			return nil, fmt.Errorf("getting metric %s: %w", name, err)
+			return nil, 0, fmt.Errorf("getting metric %s: %w", name, err)
 		}
 		results = append(results, metric)
 	}
 
-	return results, nil
+	return results, total, nil
+}
+
+// CountMetrics returns the total number of metrics.
+func (s *Store) CountMetrics(ctx context.Context, serviceName string) (int, error) {
+	var query string
+	var args []interface{}
+	
+	if serviceName != "" {
+		query = `
+			SELECT COUNT(DISTINCT m.name)
+			FROM metrics m
+			JOIN metric_services ms ON m.name = ms.metric_name
+			WHERE ms.service_name = ?
+		`
+		args = []interface{}{serviceName}
+	} else {
+		query = `SELECT COUNT(*) FROM metrics`
+	}
+	
+	var count int
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("counting metrics: %w", err)
+	}
+	
+	return count, nil
 }
 
 // StoreSpan stores or updates span metadata.
@@ -827,7 +876,29 @@ func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventNam
 }
 
 // ListSpans lists all spans, optionally filtered by service.
-func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.SpanMetadata, error) {
+func (s *Store) ListSpans(ctx context.Context, serviceName string, limit, offset int) ([]*models.SpanMetadata, int, error) {
+	// First get total count
+	var countQuery string
+	var countArgs []interface{}
+	
+	if serviceName != "" {
+		countQuery = `
+			SELECT COUNT(DISTINCT sp.name)
+			FROM spans sp
+			JOIN span_services ss ON sp.name = ss.span_name
+			WHERE ss.service_name = ?
+		`
+		countArgs = []interface{}{serviceName}
+	} else {
+		countQuery = `SELECT COUNT(*) FROM spans`
+	}
+	
+	var total int
+	if err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting spans: %w", err)
+	}
+	
+	// Now get paginated names
 	var query string
 	var args []interface{}
 
@@ -838,15 +909,17 @@ func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.Sp
 			JOIN span_services ss ON sp.name = ss.span_name
 			WHERE ss.service_name = ?
 			ORDER BY sp.name
+			LIMIT ? OFFSET ?
 		`
-		args = []interface{}{serviceName}
+		args = []interface{}{serviceName, limit, offset}
 	} else {
-		query = `SELECT name FROM spans ORDER BY name`
+		query = `SELECT name FROM spans ORDER BY name LIMIT ? OFFSET ?`
+		args = []interface{}{limit, offset}
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("querying spans: %w", err)
+		return nil, 0, fmt.Errorf("querying spans: %w", err)
 	}
 	defer rows.Close()
 
@@ -854,25 +927,50 @@ func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.Sp
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scanning span name: %w", err)
+			return nil, 0, fmt.Errorf("scanning span name: %w", err)
 		}
 		names = append(names, name)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	// Fetch full metadata for each span
+	// Fetch full metadata for each span (only paginated ones)
 	var results []*models.SpanMetadata
 	for _, name := range names {
 		span, err := s.GetSpan(ctx, name)
 		if err != nil {
-			return nil, fmt.Errorf("getting span %s: %w", name, err)
+			return nil, 0, fmt.Errorf("getting span %s: %w", name, err)
 		}
 		results = append(results, span)
 	}
 
-	return results, nil
+	return results, total, nil
+}
+
+// CountSpans returns the total number of spans.
+func (s *Store) CountSpans(ctx context.Context, serviceName string) (int, error) {
+	var query string
+	var args []interface{}
+	
+	if serviceName != "" {
+		query = `
+			SELECT COUNT(DISTINCT sp.name)
+			FROM spans sp
+			JOIN span_services ss ON sp.name = ss.span_name
+			WHERE ss.service_name = ?
+		`
+		args = []interface{}{serviceName}
+	} else {
+		query = `SELECT COUNT(*) FROM spans`
+	}
+	
+	var count int
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("counting spans: %w", err)
+	}
+	
+	return count, nil
 }
 
 // StoreLog stores or updates log metadata.
@@ -1158,12 +1256,14 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 	}
 
 	// Get body templates (aggregated across all services)
+	// Limit to top 100 to avoid huge responses
 	tmplRows, err := s.db.QueryContext(ctx, `
 		SELECT template, example, SUM(count) as total_count, AVG(percentage) as avg_percentage
 		FROM log_body_templates
 		WHERE severity = ?
 		GROUP BY template, example
 		ORDER BY total_count DESC
+		LIMIT 100
 	`, severityText)
 	if err != nil {
 		return nil, fmt.Errorf("querying body templates: %w", err)
@@ -1216,7 +1316,29 @@ func (s *Store) getKeysForLog(ctx context.Context, severity, keyScope string) (m
 }
 
 // ListLogs lists all logs, optionally filtered by service.
-func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.LogMetadata, error) {
+func (s *Store) ListLogs(ctx context.Context, serviceName string, limit, offset int) ([]*models.LogMetadata, int, error) {
+	// First get total count
+	var countQuery string
+	var countArgs []interface{}
+	
+	if serviceName != "" {
+		countQuery = `
+			SELECT COUNT(DISTINCT l.severity)
+			FROM logs l
+			JOIN log_services ls ON l.severity = ls.severity
+			WHERE ls.service_name = ?
+		`
+		countArgs = []interface{}{serviceName}
+	} else {
+		countQuery = `SELECT COUNT(*) FROM logs`
+	}
+	
+	var total int
+	if err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting logs: %w", err)
+	}
+	
+	// Now get the paginated severities
 	var query string
 	var args []interface{}
 
@@ -1227,15 +1349,17 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 			JOIN log_services ls ON l.severity = ls.severity
 			WHERE ls.service_name = ?
 			ORDER BY l.severity
+			LIMIT ? OFFSET ?
 		`
-		args = []interface{}{serviceName}
+		args = []interface{}{serviceName, limit, offset}
 	} else {
-		query = `SELECT severity FROM logs ORDER BY severity`
+		query = `SELECT severity FROM logs ORDER BY severity LIMIT ? OFFSET ?`
+		args = []interface{}{limit, offset}
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("querying logs: %w", err)
+		return nil, 0, fmt.Errorf("querying logs: %w", err)
 	}
 	defer rows.Close()
 
@@ -1243,25 +1367,50 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 	for rows.Next() {
 		var severity string
 		if err := rows.Scan(&severity); err != nil {
-			return nil, fmt.Errorf("scanning severity: %w", err)
+			return nil, 0, fmt.Errorf("scanning severity: %w", err)
 		}
 		severities = append(severities, severity)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	// Fetch full metadata for each severity
+	// Fetch full metadata for each severity (only the paginated ones)
 	var results []*models.LogMetadata
 	for _, severity := range severities {
 		log, err := s.GetLog(ctx, severity)
 		if err != nil {
-			return nil, fmt.Errorf("getting log %s: %w", severity, err)
+			return nil, 0, fmt.Errorf("getting log %s: %w", severity, err)
 		}
 		results = append(results, log)
 	}
 
-	return results, nil
+	return results, total, nil
+}
+
+// CountLogs returns the total number of log severities.
+func (s *Store) CountLogs(ctx context.Context, serviceName string) (int, error) {
+	var query string
+	var args []interface{}
+	
+	if serviceName != "" {
+		query = `
+			SELECT COUNT(DISTINCT l.severity)
+			FROM logs l
+			JOIN log_services ls ON l.severity = ls.severity
+			WHERE ls.service_name = ?
+		`
+		args = []interface{}{serviceName}
+	} else {
+		query = `SELECT COUNT(*) FROM logs`
+	}
+	
+	var count int
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("counting logs: %w", err)
+	}
+	
+	return count, nil
 }
 
 // GetLogPatterns returns an advanced pattern analysis view.
@@ -1490,17 +1639,20 @@ func (s *Store) ListServices(ctx context.Context) ([]string, error) {
 
 // GetServiceOverview returns an overview of all telemetry for a service.
 func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error) {
-	metrics, err := s.ListMetrics(ctx, serviceName)
+	// Get all without pagination for service overview (small result set per service)
+	const noLimit = 10000 // High enough for service overview
+	
+	metrics, _, err := s.ListMetrics(ctx, serviceName, noLimit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("listing metrics: %w", err)
 	}
 
-	spans, err := s.ListSpans(ctx, serviceName)
+	spans, _, err := s.ListSpans(ctx, serviceName, noLimit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("listing spans: %w", err)
 	}
 
-	logs, err := s.ListLogs(ctx, serviceName)
+	logs, _, err := s.ListLogs(ctx, serviceName, noLimit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("listing logs: %w", err)
 	}

@@ -14,17 +14,20 @@ type Storage interface {
 	// Metric operations
 	StoreMetric(ctx context.Context, metric *models.MetricMetadata) error
 	GetMetric(ctx context.Context, name string) (*models.MetricMetadata, error)
-	ListMetrics(ctx context.Context, serviceName string) ([]*models.MetricMetadata, error)
+	ListMetrics(ctx context.Context, serviceName string, limit, offset int) ([]*models.MetricMetadata, int, error)
+	CountMetrics(ctx context.Context, serviceName string) (int, error)
 
 	// Span operations
 	StoreSpan(ctx context.Context, span *models.SpanMetadata) error
 	GetSpan(ctx context.Context, name string) (*models.SpanMetadata, error)
-	ListSpans(ctx context.Context, serviceName string) ([]*models.SpanMetadata, error)
+	ListSpans(ctx context.Context, serviceName string, limit, offset int) ([]*models.SpanMetadata, int, error)
+	CountSpans(ctx context.Context, serviceName string) (int, error)
 
 	// Log operations
 	StoreLog(ctx context.Context, log *models.LogMetadata) error
 	GetLog(ctx context.Context, severityText string) (*models.LogMetadata, error)
-	ListLogs(ctx context.Context, serviceName string) ([]*models.LogMetadata, error)
+	ListLogs(ctx context.Context, serviceName string, limit, offset int) ([]*models.LogMetadata, int, error)
+	CountLogs(ctx context.Context, serviceName string) (int, error)
 	
 	// Pattern explorer - advanced log pattern analysis
 	GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error)

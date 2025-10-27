@@ -105,12 +105,14 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 	return metric, nil
 }
 
-// ListMetrics returns all metrics, optionally filtered by service name.
-func (s *Store) ListMetrics(ctx context.Context, serviceName string) ([]*models.MetricMetadata, error) {
+// ListMetrics returns metrics with pagination, optionally filtered by service name.
+// Returns metrics, total count, and error.
+func (s *Store) ListMetrics(ctx context.Context, serviceName string, limit, offset int) ([]*models.MetricMetadata, int, error) {
 	s.metricsmu.RLock()
 	defer s.metricsmu.RUnlock()
 
-	metrics := make([]*models.MetricMetadata, 0, len(s.metrics))
+	// Build full list first (for filtering)
+	allMetrics := make([]*models.MetricMetadata, 0, len(s.metrics))
 	for _, metric := range s.metrics {
 		// Filter by service if specified
 		if serviceName != "" {
@@ -118,15 +120,47 @@ func (s *Store) ListMetrics(ctx context.Context, serviceName string) ([]*models.
 				continue
 			}
 		}
-		metrics = append(metrics, metric)
+		allMetrics = append(allMetrics, metric)
 	}
 
 	// Sort by name for consistency
-	sort.Slice(metrics, func(i, j int) bool {
-		return metrics[i].Name < metrics[j].Name
+	sort.Slice(allMetrics, func(i, j int) bool {
+		return allMetrics[i].Name < allMetrics[j].Name
 	})
+	
+	total := len(allMetrics)
+	
+	// Apply pagination
+	start := offset
+	if start >= total {
+		return []*models.MetricMetadata{}, total, nil
+	}
+	
+	end := start + limit
+	if end > total {
+		end = total
+	}
 
-	return metrics, nil
+	return allMetrics[start:end], total, nil
+}
+
+// CountMetrics returns the total number of metrics, optionally filtered by service.
+func (s *Store) CountMetrics(ctx context.Context, serviceName string) (int, error) {
+	s.metricsmu.RLock()
+	defer s.metricsmu.RUnlock()
+
+	if serviceName == "" {
+		return len(s.metrics), nil
+	}
+	
+	count := 0
+	for _, metric := range s.metrics {
+		if _, hasService := metric.Services[serviceName]; hasService {
+			count++
+		}
+	}
+	
+	return count, nil
 }
 
 // StoreSpan stores or updates span metadata.
@@ -194,11 +228,12 @@ func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata,
 }
 
 // ListSpans returns all spans, optionally filtered by service name.
-func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.SpanMetadata, error) {
+func (s *Store) ListSpans(ctx context.Context, serviceName string, limit, offset int) ([]*models.SpanMetadata, int, error) {
 	s.spansmu.RLock()
 	defer s.spansmu.RUnlock()
 
-	spans := make([]*models.SpanMetadata, 0, len(s.spans))
+	// Build full list first (for filtering)
+	allSpans := make([]*models.SpanMetadata, 0, len(s.spans))
 	for _, span := range s.spans {
 		// Filter by service if specified
 		if serviceName != "" {
@@ -206,15 +241,47 @@ func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.Sp
 				continue
 			}
 		}
-		spans = append(spans, span)
+		allSpans = append(allSpans, span)
 	}
 
 	// Sort by name for consistency
-	sort.Slice(spans, func(i, j int) bool {
-		return spans[i].Name < spans[j].Name
+	sort.Slice(allSpans, func(i, j int) bool {
+		return allSpans[i].Name < allSpans[j].Name
 	})
+	
+	total := len(allSpans)
+	
+	// Apply pagination
+	start := offset
+	if start >= total {
+		return []*models.SpanMetadata{}, total, nil
+	}
+	
+	end := start + limit
+	if end > total {
+		end = total
+	}
 
-	return spans, nil
+	return allSpans[start:end], total, nil
+}
+
+// CountSpans returns the total number of spans, optionally filtered by service.
+func (s *Store) CountSpans(ctx context.Context, serviceName string) (int, error) {
+	s.spansmu.RLock()
+	defer s.spansmu.RUnlock()
+
+	if serviceName == "" {
+		return len(s.spans), nil
+	}
+	
+	count := 0
+	for _, span := range s.spans {
+		if _, hasService := span.Services[serviceName]; hasService {
+			count++
+		}
+	}
+	
+	return count, nil
 }
 
 // StoreLog stores or updates log metadata.
@@ -300,11 +367,12 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 }
 
 // ListLogs returns all log metadata, optionally filtered by service name.
-func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.LogMetadata, error) {
+func (s *Store) ListLogs(ctx context.Context, serviceName string, limit, offset int) ([]*models.LogMetadata, int, error) {
 	s.logsmu.RLock()
 	defer s.logsmu.RUnlock()
 
-	logs := make([]*models.LogMetadata, 0, len(s.logs))
+	// Build full list first (for filtering)
+	allLogs := make([]*models.LogMetadata, 0, len(s.logs))
 	for _, log := range s.logs {
 		// Filter by service if specified
 		if serviceName != "" {
@@ -320,15 +388,47 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 			})
 		}
 		
-		logs = append(logs, log)
+		allLogs = append(allLogs, log)
 	}
 
 	// Sort by severity for consistency
-	sort.Slice(logs, func(i, j int) bool {
-		return logs[i].Severity < logs[j].Severity
+	sort.Slice(allLogs, func(i, j int) bool {
+		return allLogs[i].Severity < allLogs[j].Severity
 	})
+	
+	total := len(allLogs)
+	
+	// Apply pagination
+	start := offset
+	if start >= total {
+		return []*models.LogMetadata{}, total, nil
+	}
+	
+	end := start + limit
+	if end > total {
+		end = total
+	}
 
-	return logs, nil
+	return allLogs[start:end], total, nil
+}
+
+// CountLogs returns the total number of log severities, optionally filtered by service.
+func (s *Store) CountLogs(ctx context.Context, serviceName string) (int, error) {
+	s.logsmu.RLock()
+	defer s.logsmu.RUnlock()
+
+	if serviceName == "" {
+		return len(s.logs), nil
+	}
+	
+	count := 0
+	for _, log := range s.logs {
+		if _, hasService := log.Services[serviceName]; hasService {
+			count++
+		}
+	}
+	
+	return count, nil
 }
 
 // GetLogPatterns returns an advanced pattern analysis view.
@@ -438,17 +538,20 @@ func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*mo
 		return nil, errors.New("service name cannot be empty")
 	}
 
-	metrics, err := s.ListMetrics(ctx, serviceName)
+	// Get all without pagination for service overview (small result set per service)
+	const noLimit = 10000 // High enough for service overview
+	
+	metrics, _, err := s.ListMetrics(ctx, serviceName, noLimit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("listing metrics: %w", err)
 	}
 
-	spans, err := s.ListSpans(ctx, serviceName)
+	spans, _, err := s.ListSpans(ctx, serviceName, noLimit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("listing spans: %w", err)
 	}
 
-	logs, err := s.ListLogs(ctx, serviceName)
+	logs, _, err := s.ListLogs(ctx, serviceName, noLimit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("listing logs: %w", err)
 	}
