@@ -23,6 +23,9 @@ var migration001SQL string
 //go:embed migrations/002_unified_signal_keys.up.sql
 var migration002SQL string
 
+//go:embed migrations/003_log_service_keys.up.sql
+var migration003SQL string
+
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
 	db *sql.DB
@@ -96,7 +99,7 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL}
+	migrations := []string{migration001SQL, migration002SQL, migration003SQL}
 	for i, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
 			db.Close()
@@ -247,6 +250,7 @@ func (s *Store) AutoTemplateCfg() autotemplate.Config {
 // Clear removes all stored data.
 func (s *Store) Clear(ctx context.Context) error {
 	tables := []string{
+		"signal_keys", // Unified keys table (new)
 		"log_body_templates",
 		"log_keys",
 		"log_services",
@@ -914,39 +918,70 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 	if err := s.upsertKeysForLog(tx, log.Severity, "attribute", log.AttributeKeys); err != nil {
 		return fmt.Errorf("upserting attribute keys: %w", err)
 	}
+	
+	// 3a. Link attribute keys to services
+	for service := range log.Services {
+		for keyName := range log.AttributeKeys {
+			_, err := tx.Exec(`
+				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
+				VALUES (?, ?, 'attribute', ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
+			`, service, log.Severity, keyName)
+			if err != nil {
+				return fmt.Errorf("linking attribute key %s to service %s: %w", keyName, service, err)
+			}
+		}
+	}
 
 	// 4. Upsert resource keys
 	if err := s.upsertKeysForLog(tx, log.Severity, "resource", log.ResourceKeys); err != nil {
 		return fmt.Errorf("upserting resource keys: %w", err)
 	}
+	
+	// 4a. Link resource keys to services
+	for service := range log.Services {
+		for keyName := range log.ResourceKeys {
+			_, err := tx.Exec(`
+				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
+				VALUES (?, ?, 'resource', ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
+			`, service, log.Severity, keyName)
+			if err != nil {
+				return fmt.Errorf("linking resource key %s to service %s: %w", keyName, service, err)
+			}
+		}
+	}
 
-	// 5. Upsert body templates (per service)
-	if len(log.BodyTemplates) > 0 {
-		// Body templates are stored per service in the model
-		// We need to iterate through services and store their templates
+	// 5. Upsert body templates
+	// IMPORTANT: Body templates are analyzed at SEVERITY level, not per service.
+	// Each service+severity LogMetadata has the SAME templates with SAME counts.
+	// To avoid counting duplicates, we only store templates once per severity,
+	// using an arbitrary service name (first one we encounter).
+	if len(log.BodyTemplates) > 0 && len(log.Services) > 0 {
+		// Pick first service arbitrarily
+		var firstService string
+		for service := range log.Services {
+			firstService = service
+			break
+		}
+
 		for _, tmpl := range log.BodyTemplates {
-			// In the current model, templates don't have explicit service association
-			// We'll store them for all services that have this severity
-			for service := range log.Services {
-				_, err := tx.Exec(`
-					INSERT INTO log_body_templates (severity, service_name, template, example, count, percentage)
-					VALUES (?, ?, ?, ?, ?, ?)
-					ON CONFLICT(severity, service_name, template) DO UPDATE SET
-						example = COALESCE(excluded.example, example),
-						count = excluded.count,
-						percentage = excluded.percentage
-				`, log.Severity, service, tmpl.Template, tmpl.Example, tmpl.Count, tmpl.Percentage)
-				if err != nil {
-					return fmt.Errorf("upserting body template for service %s: %w", service, err)
-				}
+			_, err := tx.Exec(`
+				INSERT INTO log_body_templates (severity, service_name, template, example, count, percentage)
+				VALUES (?, ?, ?, ?, ?, ?)
+				ON CONFLICT(severity, service_name, template) DO UPDATE SET
+					example = COALESCE(excluded.example, example),
+					count = count + excluded.count,
+					percentage = excluded.percentage
+			`, log.Severity, firstService, tmpl.Template, tmpl.Example, tmpl.Count, tmpl.Percentage)
+			if err != nil {
+				return fmt.Errorf("upserting body template: %w", err)
 			}
 		}
 
-		// Recalculate percentages for each service
-		for service := range log.Services {
-			if err := s.recalculateTemplatePercentages(tx, log.Severity, service); err != nil {
-				return fmt.Errorf("recalculating percentages for service %s: %w", service, err)
-			}
+		// Recalculate percentages
+		if err := s.recalculateTemplatePercentages(tx, log.Severity, firstService); err != nil {
+			return fmt.Errorf("recalculating percentages: %w", err)
 		}
 	}
 
@@ -980,6 +1015,49 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 		}
 
 		// Also write to unified signal_keys table
+		// First, check if key exists and merge samples
+		var existingSamplesJSON string
+		var existingCard int64
+		err = tx.QueryRow(`
+			SELECT COALESCE(value_samples, '[]'), estimated_cardinality
+			FROM signal_keys
+			WHERE signal_type = 'log' AND signal_name = ? AND key_scope = ? AND key_name = ? AND event_name = ''
+		`, severity, keyScope, keyName).Scan(&existingSamplesJSON, &existingCard)
+		
+		mergedSamples := samples
+		mergedCard := int64(keyMeta.EstimatedCardinality)
+		
+		if err == nil {
+			// Key exists, merge samples
+			var existingSamples []string
+			if existingSamplesJSON != "" && existingSamplesJSON != "[]" {
+				if err := decodeJSON(existingSamplesJSON, &existingSamples); err == nil {
+					// Merge samples (union)
+					sampleSet := make(map[string]bool)
+					for _, s := range existingSamples {
+						sampleSet[s] = true
+					}
+					for _, s := range keyMeta.ValueSamples {
+						sampleSet[s] = true
+					}
+					
+					// Convert back to slice (limit to MaxSamples)
+					merged := make([]string, 0, len(sampleSet))
+					for s := range sampleSet {
+						merged = append(merged, s)
+						if len(merged) >= 10 { // MaxSamples
+							break
+						}
+					}
+					mergedSamples, _ = encodeJSON(merged)
+					mergedCard = int64(len(sampleSet))
+					if mergedCard < existingCard {
+						mergedCard = existingCard
+					}
+				}
+			}
+		}
+		
 		_, err = tx.Exec(`
 			INSERT INTO signal_keys (
 				signal_type, signal_name, key_scope, key_name, event_name,
@@ -992,7 +1070,7 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
 		`, severity, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
-			keyMeta.EstimatedCardinality, samples, nil)
+			mergedCard, mergedSamples, nil)
 
 		if err != nil {
 			return fmt.Errorf("upserting signal key %s: %w", keyName, err)
@@ -1338,18 +1416,21 @@ func (s *Store) getKeysForPatternService(ctx context.Context, severities []strin
 		placeholders += "?"
 		args = append(args, sev)
 	}
+	args = append(args, serviceName)
 	args = append(args, keyScope)
 	
+	// Query log_service_keys to get only keys that actually belong to this service
+	// NOTE: We don't include cardinality/samples here because signal_keys contains
+	// aggregated data across ALL services. To show accurate per-service cardinality,
+	// we would need to store cardinality per service+severity+key combination.
 	query := `
 		SELECT DISTINCT
-			key_name,
-			estimated_cardinality,
-			value_samples
-		FROM signal_keys
-		WHERE signal_type = 'log'
-		AND signal_name IN (` + placeholders + `)
-		AND key_scope = ?
-		ORDER BY estimated_cardinality DESC
+			lsk.key_name
+		FROM log_service_keys lsk
+		WHERE lsk.severity IN (` + placeholders + `)
+		AND lsk.service_name = ?
+		AND lsk.key_scope = ?
+		ORDER BY lsk.key_name
 	`
 	
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -1361,25 +1442,15 @@ func (s *Store) getKeysForPatternService(ctx context.Context, severities []strin
 	var keys []models.KeyInfo
 	for rows.Next() {
 		var keyName string
-		var cardinality int
-		var samplesJSON string
 		
-		if err := rows.Scan(&keyName, &cardinality, &samplesJSON); err != nil {
+		if err := rows.Scan(&keyName); err != nil {
 			return nil, fmt.Errorf("scanning key: %w", err)
-		}
-		
-		var samples []string
-		if samplesJSON != "" {
-			if err := decodeJSON(samplesJSON, &samples); err != nil {
-				// Ignore decode errors, just use empty samples
-				samples = []string{}
-			}
 		}
 		
 		keys = append(keys, models.KeyInfo{
 			Name:         keyName,
-			Cardinality:  cardinality,
-			SampleValues: samples,
+			Cardinality:  0, // Not available per-service
+			SampleValues: []string{}, // Not available per-service
 		})
 	}
 	
