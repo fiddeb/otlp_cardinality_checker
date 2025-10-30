@@ -91,6 +91,7 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 					logMap[key] = models.NewLogMetadata(severityText)
 					logMap[key].ScopeInfo = scopeInfo
 					logMap[key].Services[serviceName] = 0
+					logMap[key].SeverityNumber = int32(logRecord.SeverityNumber)
 
 					// Add resource keys for this service
 					for resKey := range resourceAttrs {
@@ -103,6 +104,33 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 				metadata := logMap[key]
 				metadata.SampleCount++
 				metadata.Services[serviceName]++
+				
+				// Track trace/span context presence
+				if len(logRecord.TraceId) > 0 && !isEmptyBytes(logRecord.TraceId) {
+					metadata.HasTraceContext = true
+				}
+				if len(logRecord.SpanId) > 0 && !isEmptyBytes(logRecord.SpanId) {
+					metadata.HasSpanContext = true
+				}
+				
+				// Track event_name if present
+				if logRecord.EventName != "" {
+					if !contains(metadata.EventNames, logRecord.EventName) {
+						metadata.EventNames = append(metadata.EventNames, logRecord.EventName)
+					}
+				}
+				
+				// Track dropped attributes statistics
+				if logRecord.DroppedAttributesCount > 0 {
+					if metadata.DroppedAttributesStats == nil {
+						metadata.DroppedAttributesStats = &models.DroppedAttributesStats{}
+					}
+					metadata.DroppedAttributesStats.TotalDropped += logRecord.DroppedAttributesCount
+					metadata.DroppedAttributesStats.RecordsWithDropped++
+					if logRecord.DroppedAttributesCount > metadata.DroppedAttributesStats.MaxDropped {
+						metadata.DroppedAttributesStats.MaxDropped = logRecord.DroppedAttributesCount
+					}
+				}
 				
 				// Track service-severity combination
 				if serviceSeverities[serviceName] == nil {
@@ -172,4 +200,27 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 	}
 
 	return results, nil
+}
+
+// isEmptyBytes checks if a byte slice is empty or all zeros
+func isEmptyBytes(b []byte) bool {
+	if len(b) == 0 {
+		return true
+	}
+	for _, v := range b {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// contains checks if a string slice contains a value
+func contains(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
 }

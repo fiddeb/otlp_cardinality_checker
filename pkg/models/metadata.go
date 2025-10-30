@@ -87,17 +87,39 @@ type SpanMetadata struct {
 }
 
 // LogMetadata contains metadata about observed log records.
+// Follows the structure of opentelemetry.proto.logs.v1.LogRecord
 type LogMetadata struct {
-	Severity string `json:"severity"` // INFO, WARN, ERROR, etc.
+	// Severity is the severity text (INFO, WARN, ERROR, etc.)
+	// Corresponds to LogRecord.severity_text
+	Severity string `json:"severity"`
+	
+	// SeverityNumber is the numerical severity value (1-24)
+	// Corresponds to LogRecord.severity_number enum
+	SeverityNumber int32 `json:"severity_number,omitempty"`
 
 	// AttributeKeys maps attribute key names to their metadata
+	// These are from LogRecord.attributes
 	AttributeKeys map[string]*KeyMetadata `json:"attribute_keys"`
 
 	// ResourceKeys maps resource attribute key names to their metadata
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
 	
-	// BodyTemplates contains extracted templates from log body text (optional)
+	// BodyTemplates contains extracted templates from log body text
+	// This is our custom feature for analyzing LogRecord.body patterns
 	BodyTemplates []*BodyTemplate `json:"body_templates,omitempty"`
+	
+	// EventNames tracks unique event_name values observed
+	// Corresponds to LogRecord.event_name
+	EventNames []string `json:"event_names,omitempty"`
+	
+	// HasTraceContext indicates if any log records had trace_id set
+	HasTraceContext bool `json:"has_trace_context"`
+	
+	// HasSpanContext indicates if any log records had span_id set
+	HasSpanContext bool `json:"has_span_context"`
+	
+	// DroppedAttributesCount tracks statistics about dropped attributes
+	DroppedAttributesStats *DroppedAttributesStats `json:"dropped_attributes_stats,omitempty"`
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
@@ -109,6 +131,18 @@ type LogMetadata struct {
 	Services map[string]int64 `json:"services"`
 
 	mu sync.RWMutex `json:"-"`
+}
+
+// DroppedAttributesStats tracks statistics about dropped attributes in log records
+type DroppedAttributesStats struct {
+	// TotalDropped is the sum of all dropped_attributes_count values
+	TotalDropped uint32 `json:"total_dropped"`
+	
+	// RecordsWithDropped is the count of log records that had dropped attributes
+	RecordsWithDropped int64 `json:"records_with_dropped"`
+	
+	// MaxDropped is the maximum dropped_attributes_count seen in a single record
+	MaxDropped uint32 `json:"max_dropped"`
 }
 
 // BodyTemplate represents a pattern extracted from log message bodies
@@ -193,6 +227,7 @@ func NewLogMetadata(severity string) *LogMetadata {
 		AttributeKeys: make(map[string]*KeyMetadata),
 		ResourceKeys:  make(map[string]*KeyMetadata),
 		Services:      make(map[string]int64),
+		EventNames:    []string{},
 	}
 }
 
