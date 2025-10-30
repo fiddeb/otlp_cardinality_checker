@@ -17,13 +17,26 @@ var ErrNotFound = errors.New("not found")
 
 // MetricMetadata contains metadata about an observed metric.
 // It tracks all unique label keys and their cardinality statistics.
+// Follows the structure of opentelemetry.proto.metrics.v1.Metric
 type MetricMetadata struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`                   // Gauge, Sum, Histogram, etc.
-	Unit        string `json:"unit,omitempty"`         // Optional unit
-	Description string `json:"description,omitempty"`  // Metric description
+	// Name is the metric name (required)
+	Name string `json:"name"`
+	
+	// Description provides context about what the metric measures
+	Description string `json:"description,omitempty"`
+	
+	// Unit specifies the unit of measurement (e.g., "By", "ms", "1")
+	Unit string `json:"unit,omitempty"`
+	
+	// Data contains the type-specific metric data (Gauge, Sum, Histogram, etc.)
+	// This replaces the old "Type" string field with a proper typed interface
+	Data MetricData `json:"data"`
+	
+	// Metadata contains additional key-value metadata (optional, rarely used)
+	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// LabelKeys maps label key names to their metadata and cardinality stats
+	// These correspond to attributes on data points in OTLP
 	LabelKeys map[string]*KeyMetadata `json:"label_keys"`
 
 	// ResourceKeys maps resource attribute key names to their metadata
@@ -137,15 +150,26 @@ type ScopeMetadata struct {
 	Version string `json:"version,omitempty"`
 }
 
-// NewMetricMetadata creates a new MetricMetadata instance.
-func NewMetricMetadata(name, metricType string) *MetricMetadata {
+// NewMetricMetadata creates a new MetricMetadata instance with the specified metric data type.
+// The data parameter should be one of: *GaugeMetric, *SumMetric, *HistogramMetric, 
+// *ExponentialHistogramMetric, or *SummaryMetric
+func NewMetricMetadata(name string, data MetricData) *MetricMetadata {
 	return &MetricMetadata{
 		Name:         name,
-		Type:         metricType,
+		Data:         data,
 		LabelKeys:    make(map[string]*KeyMetadata),
 		ResourceKeys: make(map[string]*KeyMetadata),
 		Services:     make(map[string]int64),
+		Metadata:     make(map[string]string),
 	}
+}
+
+// GetType returns the metric type as a string (for backward compatibility)
+func (m *MetricMetadata) GetType() string {
+	if m.Data == nil {
+		return "Unknown"
+	}
+	return m.Data.GetType()
 }
 
 // NewSpanMetadata creates a new SpanMetadata instance.
