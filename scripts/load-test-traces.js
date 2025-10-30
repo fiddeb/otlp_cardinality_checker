@@ -94,6 +94,7 @@ function generateTraceBatch(vu, iter) {
         // Generate trace and span IDs
         const traceId = Math.floor(Math.random() * 1000000000000).toString(16).padStart(32, '0');
         const spanId = Math.floor(Math.random() * 10000000000).toString(16).padStart(16, '0');
+        const parentSpanId = (i > 0 && Math.random() > 0.5) ? Math.floor(Math.random() * 10000000000).toString(16).padStart(16, '0') : '';
         
         // Build attributes based on span template
         const attributes = [];
@@ -146,7 +147,7 @@ function generateTraceBatch(vu, iter) {
             }
         });
         
-        spans.push({
+        const span = {
             trace_id: traceId,
             span_id: spanId,
             name: spanTemplate.name,
@@ -154,7 +155,58 @@ function generateTraceBatch(vu, iter) {
             start_time_unix_nano: timestamp,
             end_time_unix_nano: timestamp + Math.floor(Math.random() * 1000000000), // Random duration up to 1 second
             attributes: attributes,
-        });
+            dropped_attributes_count: Math.floor(Math.random() * 3), // 0-2 dropped attributes
+            dropped_events_count: Math.floor(Math.random() * 2), // 0-1 dropped events
+            dropped_links_count: Math.floor(Math.random() * 2), // 0-1 dropped links
+        };
+        
+        // Add parent_span_id if this isn't a root span
+        if (parentSpanId) {
+            span.parent_span_id = parentSpanId;
+        }
+        
+        // Add trace_state to some spans
+        if (Math.random() > 0.7) {
+            span.trace_state = 'vendor1=value1,vendor2=value2';
+        }
+        
+        // Add status to some spans
+        if (Math.random() > 0.5) {
+            const statusCodes = [0, 1, 2]; // UNSET, OK, ERROR
+            const statusCode = statusCodes[Math.floor(Math.random() * 3)];
+            span.status = {
+                code: statusCode,
+            };
+            if (statusCode === 2) { // ERROR
+                span.status.message = 'Operation failed';
+            }
+        }
+        
+        // Add events to some spans
+        if (Math.random() > 0.7) {
+            span.events = [{
+                time_unix_nano: timestamp + Math.floor(Math.random() * 500000000),
+                name: ['request.started', 'query.executed', 'cache.miss', 'error.occurred'][Math.floor(Math.random() * 4)],
+                attributes: [
+                    { key: 'event.detail', value: { string_value: 'test detail' } },
+                ],
+            }];
+        }
+        
+        // Add links to some spans
+        if (Math.random() > 0.8) {
+            const linkedTraceId = Math.floor(Math.random() * 1000000000000).toString(16).padStart(32, '0');
+            const linkedSpanId = Math.floor(Math.random() * 10000000000).toString(16).padStart(16, '0');
+            span.links = [{
+                trace_id: linkedTraceId,
+                span_id: linkedSpanId,
+                attributes: [
+                    { key: 'link.type', value: { string_value: 'follows_from' } },
+                ],
+            }];
+        }
+        
+        spans.push(span);
     }
     
     return {
