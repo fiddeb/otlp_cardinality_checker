@@ -29,6 +29,9 @@ var migration003SQL string
 //go:embed migrations/004_log_otlp_fields.up.sql
 var migration004SQL string
 
+//go:embed migrations/005_span_otlp_fields.up.sql
+var migration005SQL string
+
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
 	db *sql.DB
@@ -102,7 +105,7 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL, migration003SQL, migration004SQL}
+	migrations := []string{migration001SQL, migration002SQL, migration003SQL, migration004SQL, migration005SQL}
 	for i, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
 			db.Close()
@@ -601,14 +604,76 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 
 // storeSpanTx stores span metadata within a transaction.
 func (s *Store) storeSpanTx(tx *sql.Tx, span *models.SpanMetadata) error {
-	// 1. Upsert base span
-	_, err := tx.Exec(`
-		INSERT INTO spans (name, kind, total_sample_count)
-		VALUES (?, ?, ?)
+	// Serialize StatusCodes to JSON
+	statusCodesJSON, err := encodeJSON(span.StatusCodes)
+	if err != nil {
+		return fmt.Errorf("encoding status codes: %w", err)
+	}
+
+	// Convert boolean flags to INTEGER for SQLite
+	hasTraceState := 0
+	if span.HasTraceState {
+		hasTraceState = 1
+	}
+	hasParentSpanId := 0
+	if span.HasParentSpanId {
+		hasParentSpanId = 1
+	}
+
+	// Prepare dropped stats values
+	droppedAttrsTotal, droppedAttrsItems, droppedAttrsMax := uint32(0), int64(0), uint32(0)
+	if span.DroppedAttributesStats != nil {
+		droppedAttrsTotal = span.DroppedAttributesStats.TotalDropped
+		droppedAttrsItems = span.DroppedAttributesStats.ItemsWithDropped
+		droppedAttrsMax = span.DroppedAttributesStats.MaxDropped
+	}
+
+	droppedEventsTotal, droppedEventsItems, droppedEventsMax := uint32(0), int64(0), uint32(0)
+	if span.DroppedEventsStats != nil {
+		droppedEventsTotal = span.DroppedEventsStats.TotalDropped
+		droppedEventsItems = span.DroppedEventsStats.ItemsWithDropped
+		droppedEventsMax = span.DroppedEventsStats.MaxDropped
+	}
+
+	droppedLinksTotal, droppedLinksItems, droppedLinksMax := uint32(0), int64(0), uint32(0)
+	if span.DroppedLinksStats != nil {
+		droppedLinksTotal = span.DroppedLinksStats.TotalDropped
+		droppedLinksItems = span.DroppedLinksStats.ItemsWithDropped
+		droppedLinksMax = span.DroppedLinksStats.MaxDropped
+	}
+
+	// 1. Upsert base span with new OTLP fields
+	_, err = tx.Exec(`
+		INSERT INTO spans (
+			name, kind, kind_number, kind_name, total_sample_count,
+			has_trace_state, has_parent_span_id, status_codes,
+			dropped_attrs_total, dropped_attrs_items, dropped_attrs_max,
+			dropped_events_total, dropped_events_items, dropped_events_max,
+			dropped_links_total, dropped_links_items, dropped_links_max
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET
 			kind = excluded.kind,
-			total_sample_count = total_sample_count + excluded.total_sample_count
-	`, span.Name, span.Kind, span.SampleCount)
+			kind_number = excluded.kind_number,
+			kind_name = excluded.kind_name,
+			total_sample_count = total_sample_count + excluded.total_sample_count,
+			has_trace_state = excluded.has_trace_state OR has_trace_state,
+			has_parent_span_id = excluded.has_parent_span_id OR has_parent_span_id,
+			status_codes = excluded.status_codes,
+			dropped_attrs_total = dropped_attrs_total + excluded.dropped_attrs_total,
+			dropped_attrs_items = dropped_attrs_items + excluded.dropped_attrs_items,
+			dropped_attrs_max = MAX(dropped_attrs_max, excluded.dropped_attrs_max),
+			dropped_events_total = dropped_events_total + excluded.dropped_events_total,
+			dropped_events_items = dropped_events_items + excluded.dropped_events_items,
+			dropped_events_max = MAX(dropped_events_max, excluded.dropped_events_max),
+			dropped_links_total = dropped_links_total + excluded.dropped_links_total,
+			dropped_links_items = dropped_links_items + excluded.dropped_links_items,
+			dropped_links_max = MAX(dropped_links_max, excluded.dropped_links_max)
+	`, span.Name, span.KindName, span.Kind, span.KindName, span.SampleCount,
+		hasTraceState, hasParentSpanId, statusCodesJSON,
+		droppedAttrsTotal, droppedAttrsItems, droppedAttrsMax,
+		droppedEventsTotal, droppedEventsItems, droppedEventsMax,
+		droppedLinksTotal, droppedLinksItems, droppedLinksMax)
 	if err != nil {
 		return fmt.Errorf("upserting span: %w", err)
 	}
@@ -727,18 +792,55 @@ func eventNameOrEmpty(s string) string {
 
 // GetSpan retrieves span metadata by name.
 func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata, error) {
-	// Get base span
+	// Get base span with new OTLP fields
 	var span models.SpanMetadata
+	span.DroppedAttributesStats = &models.DroppedCountStats{}
+	span.DroppedEventsStats = &models.DroppedCountStats{}
+	span.DroppedLinksStats = &models.DroppedCountStats{}
+	
+	var hasTraceState, hasParentSpanId int
+	var statusCodesJSON string
+	var kindName string // For backwards compatibility with old 'kind' TEXT column
+	
 	err := s.db.QueryRowContext(ctx, `
-		SELECT name, kind, total_sample_count
+		SELECT name, COALESCE(kind, ''), COALESCE(kind_number, 0), COALESCE(kind_name, ''), total_sample_count,
+		       COALESCE(has_trace_state, 0), COALESCE(has_parent_span_id, 0), COALESCE(status_codes, '[]'),
+		       COALESCE(dropped_attrs_total, 0), COALESCE(dropped_attrs_items, 0), COALESCE(dropped_attrs_max, 0),
+		       COALESCE(dropped_events_total, 0), COALESCE(dropped_events_items, 0), COALESCE(dropped_events_max, 0),
+		       COALESCE(dropped_links_total, 0), COALESCE(dropped_links_items, 0), COALESCE(dropped_links_max, 0)
 		FROM spans WHERE name = ?
-	`, name).Scan(&span.Name, &span.Kind, &span.SampleCount)
+	`, name).Scan(
+		&span.Name, &kindName, &span.Kind, &span.KindName, &span.SampleCount,
+		&hasTraceState, &hasParentSpanId, &statusCodesJSON,
+		&span.DroppedAttributesStats.TotalDropped, &span.DroppedAttributesStats.ItemsWithDropped, &span.DroppedAttributesStats.MaxDropped,
+		&span.DroppedEventsStats.TotalDropped, &span.DroppedEventsStats.ItemsWithDropped, &span.DroppedEventsStats.MaxDropped,
+		&span.DroppedLinksStats.TotalDropped, &span.DroppedLinksStats.ItemsWithDropped, &span.DroppedLinksStats.MaxDropped,
+	)
 
 	if err == sql.ErrNoRows {
 		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying span: %w", err)
+	}
+	
+	// Use kind_name if available, otherwise fall back to old kind column
+	if span.KindName == "" {
+		span.KindName = kindName
+	}
+
+	// Convert INTEGER back to boolean
+	span.HasTraceState = hasTraceState != 0
+	span.HasParentSpanId = hasParentSpanId != 0
+
+	// Deserialize StatusCodes from JSON
+	if statusCodesJSON != "" && statusCodesJSON != "[]" {
+		if err := decodeJSON(statusCodesJSON, &span.StatusCodes); err != nil {
+			return nil, fmt.Errorf("decoding status codes: %w", err)
+		}
+	}
+	if span.StatusCodes == nil {
+		span.StatusCodes = []string{}
 	}
 
 	// Get services
