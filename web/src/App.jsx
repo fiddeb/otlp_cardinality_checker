@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
-import HighCardinality from './components/HighCardinality'
+import CrossSignalCardinality from './components/CrossSignalCardinality'
+import MetadataComplexity from './components/MetadataComplexity'
 import MetricsView from './components/MetricsView'
 import TracesView from './components/TracesView'
 import LogsView from './components/LogsView'
@@ -10,11 +11,13 @@ import Details from './components/Details'
 import MemoryView from './components/MemoryView'
 import NoisyNeighbors from './components/NoisyNeighbors'
 import PatternExplorer from './components/PatternExplorer'
+import TemplateDetails from './components/TemplateDetails'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedService, setSelectedService] = useState(null)
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [isClearing, setIsClearing] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage or system preference
@@ -76,9 +79,15 @@ function App() {
     setActiveTab('service')
   }
 
+  const handleViewTemplate = (severity, template) => {
+    setSelectedTemplate({ severity, template })
+    setActiveTab('template-details')
+  }
+
   const handleBack = () => {
     setSelectedItem(null)
     setSelectedService(null)
+    setSelectedTemplate(null)
     setActiveTab('dashboard')
   }
 
@@ -108,7 +117,7 @@ function App() {
         </div>
       </header>
 
-      {!selectedItem && !selectedService && (
+      {!selectedItem && !selectedService && !selectedTemplate && (
         <div className="tabs">
           <button 
             className={`tab ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -117,10 +126,16 @@ function App() {
             Dashboard
           </button>
           <button 
-            className={`tab ${activeTab === 'high-cardinality' ? 'active' : ''}`}
-            onClick={() => setActiveTab('high-cardinality')}
+            className={`tab ${activeTab === 'cross-signal-cardinality' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cross-signal-cardinality')}
           >
-            High Cardinality
+            Cross-Signal Keys
+          </button>
+          <button 
+            className={`tab ${activeTab === 'metadata-complexity' ? 'active' : ''}`}
+            onClick={() => setActiveTab('metadata-complexity')}
+          >
+            Metadata Complexity
           </button>
           <button 
             className={`tab ${activeTab === 'metrics' ? 'active' : ''}`}
@@ -171,8 +186,12 @@ function App() {
         <Dashboard onViewService={handleViewService} />
       )}
 
-      {activeTab === 'high-cardinality' && (
-        <HighCardinality onViewDetails={handleViewDetails} />
+      {activeTab === 'cross-signal-cardinality' && (
+        <CrossSignalCardinality />
+      )}
+
+      {activeTab === 'metadata-complexity' && (
+        <MetadataComplexity onViewDetails={handleViewDetails} />
       )}
 
       {activeTab === 'metrics' && (
@@ -184,7 +203,7 @@ function App() {
       )}
 
       {activeTab === 'logs' && (
-        <LogsView onViewDetails={handleViewDetails} />
+        <LogsView onViewTemplate={handleViewTemplate} />
       )}
 
       {activeTab === 'pattern-explorer' && (
@@ -201,6 +220,14 @@ function App() {
 
       {activeTab === 'memory' && (
         <MemoryView />
+      )}
+
+      {activeTab === 'template-details' && selectedTemplate && (
+        <TemplateDetails 
+          severity={selectedTemplate.severity}
+          template={selectedTemplate.template}
+          onBack={handleBack}
+        />
       )}
 
       {activeTab === 'service' && selectedService && (

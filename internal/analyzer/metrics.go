@@ -373,11 +373,3 @@ func attributeValueToString(value *commonpb.AnyValue) string {
 		return fmt.Sprintf("%v", value)
 	}
 }
-
-// getServiceName extracts service.name from resource attributes.
-func getServiceName(attrs map[string]string) string {
-	if name, ok := attrs["service.name"]; ok {
-		return name
-	}
-	return ""
-}
