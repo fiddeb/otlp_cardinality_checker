@@ -26,6 +26,9 @@ var migration002SQL string
 //go:embed migrations/003_log_service_keys.up.sql
 var migration003SQL string
 
+//go:embed migrations/004_log_otlp_fields.up.sql
+var migration004SQL string
+
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
 	db *sql.DB
@@ -99,7 +102,7 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL, migration003SQL}
+	migrations := []string{migration001SQL, migration002SQL, migration003SQL, migration004SQL}
 	for i, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
 			db.Close()
@@ -919,13 +922,44 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 
 // storeLogTx stores log metadata within a transaction.
 func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
-	// 1. Upsert base log
-	_, err := tx.Exec(`
-		INSERT INTO logs (severity, total_sample_count)
-		VALUES (?, ?)
+	// Serialize EventNames to JSON
+	eventNamesJSON, err := encodeJSON(log.EventNames)
+	if err != nil {
+		return fmt.Errorf("encoding event names: %w", err)
+	}
+
+	// Convert boolean flags to INTEGER for SQLite
+	hasTraceCtx := 0
+	if log.HasTraceContext {
+		hasTraceCtx = 1
+	}
+	hasSpanCtx := 0
+	if log.HasSpanContext {
+		hasSpanCtx = 1
+	}
+
+	// 1. Upsert base log with new OTLP fields
+	_, err = tx.Exec(`
+		INSERT INTO logs (
+			severity, total_sample_count, severity_number,
+			has_trace_context, has_span_context, event_names,
+			dropped_attrs_total, dropped_attrs_records, dropped_attrs_max
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(severity) DO UPDATE SET
-			total_sample_count = total_sample_count + excluded.total_sample_count
-	`, log.Severity, log.SampleCount)
+			total_sample_count = total_sample_count + excluded.total_sample_count,
+			severity_number = excluded.severity_number,
+			has_trace_context = excluded.has_trace_context OR has_trace_context,
+			has_span_context = excluded.has_span_context OR has_span_context,
+			event_names = excluded.event_names,
+			dropped_attrs_total = dropped_attrs_total + excluded.dropped_attrs_total,
+			dropped_attrs_records = dropped_attrs_records + excluded.dropped_attrs_records,
+			dropped_attrs_max = MAX(dropped_attrs_max, excluded.dropped_attrs_max)
+	`, log.Severity, log.SampleCount, log.SeverityNumber,
+		hasTraceCtx, hasSpanCtx, eventNamesJSON,
+		log.DroppedAttributesStats.TotalDropped,
+		log.DroppedAttributesStats.RecordsWithDropped,
+		log.DroppedAttributesStats.MaxDropped)
 	if err != nil {
 		return fmt.Errorf("upserting log: %w", err)
 	}
@@ -1137,18 +1171,40 @@ func (s *Store) recalculateTemplatePercentages(tx *sql.Tx, severity, service str
 
 // GetLog retrieves log metadata by severity.
 func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMetadata, error) {
-	// Get base log
+	// Get base log with new OTLP fields
 	var log models.LogMetadata
+	log.DroppedAttributesStats = &models.DroppedAttributesStats{} // Initialize before use
+	var hasTraceCtx, hasSpanCtx int
+	var eventNamesJSON string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT severity, total_sample_count
+		SELECT severity, total_sample_count, severity_number,
+		       has_trace_context, has_span_context, event_names,
+		       dropped_attrs_total, dropped_attrs_records, dropped_attrs_max
 		FROM logs WHERE severity = ?
-	`, severityText).Scan(&log.Severity, &log.SampleCount)
+	`, severityText).Scan(
+		&log.Severity, &log.SampleCount, &log.SeverityNumber,
+		&hasTraceCtx, &hasSpanCtx, &eventNamesJSON,
+		&log.DroppedAttributesStats.TotalDropped,
+		&log.DroppedAttributesStats.RecordsWithDropped,
+		&log.DroppedAttributesStats.MaxDropped,
+	)
 
 	if err == sql.ErrNoRows {
 		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying log: %w", err)
+	}
+
+	// Convert INTEGER back to boolean
+	log.HasTraceContext = hasTraceCtx != 0
+	log.HasSpanContext = hasSpanCtx != 0
+
+	// Deserialize EventNames from JSON
+	if eventNamesJSON != "" {
+		if err := decodeJSON(eventNamesJSON, &log.EventNames); err != nil {
+			return nil, fmt.Errorf("decoding event names: %w", err)
+		}
 	}
 
 	// Get services

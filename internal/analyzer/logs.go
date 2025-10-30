@@ -113,13 +113,6 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 					metadata.HasSpanContext = true
 				}
 				
-				// Track event_name if present
-				if logRecord.EventName != "" {
-					if !contains(metadata.EventNames, logRecord.EventName) {
-						metadata.EventNames = append(metadata.EventNames, logRecord.EventName)
-					}
-				}
-				
 				// Track dropped attributes statistics
 				if logRecord.DroppedAttributesCount > 0 {
 					if metadata.DroppedAttributesStats == nil {
@@ -150,6 +143,13 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 				// Extract log record attributes
 				logAttrs := extractAttributes(logRecord.Attributes)
 				for attrKey, attrValue := range logAttrs {
+					// Track event.name separately
+					if attrKey == "event.name" && attrValue != "" {
+						if !contains(metadata.EventNames, attrValue) {
+							metadata.EventNames = append(metadata.EventNames, attrValue)
+						}
+					}
+					
 					if metadata.AttributeKeys[attrKey] == nil {
 						metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
 					}
