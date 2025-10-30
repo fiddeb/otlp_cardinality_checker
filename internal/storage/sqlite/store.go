@@ -336,7 +336,7 @@ func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
 			unit = COALESCE(excluded.unit, unit),
 			description = COALESCE(excluded.description, description),
 			total_sample_count = total_sample_count + excluded.total_sample_count
-	`, metric.Name, metric.Type, metric.Unit, metric.Description, metric.SampleCount)
+	`, metric.Name, metric.GetType(), metric.Unit, metric.Description, metric.SampleCount)
 	if err != nil {
 		return fmt.Errorf("upserting metric: %w", err)
 	}
@@ -420,11 +420,14 @@ func (s *Store) upsertKeysForMetric(tx *sql.Tx, metricName, keyScope string, key
 // GetMetric retrieves metric metadata by name.
 func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetadata, error) {
 	// Get base metric
-	var metric models.MetricMetadata
+	var metricType string
+	var metricName, unit, description string
+	var sampleCount int64
+	
 	err := s.db.QueryRowContext(ctx, `
 		SELECT name, type, unit, description, total_sample_count
 		FROM metrics WHERE name = ?
-	`, name).Scan(&metric.Name, &metric.Type, &metric.Unit, &metric.Description, &metric.SampleCount)
+	`, name).Scan(&metricName, &metricType, &unit, &description, &sampleCount)
 
 	if err == sql.ErrNoRows {
 		return nil, models.ErrNotFound
@@ -432,6 +435,32 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 	if err != nil {
 		return nil, fmt.Errorf("querying metric: %w", err)
 	}
+
+	// Create MetricData based on type string from database
+	// We don't have full type info in DB, so create basic instances
+	var metricData models.MetricData
+	switch metricType {
+	case "Gauge":
+		metricData = &models.GaugeMetric{DataPointCount: sampleCount}
+	case "Sum":
+		metricData = &models.SumMetric{DataPointCount: sampleCount}
+	case "Histogram":
+		metricData = &models.HistogramMetric{DataPointCount: sampleCount}
+	case "ExponentialHistogram":
+		metricData = &models.ExponentialHistogramMetric{DataPointCount: sampleCount}
+	case "Summary":
+		metricData = &models.SummaryMetric{DataPointCount: sampleCount}
+	default:
+		// Fallback to Gauge for unknown types
+		metricData = &models.GaugeMetric{DataPointCount: sampleCount}
+	}
+	
+	metric := models.NewMetricMetadata(metricName, metricData)
+	metric.Unit = unit
+	metric.Description = description
+	metric.SampleCount = sampleCount
+
+	metric.SampleCount = sampleCount
 
 	// Get services
 	metric.Services = make(map[string]int64)
@@ -468,7 +497,7 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 		return nil, fmt.Errorf("querying resource keys: %w", err)
 	}
 
-	return &metric, nil
+	return metric, nil
 }
 
 // getKeysForMetric retrieves key metadata for a metric and scope.
