@@ -1040,6 +1040,11 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 		hasSpanCtx = 1
 	}
 
+	// Initialize dropped attributes stats if nil
+	if log.DroppedAttributesStats == nil {
+		log.DroppedAttributesStats = &models.DroppedAttributesStats{}
+	}
+
 	// 1. Upsert base log with new OTLP fields
 	_, err = tx.Exec(`
 		INSERT INTO logs (
