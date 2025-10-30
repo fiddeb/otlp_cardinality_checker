@@ -55,24 +55,62 @@ type MetricMetadata struct {
 }
 
 // SpanMetadata contains metadata about observed spans.
+// Follows the structure of opentelemetry.proto.trace.v1.Span
 type SpanMetadata struct {
+	// Name is the span name (required)
+	// Corresponds to Span.name
 	Name string `json:"name"`
-	Kind string `json:"kind"` // Client, Server, Internal, Producer, Consumer
+	
+	// Kind is the span kind enum value
+	// Corresponds to Span.kind (SpanKind enum)
+	// Values: UNSPECIFIED=0, INTERNAL=1, SERVER=2, CLIENT=3, PRODUCER=4, CONSUMER=5
+	Kind int32 `json:"kind"`
+	
+	// KindName is the human-readable span kind name for convenience
+	KindName string `json:"kind_name,omitempty"`
 
 	// AttributeKeys maps attribute key names to their metadata
+	// Corresponds to Span.attributes
 	AttributeKeys map[string]*KeyMetadata `json:"attribute_keys"`
 
 	// EventNames tracks unique event names observed in spans
+	// Corresponds to Span.Event.name
 	EventNames []string `json:"event_names"`
 
 	// EventAttributeKeys maps event names to their attribute keys
+	// Corresponds to Span.Event.attributes
 	EventAttributeKeys map[string]map[string]*KeyMetadata `json:"event_attribute_keys"`
 
 	// LinkAttributeKeys tracks attribute keys found in span links
+	// Corresponds to Span.Link.attributes
 	LinkAttributeKeys map[string]*KeyMetadata `json:"link_attribute_keys"`
 
 	// ResourceKeys maps resource attribute key names to their metadata
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
+	
+	// HasTraceState indicates if any spans had trace_state set
+	// Corresponds to Span.trace_state
+	HasTraceState bool `json:"has_trace_state"`
+	
+	// HasParentSpanId indicates if any spans had parent_span_id set (not root spans)
+	// Corresponds to Span.parent_span_id
+	HasParentSpanId bool `json:"has_parent_span_id"`
+	
+	// StatusCodes tracks which status codes have been observed
+	// Corresponds to Span.Status.code enum (UNSET=0, OK=1, ERROR=2)
+	StatusCodes []string `json:"status_codes,omitempty"`
+	
+	// DroppedAttributesStats tracks statistics about dropped attributes
+	// Corresponds to Span.dropped_attributes_count
+	DroppedAttributesStats *DroppedCountStats `json:"dropped_attributes_stats,omitempty"`
+	
+	// DroppedEventsStats tracks statistics about dropped events
+	// Corresponds to Span.dropped_events_count
+	DroppedEventsStats *DroppedCountStats `json:"dropped_events_stats,omitempty"`
+	
+	// DroppedLinksStats tracks statistics about dropped links
+	// Corresponds to Span.dropped_links_count
+	DroppedLinksStats *DroppedCountStats `json:"dropped_links_stats,omitempty"`
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
@@ -145,6 +183,19 @@ type DroppedAttributesStats struct {
 	MaxDropped uint32 `json:"max_dropped"`
 }
 
+// DroppedCountStats tracks statistics about dropped items (attributes, events, or links)
+// Used for Span.dropped_attributes_count, dropped_events_count, dropped_links_count
+type DroppedCountStats struct {
+	// TotalDropped is the sum of all dropped counts
+	TotalDropped uint32 `json:"total_dropped"`
+	
+	// ItemsWithDropped is the count of items (spans) that had dropped data
+	ItemsWithDropped int64 `json:"items_with_dropped"`
+	
+	// MaxDropped is the maximum dropped count seen in a single item
+	MaxDropped uint32 `json:"max_dropped"`
+}
+
 // BodyTemplate represents a pattern extracted from log message bodies
 type BodyTemplate struct {
 	Template   string  `json:"template"`
@@ -207,16 +258,18 @@ func (m *MetricMetadata) GetType() string {
 }
 
 // NewSpanMetadata creates a new SpanMetadata instance.
-func NewSpanMetadata(name, kind string) *SpanMetadata {
+func NewSpanMetadata(name string, kind int32, kindName string) *SpanMetadata {
 	return &SpanMetadata{
 		Name:               name,
 		Kind:               kind,
+		KindName:           kindName,
 		AttributeKeys:      make(map[string]*KeyMetadata),
 		EventNames:         []string{},
 		EventAttributeKeys: make(map[string]map[string]*KeyMetadata),
 		LinkAttributeKeys:  make(map[string]*KeyMetadata),
 		ResourceKeys:       make(map[string]*KeyMetadata),
 		Services:           make(map[string]int64),
+		StatusCodes:        []string{},
 	}
 }
 
