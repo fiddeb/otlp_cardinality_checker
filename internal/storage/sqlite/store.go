@@ -23,6 +23,15 @@ var migration001SQL string
 //go:embed migrations/002_unified_signal_keys.up.sql
 var migration002SQL string
 
+//go:embed migrations/003_log_service_keys.up.sql
+var migration003SQL string
+
+//go:embed migrations/004_log_otlp_fields.up.sql
+var migration004SQL string
+
+//go:embed migrations/005_span_otlp_fields.up.sql
+var migration005SQL string
+
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
 	db *sql.DB
@@ -96,7 +105,7 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL}
+	migrations := []string{migration001SQL, migration002SQL, migration003SQL, migration004SQL, migration005SQL}
 	for i, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
 			db.Close()
@@ -247,6 +256,7 @@ func (s *Store) AutoTemplateCfg() autotemplate.Config {
 // Clear removes all stored data.
 func (s *Store) Clear(ctx context.Context) error {
 	tables := []string{
+		"signal_keys", // Unified keys table (new)
 		"log_body_templates",
 		"log_keys",
 		"log_services",
@@ -332,7 +342,7 @@ func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
 			unit = COALESCE(excluded.unit, unit),
 			description = COALESCE(excluded.description, description),
 			total_sample_count = total_sample_count + excluded.total_sample_count
-	`, metric.Name, metric.Type, metric.Unit, metric.Description, metric.SampleCount)
+	`, metric.Name, metric.GetType(), metric.Unit, metric.Description, metric.SampleCount)
 	if err != nil {
 		return fmt.Errorf("upserting metric: %w", err)
 	}
@@ -416,11 +426,14 @@ func (s *Store) upsertKeysForMetric(tx *sql.Tx, metricName, keyScope string, key
 // GetMetric retrieves metric metadata by name.
 func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetadata, error) {
 	// Get base metric
-	var metric models.MetricMetadata
+	var metricType string
+	var metricName, unit, description string
+	var sampleCount int64
+	
 	err := s.db.QueryRowContext(ctx, `
 		SELECT name, type, unit, description, total_sample_count
 		FROM metrics WHERE name = ?
-	`, name).Scan(&metric.Name, &metric.Type, &metric.Unit, &metric.Description, &metric.SampleCount)
+	`, name).Scan(&metricName, &metricType, &unit, &description, &sampleCount)
 
 	if err == sql.ErrNoRows {
 		return nil, models.ErrNotFound
@@ -428,6 +441,32 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 	if err != nil {
 		return nil, fmt.Errorf("querying metric: %w", err)
 	}
+
+	// Create MetricData based on type string from database
+	// We don't have full type info in DB, so create basic instances
+	var metricData models.MetricData
+	switch metricType {
+	case "Gauge":
+		metricData = &models.GaugeMetric{DataPointCount: sampleCount}
+	case "Sum":
+		metricData = &models.SumMetric{DataPointCount: sampleCount}
+	case "Histogram":
+		metricData = &models.HistogramMetric{DataPointCount: sampleCount}
+	case "ExponentialHistogram":
+		metricData = &models.ExponentialHistogramMetric{DataPointCount: sampleCount}
+	case "Summary":
+		metricData = &models.SummaryMetric{DataPointCount: sampleCount}
+	default:
+		// Fallback to Gauge for unknown types
+		metricData = &models.GaugeMetric{DataPointCount: sampleCount}
+	}
+	
+	metric := models.NewMetricMetadata(metricName, metricData)
+	metric.Unit = unit
+	metric.Description = description
+	metric.SampleCount = sampleCount
+
+	metric.SampleCount = sampleCount
 
 	// Get services
 	metric.Services = make(map[string]int64)
@@ -464,7 +503,7 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 		return nil, fmt.Errorf("querying resource keys: %w", err)
 	}
 
-	return &metric, nil
+	return metric, nil
 }
 
 // getKeysForMetric retrieves key metadata for a metric and scope.
@@ -565,14 +604,76 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 
 // storeSpanTx stores span metadata within a transaction.
 func (s *Store) storeSpanTx(tx *sql.Tx, span *models.SpanMetadata) error {
-	// 1. Upsert base span
-	_, err := tx.Exec(`
-		INSERT INTO spans (name, kind, total_sample_count)
-		VALUES (?, ?, ?)
+	// Serialize StatusCodes to JSON
+	statusCodesJSON, err := encodeJSON(span.StatusCodes)
+	if err != nil {
+		return fmt.Errorf("encoding status codes: %w", err)
+	}
+
+	// Convert boolean flags to INTEGER for SQLite
+	hasTraceState := 0
+	if span.HasTraceState {
+		hasTraceState = 1
+	}
+	hasParentSpanId := 0
+	if span.HasParentSpanId {
+		hasParentSpanId = 1
+	}
+
+	// Prepare dropped stats values
+	droppedAttrsTotal, droppedAttrsItems, droppedAttrsMax := uint32(0), int64(0), uint32(0)
+	if span.DroppedAttributesStats != nil {
+		droppedAttrsTotal = span.DroppedAttributesStats.TotalDropped
+		droppedAttrsItems = span.DroppedAttributesStats.ItemsWithDropped
+		droppedAttrsMax = span.DroppedAttributesStats.MaxDropped
+	}
+
+	droppedEventsTotal, droppedEventsItems, droppedEventsMax := uint32(0), int64(0), uint32(0)
+	if span.DroppedEventsStats != nil {
+		droppedEventsTotal = span.DroppedEventsStats.TotalDropped
+		droppedEventsItems = span.DroppedEventsStats.ItemsWithDropped
+		droppedEventsMax = span.DroppedEventsStats.MaxDropped
+	}
+
+	droppedLinksTotal, droppedLinksItems, droppedLinksMax := uint32(0), int64(0), uint32(0)
+	if span.DroppedLinksStats != nil {
+		droppedLinksTotal = span.DroppedLinksStats.TotalDropped
+		droppedLinksItems = span.DroppedLinksStats.ItemsWithDropped
+		droppedLinksMax = span.DroppedLinksStats.MaxDropped
+	}
+
+	// 1. Upsert base span with new OTLP fields
+	_, err = tx.Exec(`
+		INSERT INTO spans (
+			name, kind, kind_number, kind_name, total_sample_count,
+			has_trace_state, has_parent_span_id, status_codes,
+			dropped_attrs_total, dropped_attrs_items, dropped_attrs_max,
+			dropped_events_total, dropped_events_items, dropped_events_max,
+			dropped_links_total, dropped_links_items, dropped_links_max
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET
 			kind = excluded.kind,
-			total_sample_count = total_sample_count + excluded.total_sample_count
-	`, span.Name, span.Kind, span.SampleCount)
+			kind_number = excluded.kind_number,
+			kind_name = excluded.kind_name,
+			total_sample_count = total_sample_count + excluded.total_sample_count,
+			has_trace_state = excluded.has_trace_state OR has_trace_state,
+			has_parent_span_id = excluded.has_parent_span_id OR has_parent_span_id,
+			status_codes = excluded.status_codes,
+			dropped_attrs_total = dropped_attrs_total + excluded.dropped_attrs_total,
+			dropped_attrs_items = dropped_attrs_items + excluded.dropped_attrs_items,
+			dropped_attrs_max = MAX(dropped_attrs_max, excluded.dropped_attrs_max),
+			dropped_events_total = dropped_events_total + excluded.dropped_events_total,
+			dropped_events_items = dropped_events_items + excluded.dropped_events_items,
+			dropped_events_max = MAX(dropped_events_max, excluded.dropped_events_max),
+			dropped_links_total = dropped_links_total + excluded.dropped_links_total,
+			dropped_links_items = dropped_links_items + excluded.dropped_links_items,
+			dropped_links_max = MAX(dropped_links_max, excluded.dropped_links_max)
+	`, span.Name, span.KindName, span.Kind, span.KindName, span.SampleCount,
+		hasTraceState, hasParentSpanId, statusCodesJSON,
+		droppedAttrsTotal, droppedAttrsItems, droppedAttrsMax,
+		droppedEventsTotal, droppedEventsItems, droppedEventsMax,
+		droppedLinksTotal, droppedLinksItems, droppedLinksMax)
 	if err != nil {
 		return fmt.Errorf("upserting span: %w", err)
 	}
@@ -691,18 +792,55 @@ func eventNameOrEmpty(s string) string {
 
 // GetSpan retrieves span metadata by name.
 func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata, error) {
-	// Get base span
+	// Get base span with new OTLP fields
 	var span models.SpanMetadata
+	span.DroppedAttributesStats = &models.DroppedCountStats{}
+	span.DroppedEventsStats = &models.DroppedCountStats{}
+	span.DroppedLinksStats = &models.DroppedCountStats{}
+	
+	var hasTraceState, hasParentSpanId int
+	var statusCodesJSON string
+	var kindName string // For backwards compatibility with old 'kind' TEXT column
+	
 	err := s.db.QueryRowContext(ctx, `
-		SELECT name, kind, total_sample_count
+		SELECT name, COALESCE(kind, ''), COALESCE(kind_number, 0), COALESCE(kind_name, ''), total_sample_count,
+		       COALESCE(has_trace_state, 0), COALESCE(has_parent_span_id, 0), COALESCE(status_codes, '[]'),
+		       COALESCE(dropped_attrs_total, 0), COALESCE(dropped_attrs_items, 0), COALESCE(dropped_attrs_max, 0),
+		       COALESCE(dropped_events_total, 0), COALESCE(dropped_events_items, 0), COALESCE(dropped_events_max, 0),
+		       COALESCE(dropped_links_total, 0), COALESCE(dropped_links_items, 0), COALESCE(dropped_links_max, 0)
 		FROM spans WHERE name = ?
-	`, name).Scan(&span.Name, &span.Kind, &span.SampleCount)
+	`, name).Scan(
+		&span.Name, &kindName, &span.Kind, &span.KindName, &span.SampleCount,
+		&hasTraceState, &hasParentSpanId, &statusCodesJSON,
+		&span.DroppedAttributesStats.TotalDropped, &span.DroppedAttributesStats.ItemsWithDropped, &span.DroppedAttributesStats.MaxDropped,
+		&span.DroppedEventsStats.TotalDropped, &span.DroppedEventsStats.ItemsWithDropped, &span.DroppedEventsStats.MaxDropped,
+		&span.DroppedLinksStats.TotalDropped, &span.DroppedLinksStats.ItemsWithDropped, &span.DroppedLinksStats.MaxDropped,
+	)
 
 	if err == sql.ErrNoRows {
 		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying span: %w", err)
+	}
+	
+	// Use kind_name if available, otherwise fall back to old kind column
+	if span.KindName == "" {
+		span.KindName = kindName
+	}
+
+	// Convert INTEGER back to boolean
+	span.HasTraceState = hasTraceState != 0
+	span.HasParentSpanId = hasParentSpanId != 0
+
+	// Deserialize StatusCodes from JSON
+	if statusCodesJSON != "" && statusCodesJSON != "[]" {
+		if err := decodeJSON(statusCodesJSON, &span.StatusCodes); err != nil {
+			return nil, fmt.Errorf("decoding status codes: %w", err)
+		}
+	}
+	if span.StatusCodes == nil {
+		span.StatusCodes = []string{}
 	}
 
 	// Get services
@@ -886,13 +1024,49 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 
 // storeLogTx stores log metadata within a transaction.
 func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
-	// 1. Upsert base log
-	_, err := tx.Exec(`
-		INSERT INTO logs (severity, total_sample_count)
-		VALUES (?, ?)
+	// Serialize EventNames to JSON
+	eventNamesJSON, err := encodeJSON(log.EventNames)
+	if err != nil {
+		return fmt.Errorf("encoding event names: %w", err)
+	}
+
+	// Convert boolean flags to INTEGER for SQLite
+	hasTraceCtx := 0
+	if log.HasTraceContext {
+		hasTraceCtx = 1
+	}
+	hasSpanCtx := 0
+	if log.HasSpanContext {
+		hasSpanCtx = 1
+	}
+
+	// Initialize dropped attributes stats if nil
+	if log.DroppedAttributesStats == nil {
+		log.DroppedAttributesStats = &models.DroppedAttributesStats{}
+	}
+
+	// 1. Upsert base log with new OTLP fields
+	_, err = tx.Exec(`
+		INSERT INTO logs (
+			severity, total_sample_count, severity_number,
+			has_trace_context, has_span_context, event_names,
+			dropped_attrs_total, dropped_attrs_records, dropped_attrs_max
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(severity) DO UPDATE SET
-			total_sample_count = total_sample_count + excluded.total_sample_count
-	`, log.Severity, log.SampleCount)
+			total_sample_count = total_sample_count + excluded.total_sample_count,
+			severity_number = excluded.severity_number,
+			has_trace_context = excluded.has_trace_context OR has_trace_context,
+			has_span_context = excluded.has_span_context OR has_span_context,
+			event_names = excluded.event_names,
+			dropped_attrs_total = dropped_attrs_total + excluded.dropped_attrs_total,
+			dropped_attrs_records = dropped_attrs_records + excluded.dropped_attrs_records,
+			dropped_attrs_max = MAX(dropped_attrs_max, excluded.dropped_attrs_max)
+	`, log.Severity, log.SampleCount, log.SeverityNumber,
+		hasTraceCtx, hasSpanCtx, eventNamesJSON,
+		log.DroppedAttributesStats.TotalDropped,
+		log.DroppedAttributesStats.RecordsWithDropped,
+		log.DroppedAttributesStats.MaxDropped)
 	if err != nil {
 		return fmt.Errorf("upserting log: %w", err)
 	}
@@ -914,39 +1088,70 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 	if err := s.upsertKeysForLog(tx, log.Severity, "attribute", log.AttributeKeys); err != nil {
 		return fmt.Errorf("upserting attribute keys: %w", err)
 	}
+	
+	// 3a. Link attribute keys to services
+	for service := range log.Services {
+		for keyName := range log.AttributeKeys {
+			_, err := tx.Exec(`
+				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
+				VALUES (?, ?, 'attribute', ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
+			`, service, log.Severity, keyName)
+			if err != nil {
+				return fmt.Errorf("linking attribute key %s to service %s: %w", keyName, service, err)
+			}
+		}
+	}
 
 	// 4. Upsert resource keys
 	if err := s.upsertKeysForLog(tx, log.Severity, "resource", log.ResourceKeys); err != nil {
 		return fmt.Errorf("upserting resource keys: %w", err)
 	}
+	
+	// 4a. Link resource keys to services
+	for service := range log.Services {
+		for keyName := range log.ResourceKeys {
+			_, err := tx.Exec(`
+				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
+				VALUES (?, ?, 'resource', ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
+			`, service, log.Severity, keyName)
+			if err != nil {
+				return fmt.Errorf("linking resource key %s to service %s: %w", keyName, service, err)
+			}
+		}
+	}
 
-	// 5. Upsert body templates (per service)
-	if len(log.BodyTemplates) > 0 {
-		// Body templates are stored per service in the model
-		// We need to iterate through services and store their templates
+	// 5. Upsert body templates
+	// IMPORTANT: Body templates are analyzed at SEVERITY level, not per service.
+	// Each service+severity LogMetadata has the SAME templates with SAME counts.
+	// To avoid counting duplicates, we only store templates once per severity,
+	// using an arbitrary service name (first one we encounter).
+	if len(log.BodyTemplates) > 0 && len(log.Services) > 0 {
+		// Pick first service arbitrarily
+		var firstService string
+		for service := range log.Services {
+			firstService = service
+			break
+		}
+
 		for _, tmpl := range log.BodyTemplates {
-			// In the current model, templates don't have explicit service association
-			// We'll store them for all services that have this severity
-			for service := range log.Services {
-				_, err := tx.Exec(`
-					INSERT INTO log_body_templates (severity, service_name, template, example, count, percentage)
-					VALUES (?, ?, ?, ?, ?, ?)
-					ON CONFLICT(severity, service_name, template) DO UPDATE SET
-						example = COALESCE(excluded.example, example),
-						count = excluded.count,
-						percentage = excluded.percentage
-				`, log.Severity, service, tmpl.Template, tmpl.Example, tmpl.Count, tmpl.Percentage)
-				if err != nil {
-					return fmt.Errorf("upserting body template for service %s: %w", service, err)
-				}
+			_, err := tx.Exec(`
+				INSERT INTO log_body_templates (severity, service_name, template, example, count, percentage)
+				VALUES (?, ?, ?, ?, ?, ?)
+				ON CONFLICT(severity, service_name, template) DO UPDATE SET
+					example = COALESCE(excluded.example, example),
+					count = count + excluded.count,
+					percentage = excluded.percentage
+			`, log.Severity, firstService, tmpl.Template, tmpl.Example, tmpl.Count, tmpl.Percentage)
+			if err != nil {
+				return fmt.Errorf("upserting body template: %w", err)
 			}
 		}
 
-		// Recalculate percentages for each service
-		for service := range log.Services {
-			if err := s.recalculateTemplatePercentages(tx, log.Severity, service); err != nil {
-				return fmt.Errorf("recalculating percentages for service %s: %w", service, err)
-			}
+		// Recalculate percentages
+		if err := s.recalculateTemplatePercentages(tx, log.Severity, firstService); err != nil {
+			return fmt.Errorf("recalculating percentages: %w", err)
 		}
 	}
 
@@ -980,6 +1185,49 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 		}
 
 		// Also write to unified signal_keys table
+		// First, check if key exists and merge samples
+		var existingSamplesJSON string
+		var existingCard int64
+		err = tx.QueryRow(`
+			SELECT COALESCE(value_samples, '[]'), estimated_cardinality
+			FROM signal_keys
+			WHERE signal_type = 'log' AND signal_name = ? AND key_scope = ? AND key_name = ? AND event_name = ''
+		`, severity, keyScope, keyName).Scan(&existingSamplesJSON, &existingCard)
+		
+		mergedSamples := samples
+		mergedCard := int64(keyMeta.EstimatedCardinality)
+		
+		if err == nil {
+			// Key exists, merge samples
+			var existingSamples []string
+			if existingSamplesJSON != "" && existingSamplesJSON != "[]" {
+				if err := decodeJSON(existingSamplesJSON, &existingSamples); err == nil {
+					// Merge samples (union)
+					sampleSet := make(map[string]bool)
+					for _, s := range existingSamples {
+						sampleSet[s] = true
+					}
+					for _, s := range keyMeta.ValueSamples {
+						sampleSet[s] = true
+					}
+					
+					// Convert back to slice (limit to MaxSamples)
+					merged := make([]string, 0, len(sampleSet))
+					for s := range sampleSet {
+						merged = append(merged, s)
+						if len(merged) >= 10 { // MaxSamples
+							break
+						}
+					}
+					mergedSamples, _ = encodeJSON(merged)
+					mergedCard = int64(len(sampleSet))
+					if mergedCard < existingCard {
+						mergedCard = existingCard
+					}
+				}
+			}
+		}
+		
 		_, err = tx.Exec(`
 			INSERT INTO signal_keys (
 				signal_type, signal_name, key_scope, key_name, event_name,
@@ -992,7 +1240,7 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
 		`, severity, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
-			keyMeta.EstimatedCardinality, samples, nil)
+			mergedCard, mergedSamples, nil)
 
 		if err != nil {
 			return fmt.Errorf("upserting signal key %s: %w", keyName, err)
@@ -1030,18 +1278,40 @@ func (s *Store) recalculateTemplatePercentages(tx *sql.Tx, severity, service str
 
 // GetLog retrieves log metadata by severity.
 func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMetadata, error) {
-	// Get base log
+	// Get base log with new OTLP fields
 	var log models.LogMetadata
+	log.DroppedAttributesStats = &models.DroppedAttributesStats{} // Initialize before use
+	var hasTraceCtx, hasSpanCtx int
+	var eventNamesJSON string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT severity, total_sample_count
+		SELECT severity, total_sample_count, severity_number,
+		       has_trace_context, has_span_context, event_names,
+		       dropped_attrs_total, dropped_attrs_records, dropped_attrs_max
 		FROM logs WHERE severity = ?
-	`, severityText).Scan(&log.Severity, &log.SampleCount)
+	`, severityText).Scan(
+		&log.Severity, &log.SampleCount, &log.SeverityNumber,
+		&hasTraceCtx, &hasSpanCtx, &eventNamesJSON,
+		&log.DroppedAttributesStats.TotalDropped,
+		&log.DroppedAttributesStats.RecordsWithDropped,
+		&log.DroppedAttributesStats.MaxDropped,
+	)
 
 	if err == sql.ErrNoRows {
 		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying log: %w", err)
+	}
+
+	// Convert INTEGER back to boolean
+	log.HasTraceContext = hasTraceCtx != 0
+	log.HasSpanContext = hasSpanCtx != 0
+
+	// Deserialize EventNames from JSON
+	if eventNamesJSON != "" {
+		if err := decodeJSON(eventNamesJSON, &log.EventNames); err != nil {
+			return nil, fmt.Errorf("decoding event names: %w", err)
+		}
 	}
 
 	// Get services
@@ -1338,18 +1608,21 @@ func (s *Store) getKeysForPatternService(ctx context.Context, severities []strin
 		placeholders += "?"
 		args = append(args, sev)
 	}
+	args = append(args, serviceName)
 	args = append(args, keyScope)
 	
+	// Query log_service_keys to get only keys that actually belong to this service
+	// NOTE: We don't include cardinality/samples here because signal_keys contains
+	// aggregated data across ALL services. To show accurate per-service cardinality,
+	// we would need to store cardinality per service+severity+key combination.
 	query := `
 		SELECT DISTINCT
-			key_name,
-			estimated_cardinality,
-			value_samples
-		FROM signal_keys
-		WHERE signal_type = 'log'
-		AND signal_name IN (` + placeholders + `)
-		AND key_scope = ?
-		ORDER BY estimated_cardinality DESC
+			lsk.key_name
+		FROM log_service_keys lsk
+		WHERE lsk.severity IN (` + placeholders + `)
+		AND lsk.service_name = ?
+		AND lsk.key_scope = ?
+		ORDER BY lsk.key_name
 	`
 	
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -1361,25 +1634,15 @@ func (s *Store) getKeysForPatternService(ctx context.Context, severities []strin
 	var keys []models.KeyInfo
 	for rows.Next() {
 		var keyName string
-		var cardinality int
-		var samplesJSON string
 		
-		if err := rows.Scan(&keyName, &cardinality, &samplesJSON); err != nil {
+		if err := rows.Scan(&keyName); err != nil {
 			return nil, fmt.Errorf("scanning key: %w", err)
-		}
-		
-		var samples []string
-		if samplesJSON != "" {
-			if err := decodeJSON(samplesJSON, &samples); err != nil {
-				// Ignore decode errors, just use empty samples
-				samples = []string{}
-			}
 		}
 		
 		keys = append(keys, models.KeyInfo{
 			Name:         keyName,
-			Cardinality:  cardinality,
-			SampleValues: samples,
+			Cardinality:  0, // Not available per-service
+			SampleValues: []string{}, // Not available per-service
 		})
 	}
 	

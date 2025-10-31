@@ -56,7 +56,44 @@ func (a *MetricsAnalyzer) analyzeMetric(
 	serviceName string,
 	scopeInfo *models.ScopeMetadata,
 ) *models.MetricMetadata {
-	metadata := models.NewMetricMetadata(metric.Name, getMetricType(metric))
+	// Create appropriate MetricData type based on OTLP metric type
+	var metricData models.MetricData
+	
+	switch data := metric.Data.(type) {
+	case *metricspb.Metric_Gauge:
+		metricData = &models.GaugeMetric{
+			DataPointCount: int64(len(data.Gauge.DataPoints)),
+		}
+	case *metricspb.Metric_Sum:
+		metricData = &models.SumMetric{
+			DataPointCount:         int64(len(data.Sum.DataPoints)),
+			AggregationTemporality: models.AggregationTemporality(data.Sum.AggregationTemporality),
+			IsMonotonic:           data.Sum.IsMonotonic,
+		}
+	case *metricspb.Metric_Histogram:
+		metricData = &models.HistogramMetric{
+			DataPointCount:         int64(len(data.Histogram.DataPoints)),
+			AggregationTemporality: models.AggregationTemporality(data.Histogram.AggregationTemporality),
+			ExplicitBounds:         extractUniqueBounds(data.Histogram.DataPoints),
+		}
+	case *metricspb.Metric_ExponentialHistogram:
+		metricData = &models.ExponentialHistogramMetric{
+			DataPointCount:         int64(len(data.ExponentialHistogram.DataPoints)),
+			AggregationTemporality: models.AggregationTemporality(data.ExponentialHistogram.AggregationTemporality),
+			Scales:                extractUniqueScales(data.ExponentialHistogram.DataPoints),
+		}
+	case *metricspb.Metric_Summary:
+		metricData = &models.SummaryMetric{
+			DataPointCount: int64(len(data.Summary.DataPoints)),
+		}
+	default:
+		// Unknown metric type, use Gauge as fallback
+		metricData = &models.GaugeMetric{
+			DataPointCount: 0,
+		}
+	}
+	
+	metadata := models.NewMetricMetadata(metric.Name, metricData)
 	metadata.Description = metric.Description
 	metadata.Unit = metric.Unit
 	metadata.ScopeInfo = scopeInfo
@@ -256,6 +293,58 @@ func getMetricType(metric *metricspb.Metric) string {
 	}
 }
 
+// extractUniqueBounds extracts all unique explicit bounds from histogram data points
+func extractUniqueBounds(dataPoints []*metricspb.HistogramDataPoint) []float64 {
+	boundsSet := make(map[float64]bool)
+	for _, dp := range dataPoints {
+		for _, bound := range dp.ExplicitBounds {
+			boundsSet[bound] = true
+		}
+	}
+	
+	// Convert to sorted slice
+	bounds := make([]float64, 0, len(boundsSet))
+	for bound := range boundsSet {
+		bounds = append(bounds, bound)
+	}
+	
+	// Sort bounds
+	for i := 0; i < len(bounds); i++ {
+		for j := i + 1; j < len(bounds); j++ {
+			if bounds[j] < bounds[i] {
+				bounds[i], bounds[j] = bounds[j], bounds[i]
+			}
+		}
+	}
+	
+	return bounds
+}
+
+// extractUniqueScales extracts all unique scales from exponential histogram data points
+func extractUniqueScales(dataPoints []*metricspb.ExponentialHistogramDataPoint) []int32 {
+	scalesSet := make(map[int32]bool)
+	for _, dp := range dataPoints {
+		scalesSet[dp.Scale] = true
+	}
+	
+	// Convert to sorted slice
+	scales := make([]int32, 0, len(scalesSet))
+	for scale := range scalesSet {
+		scales = append(scales, scale)
+	}
+	
+	// Sort scales
+	for i := 0; i < len(scales); i++ {
+		for j := i + 1; j < len(scales); j++ {
+			if scales[j] < scales[i] {
+				scales[i], scales[j] = scales[j], scales[i]
+			}
+		}
+	}
+	
+	return scales
+}
+
 // extractAttributes converts OTLP KeyValue attributes to a map.
 func extractAttributes(attrs []*commonpb.KeyValue) map[string]string {
 	result := make(map[string]string, len(attrs))
@@ -283,12 +372,4 @@ func attributeValueToString(value *commonpb.AnyValue) string {
 	default:
 		return fmt.Sprintf("%v", value)
 	}
-}
-
-// getServiceName extracts service.name from resource attributes.
-func getServiceName(attrs map[string]string) string {
-	if name, ok := attrs["service.name"]; ok {
-		return name
-	}
-	return ""
 }

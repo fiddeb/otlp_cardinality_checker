@@ -48,7 +48,7 @@ const CARDINALITY = parseInt(__ENV.CARDINALITY || '50');
 function generateMetricBatch(vu, iter) {
     const timestamp = Date.now() * 1000000; // nanoseconds
     const serviceNum = (vu % 10);
-    const serviceName = `service_${serviceNum}`;
+    const serviceName = `service-${serviceNum}`;
     
     const metrics = [];
     const batchSize = 10;
@@ -61,23 +61,93 @@ function generateMetricBatch(vu, iter) {
         const metricNum = (baseMetric + randomOffset) % NUM_METRICS;
         const labelValue = Math.floor(Math.random() * CARDINALITY);
         
-        metrics.push({
+        // Vary metric types to test different MetricData types
+        const metricType = metricNum % 5;
+        
+        let metric = {
             name: `test_metric_${metricNum}`,
-            sum: {
-                aggregation_temporality: 2,
+            description: `Test metric ${metricNum} for load testing`,
+            unit: metricType === 0 ? 'ms' : (metricType === 1 ? 'By' : '1'),
+        };
+        
+        if (metricType === 0) {
+            // Gauge metric
+            metric.gauge = {
+                data_points: [{
+                    attributes: [
+                        { key: 'label1', value: { string_value: `value_${labelValue}` } },
+                        { key: 'method', value: { string_value: 'GET' } },
+                    ],
+                    as_double: Math.random() * 100,
+                    time_unix_nano: timestamp,
+                }],
+            };
+        } else if (metricType === 1) {
+            // Sum metric (DELTA)
+            metric.sum = {
+                aggregation_temporality: 1, // DELTA
                 is_monotonic: true,
                 data_points: [{
                     attributes: [
                         { key: 'label1', value: { string_value: `value_${labelValue}` } },
-                        { key: 'label2', value: { string_value: `value_${Math.floor(Math.random() * 10)}` } },
-                        { key: 'method', value: { string_value: 'GET' } },
                         { key: 'endpoint', value: { string_value: `/api/v${Math.floor(Math.random() * 3) + 1}` } },
                     ],
                     as_int: Math.floor(Math.random() * 1000),
                     time_unix_nano: timestamp,
                 }],
-            },
-        });
+            };
+        } else if (metricType === 2) {
+            // Sum metric (CUMULATIVE)
+            metric.sum = {
+                aggregation_temporality: 2, // CUMULATIVE
+                is_monotonic: false,
+                data_points: [{
+                    attributes: [
+                        { key: 'label1', value: { string_value: `value_${labelValue}` } },
+                        { key: 'label2', value: { string_value: `value_${Math.floor(Math.random() * 10)}` } },
+                    ],
+                    as_int: Math.floor(Math.random() * 1000),
+                    time_unix_nano: timestamp,
+                }],
+            };
+        } else if (metricType === 3) {
+            // Histogram metric
+            metric.histogram = {
+                aggregation_temporality: 2, // CUMULATIVE
+                data_points: [{
+                    attributes: [
+                        { key: 'method', value: { string_value: 'GET' } },
+                        { key: 'status', value: { string_value: '200' } },
+                    ],
+                    count: Math.floor(Math.random() * 100),
+                    sum: Math.random() * 1000,
+                    bucket_counts: [10, 20, 30, 25, 10, 5],
+                    explicit_bounds: [0.1, 0.5, 1.0, 5.0, 10.0],
+                    time_unix_nano: timestamp,
+                }],
+            };
+        } else {
+            // ExponentialHistogram metric
+            metric.exponential_histogram = {
+                aggregation_temporality: 2, // CUMULATIVE
+                data_points: [{
+                    attributes: [
+                        { key: 'operation', value: { string_value: 'query' } },
+                    ],
+                    count: Math.floor(Math.random() * 100),
+                    sum: Math.random() * 1000,
+                    scale: 1,
+                    zero_count: 5,
+                    positive: {
+                        offset: 0,
+                        bucket_counts: [10, 15, 20, 15, 10],
+                    },
+                    time_unix_nano: timestamp,
+                }],
+            };
+        }
+        
+        metrics.push(metric);
     }
     
     return {

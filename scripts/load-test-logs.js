@@ -46,7 +46,7 @@ const SEVERITIES = [
 function generateLogBatch(vu, iter) {
     const timestamp = Date.now() * 1000000; // nanoseconds
     const serviceNum = (vu % 10);
-    const serviceName = `log-service-${serviceNum}`;
+    const serviceName = `service-${serviceNum}`;
     
     const logRecords = [];
     const batchSize = 10;
@@ -80,7 +80,11 @@ function generateLogBatch(vu, iter) {
         const templateIndex = logNum % logTemplates.length;
         const logMessage = logTemplates[templateIndex](logNum, serviceName);
         
-        logRecords.push({
+        // Generate trace_id and span_id (16 and 8 bytes as hex strings)
+        const traceId = Math.floor(Math.random() * 1e16).toString(16).padStart(32, '0');
+        const spanId = Math.floor(Math.random() * 1e16).toString(16).padStart(16, '0');
+        
+        const logRecord = {
             time_unix_nano: timestamp + (i * 1000000), // Spread logs over time
             severity_number: severity.number,
             severity_text: severity.text,
@@ -88,11 +92,23 @@ function generateLogBatch(vu, iter) {
             attributes: [
                 { key: 'log.level', value: { string_value: severity.text.toLowerCase() } },
                 { key: 'module', value: { string_value: `module_${logNum % 20}` } },
-                { key: 'trace_id', value: { string_value: `trace_${traceValue}` } },
                 { key: 'user_id', value: { string_value: `user_${Math.floor(Math.random() * CARDINALITY)}` } },
                 { key: 'request_id', value: { string_value: `req_${logNum}` } },
             ],
-        });
+            trace_id: traceId,
+            span_id: spanId,
+            dropped_attributes_count: Math.floor(Math.random() * 5), // 0-4 dropped attributes
+        };
+        
+        // Add event.name attribute to some logs
+        if (logNum % 3 === 0) {
+            logRecord.attributes.push({
+                key: 'event.name',
+                value: { string_value: ['user.login', 'user.logout', 'payment.completed', 'order.placed'][logNum % 4] }
+            });
+        }
+        
+        logRecords.push(logRecord);
     }
     
     return {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-function LogsView({ onViewDetails }) {
+function LogsView({ onViewTemplate }) {
   const [logs, setLogs] = useState([])
   const [patterns, setPatterns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -135,7 +135,12 @@ function LogsView({ onViewDetails }) {
             .sort((a, b) => b.count - a.count)
             .map((pattern, i) => {
               return (
-                <tr key={i}>
+                <tr 
+                  key={i}
+                  onClick={() => onViewTemplate(pattern.severity, pattern.template)}
+                  style={{ cursor: 'pointer' }}
+                  className="clickable-row"
+                >
                   <td>
                     <code className="template-code" style={{ 
                       fontSize: '13px',
@@ -150,8 +155,6 @@ function LogsView({ onViewDetails }) {
                   </td>
                   <td>
                     <span 
-                      className="detail-link"
-                      onClick={() => onViewDetails('logs', pattern.severity)}
                       style={{ 
                         fontWeight: 'bold',
                         color: getSeverityColor(pattern.severity)

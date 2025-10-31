@@ -38,7 +38,8 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 			for _, span := range scopeSpans.Spans {
 				key := span.Name
 				if _, exists := spanMap[key]; !exists {
-					spanMap[key] = models.NewSpanMetadata(span.Name, getSpanKind(span.Kind))
+					kindName := getSpanKind(span.Kind)
+					spanMap[key] = models.NewSpanMetadata(span.Name, int32(span.Kind), kindName)
 					spanMap[key].ScopeInfo = scopeInfo
 
 					// Add resource keys
@@ -55,6 +56,60 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 				// Track service
 				if serviceName != "" {
 					metadata.Services[serviceName]++
+				}
+				
+				// Track trace_state presence (boolean flag, not the actual value)
+				if span.TraceState != "" {
+					metadata.HasTraceState = true
+				}
+				
+				// Track parent_span_id presence (boolean flag, not the actual value)
+				if len(span.ParentSpanId) > 0 && !isEmptyBytes(span.ParentSpanId) {
+					metadata.HasParentSpanId = true
+				}
+				
+				// Track status codes
+				if span.Status != nil {
+					statusCode := getStatusCodeName(span.Status.Code)
+					if !contains(metadata.StatusCodes, statusCode) {
+						metadata.StatusCodes = append(metadata.StatusCodes, statusCode)
+					}
+				}
+				
+				// Track dropped attributes statistics
+				if span.DroppedAttributesCount > 0 {
+					if metadata.DroppedAttributesStats == nil {
+						metadata.DroppedAttributesStats = &models.DroppedCountStats{}
+					}
+					metadata.DroppedAttributesStats.TotalDropped += span.DroppedAttributesCount
+					metadata.DroppedAttributesStats.ItemsWithDropped++
+					if span.DroppedAttributesCount > metadata.DroppedAttributesStats.MaxDropped {
+						metadata.DroppedAttributesStats.MaxDropped = span.DroppedAttributesCount
+					}
+				}
+				
+				// Track dropped events statistics
+				if span.DroppedEventsCount > 0 {
+					if metadata.DroppedEventsStats == nil {
+						metadata.DroppedEventsStats = &models.DroppedCountStats{}
+					}
+					metadata.DroppedEventsStats.TotalDropped += span.DroppedEventsCount
+					metadata.DroppedEventsStats.ItemsWithDropped++
+					if span.DroppedEventsCount > metadata.DroppedEventsStats.MaxDropped {
+						metadata.DroppedEventsStats.MaxDropped = span.DroppedEventsCount
+					}
+				}
+				
+				// Track dropped links statistics
+				if span.DroppedLinksCount > 0 {
+					if metadata.DroppedLinksStats == nil {
+						metadata.DroppedLinksStats = &models.DroppedCountStats{}
+					}
+					metadata.DroppedLinksStats.TotalDropped += span.DroppedLinksCount
+					metadata.DroppedLinksStats.ItemsWithDropped++
+					if span.DroppedLinksCount > metadata.DroppedLinksStats.MaxDropped {
+						metadata.DroppedLinksStats.MaxDropped = span.DroppedLinksCount
+					}
 				}
 				
 			// Update resource key counts and values
@@ -151,5 +206,19 @@ func getSpanKind(kind tracepb.Span_SpanKind) string {
 		return "Consumer"
 	default:
 		return "Unspecified"
+	}
+}
+
+// getStatusCodeName converts OTLP status code to string.
+func getStatusCodeName(code tracepb.Status_StatusCode) string {
+	switch code {
+	case tracepb.Status_STATUS_CODE_UNSET:
+		return "UNSET"
+	case tracepb.Status_STATUS_CODE_OK:
+		return "OK"
+	case tracepb.Status_STATUS_CODE_ERROR:
+		return "ERROR"
+	default:
+		return "UNSET"
 	}
 }

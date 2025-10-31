@@ -17,13 +17,26 @@ var ErrNotFound = errors.New("not found")
 
 // MetricMetadata contains metadata about an observed metric.
 // It tracks all unique label keys and their cardinality statistics.
+// Follows the structure of opentelemetry.proto.metrics.v1.Metric
 type MetricMetadata struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`                   // Gauge, Sum, Histogram, etc.
-	Unit        string `json:"unit,omitempty"`         // Optional unit
-	Description string `json:"description,omitempty"`  // Metric description
+	// Name is the metric name (required)
+	Name string `json:"name"`
+	
+	// Description provides context about what the metric measures
+	Description string `json:"description,omitempty"`
+	
+	// Unit specifies the unit of measurement (e.g., "By", "ms", "1")
+	Unit string `json:"unit,omitempty"`
+	
+	// Data contains the type-specific metric data (Gauge, Sum, Histogram, etc.)
+	// This replaces the old "Type" string field with a proper typed interface
+	Data MetricData `json:"data"`
+	
+	// Metadata contains additional key-value metadata (optional, rarely used)
+	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// LabelKeys maps label key names to their metadata and cardinality stats
+	// These correspond to attributes on data points in OTLP
 	LabelKeys map[string]*KeyMetadata `json:"label_keys"`
 
 	// ResourceKeys maps resource attribute key names to their metadata
@@ -42,24 +55,62 @@ type MetricMetadata struct {
 }
 
 // SpanMetadata contains metadata about observed spans.
+// Follows the structure of opentelemetry.proto.trace.v1.Span
 type SpanMetadata struct {
+	// Name is the span name (required)
+	// Corresponds to Span.name
 	Name string `json:"name"`
-	Kind string `json:"kind"` // Client, Server, Internal, Producer, Consumer
+	
+	// Kind is the span kind enum value
+	// Corresponds to Span.kind (SpanKind enum)
+	// Values: UNSPECIFIED=0, INTERNAL=1, SERVER=2, CLIENT=3, PRODUCER=4, CONSUMER=5
+	Kind int32 `json:"kind"`
+	
+	// KindName is the human-readable span kind name for convenience
+	KindName string `json:"kind_name,omitempty"`
 
 	// AttributeKeys maps attribute key names to their metadata
+	// Corresponds to Span.attributes
 	AttributeKeys map[string]*KeyMetadata `json:"attribute_keys"`
 
 	// EventNames tracks unique event names observed in spans
+	// Corresponds to Span.Event.name
 	EventNames []string `json:"event_names"`
 
 	// EventAttributeKeys maps event names to their attribute keys
+	// Corresponds to Span.Event.attributes
 	EventAttributeKeys map[string]map[string]*KeyMetadata `json:"event_attribute_keys"`
 
 	// LinkAttributeKeys tracks attribute keys found in span links
+	// Corresponds to Span.Link.attributes
 	LinkAttributeKeys map[string]*KeyMetadata `json:"link_attribute_keys"`
 
 	// ResourceKeys maps resource attribute key names to their metadata
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
+	
+	// HasTraceState indicates if any spans had trace_state set
+	// Corresponds to Span.trace_state
+	HasTraceState bool `json:"has_trace_state"`
+	
+	// HasParentSpanId indicates if any spans had parent_span_id set (not root spans)
+	// Corresponds to Span.parent_span_id
+	HasParentSpanId bool `json:"has_parent_span_id"`
+	
+	// StatusCodes tracks which status codes have been observed
+	// Corresponds to Span.Status.code enum (UNSET=0, OK=1, ERROR=2)
+	StatusCodes []string `json:"status_codes,omitempty"`
+	
+	// DroppedAttributesStats tracks statistics about dropped attributes
+	// Corresponds to Span.dropped_attributes_count
+	DroppedAttributesStats *DroppedCountStats `json:"dropped_attributes_stats,omitempty"`
+	
+	// DroppedEventsStats tracks statistics about dropped events
+	// Corresponds to Span.dropped_events_count
+	DroppedEventsStats *DroppedCountStats `json:"dropped_events_stats,omitempty"`
+	
+	// DroppedLinksStats tracks statistics about dropped links
+	// Corresponds to Span.dropped_links_count
+	DroppedLinksStats *DroppedCountStats `json:"dropped_links_stats,omitempty"`
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
@@ -74,17 +125,39 @@ type SpanMetadata struct {
 }
 
 // LogMetadata contains metadata about observed log records.
+// Follows the structure of opentelemetry.proto.logs.v1.LogRecord
 type LogMetadata struct {
-	Severity string `json:"severity"` // INFO, WARN, ERROR, etc.
+	// Severity is the severity text (INFO, WARN, ERROR, etc.)
+	// Corresponds to LogRecord.severity_text
+	Severity string `json:"severity"`
+	
+	// SeverityNumber is the numerical severity value (1-24)
+	// Corresponds to LogRecord.severity_number enum
+	SeverityNumber int32 `json:"severity_number,omitempty"`
 
 	// AttributeKeys maps attribute key names to their metadata
+	// These are from LogRecord.attributes
 	AttributeKeys map[string]*KeyMetadata `json:"attribute_keys"`
 
 	// ResourceKeys maps resource attribute key names to their metadata
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
 	
-	// BodyTemplates contains extracted templates from log body text (optional)
+	// BodyTemplates contains extracted templates from log body text
+	// This is our custom feature for analyzing LogRecord.body patterns
 	BodyTemplates []*BodyTemplate `json:"body_templates,omitempty"`
+	
+	// EventNames tracks unique event_name values observed
+	// Corresponds to LogRecord.event_name
+	EventNames []string `json:"event_names,omitempty"`
+	
+	// HasTraceContext indicates if any log records had trace_id set
+	HasTraceContext bool `json:"has_trace_context"`
+	
+	// HasSpanContext indicates if any log records had span_id set
+	HasSpanContext bool `json:"has_span_context"`
+	
+	// DroppedAttributesCount tracks statistics about dropped attributes
+	DroppedAttributesStats *DroppedAttributesStats `json:"dropped_attributes_stats,omitempty"`
 
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
@@ -96,6 +169,31 @@ type LogMetadata struct {
 	Services map[string]int64 `json:"services"`
 
 	mu sync.RWMutex `json:"-"`
+}
+
+// DroppedAttributesStats tracks statistics about dropped attributes in log records
+type DroppedAttributesStats struct {
+	// TotalDropped is the sum of all dropped_attributes_count values
+	TotalDropped uint32 `json:"total_dropped"`
+	
+	// RecordsWithDropped is the count of log records that had dropped attributes
+	RecordsWithDropped int64 `json:"records_with_dropped"`
+	
+	// MaxDropped is the maximum dropped_attributes_count seen in a single record
+	MaxDropped uint32 `json:"max_dropped"`
+}
+
+// DroppedCountStats tracks statistics about dropped items (attributes, events, or links)
+// Used for Span.dropped_attributes_count, dropped_events_count, dropped_links_count
+type DroppedCountStats struct {
+	// TotalDropped is the sum of all dropped counts
+	TotalDropped uint32 `json:"total_dropped"`
+	
+	// ItemsWithDropped is the count of items (spans) that had dropped data
+	ItemsWithDropped int64 `json:"items_with_dropped"`
+	
+	// MaxDropped is the maximum dropped count seen in a single item
+	MaxDropped uint32 `json:"max_dropped"`
 }
 
 // BodyTemplate represents a pattern extracted from log message bodies
@@ -137,28 +235,41 @@ type ScopeMetadata struct {
 	Version string `json:"version,omitempty"`
 }
 
-// NewMetricMetadata creates a new MetricMetadata instance.
-func NewMetricMetadata(name, metricType string) *MetricMetadata {
+// NewMetricMetadata creates a new MetricMetadata instance with the specified metric data type.
+// The data parameter should be one of: *GaugeMetric, *SumMetric, *HistogramMetric, 
+// *ExponentialHistogramMetric, or *SummaryMetric
+func NewMetricMetadata(name string, data MetricData) *MetricMetadata {
 	return &MetricMetadata{
 		Name:         name,
-		Type:         metricType,
+		Data:         data,
 		LabelKeys:    make(map[string]*KeyMetadata),
 		ResourceKeys: make(map[string]*KeyMetadata),
 		Services:     make(map[string]int64),
+		Metadata:     make(map[string]string),
 	}
 }
 
+// GetType returns the metric type as a string (for backward compatibility)
+func (m *MetricMetadata) GetType() string {
+	if m.Data == nil {
+		return "Unknown"
+	}
+	return m.Data.GetType()
+}
+
 // NewSpanMetadata creates a new SpanMetadata instance.
-func NewSpanMetadata(name, kind string) *SpanMetadata {
+func NewSpanMetadata(name string, kind int32, kindName string) *SpanMetadata {
 	return &SpanMetadata{
 		Name:               name,
 		Kind:               kind,
+		KindName:           kindName,
 		AttributeKeys:      make(map[string]*KeyMetadata),
 		EventNames:         []string{},
 		EventAttributeKeys: make(map[string]map[string]*KeyMetadata),
 		LinkAttributeKeys:  make(map[string]*KeyMetadata),
 		ResourceKeys:       make(map[string]*KeyMetadata),
 		Services:           make(map[string]int64),
+		StatusCodes:        []string{},
 	}
 }
 
@@ -169,6 +280,7 @@ func NewLogMetadata(severity string) *LogMetadata {
 		AttributeKeys: make(map[string]*KeyMetadata),
 		ResourceKeys:  make(map[string]*KeyMetadata),
 		Services:      make(map[string]int64),
+		EventNames:    []string{},
 	}
 }
 
