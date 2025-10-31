@@ -134,6 +134,7 @@ func NewServer(addr string, store storage.Storage) *Server {
 		// Logs endpoints
 		r.Get("/logs", s.listLogs)
 		r.Get("/logs/patterns", s.getLogPatterns)
+		r.Get("/logs/patterns/{severity}/{template}", s.getPatternDetails)
 		r.Get("/logs/{severity}", s.getLog)
 
 		// Services endpoints
@@ -332,6 +333,78 @@ func (s *Server) getLogPatterns(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	s.respondJSON(w, http.StatusOK, patterns)
+}
+
+// getPatternDetails returns detailed information about a specific log pattern.
+// This shows all unique attributes grouped by service for the given severity+template.
+func (s *Server) getPatternDetails(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	severity := chi.URLParam(r, "severity")
+	template := chi.URLParam(r, "template")
+	
+	// URL decode parameters
+	decodedSeverity, err := url.QueryUnescape(severity)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid severity encoding")
+		return
+	}
+	
+	decodedTemplate, err := url.QueryUnescape(template)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid template encoding")
+		return
+	}
+	
+	// Get all patterns (no filters) and find the matching one
+	allPatterns, err := s.store.GetLogPatterns(ctx, 0, 0)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	// Find the pattern that matches template and has this severity
+	var matchedPattern *models.PatternGroup
+	for _, pattern := range allPatterns.Patterns {
+		if pattern.Template == decodedTemplate {
+			// Check if this pattern has the requested severity
+			if _, hasSeverity := pattern.SeverityBreakdown[decodedSeverity]; hasSeverity {
+				matchedPattern = &pattern
+				break
+			}
+		}
+	}
+	
+	if matchedPattern == nil {
+		s.respondError(w, http.StatusNotFound, "pattern not found for this severity")
+		return
+	}
+	
+	// Filter services to only show those that have this severity
+	filteredServices := []models.ServicePatternInfo{}
+	for _, service := range matchedPattern.Services {
+		// Check if this service has logs with the requested severity
+		hasSeverity := false
+		for _, sev := range service.Severities {
+			if sev == decodedSeverity {
+				hasSeverity = true
+				break
+			}
+		}
+		if hasSeverity {
+			filteredServices = append(filteredServices, service)
+		}
+	}
+	
+	// Build response with filtered services
+	response := map[string]interface{}{
+		"template":           matchedPattern.Template,
+		"example_body":       matchedPattern.ExampleBody,
+		"severity":           decodedSeverity,
+		"total_count":        matchedPattern.SeverityBreakdown[decodedSeverity],
+		"services":           filteredServices,
+	}
+	
+	s.respondJSON(w, http.StatusOK, response)
 }
 
 // listServices returns all service names.
