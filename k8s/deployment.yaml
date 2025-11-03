@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: otlp-cardinality-checker
+  name: occ
   labels:
-    app: otlp-cardinality-checker
+    app: occ
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: otlp-cardinality-checker
+      app: occ
   template:
     metadata:
       labels:
-        app: otlp-cardinality-checker
+        app: occ
     spec:
       containers:
-      - name: otlp-cardinality-checker
-        image: otlp-cardinality-checker:latest
+      - name: occ
+        image: occ:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: otlp-grpc

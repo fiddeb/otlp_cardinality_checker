@@ -16,7 +16,7 @@ COPY . .
 # Build binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags='-w -s -extldflags "-static"' \
-    -o otlp-cardinality-checker \
+    -o occ \
     ./cmd/server
 
 # Runtime stage
@@ -29,7 +29,7 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 # Copy binary
-COPY --from=builder /build/otlp-cardinality-checker /otlp-cardinality-checker
+COPY --from=builder /build/occ /occ
 
 # Expose ports
 # 4317: OTLP gRPC
@@ -40,4 +40,4 @@ EXPOSE 4317 4318 8080
 # Run as non-root user
 USER 65534:65534
 
-ENTRYPOINT ["/otlp-cardinality-checker"]
+ENTRYPOINT ["/occ"]

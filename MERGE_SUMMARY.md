@@ -134,8 +134,8 @@ These features from the feature branch were intentionally not ported:
 ```bash
 # Current state: feature/merge-otlp-with-perf-ui has 3 commits ahead of main
 git checkout feature/merge-otlp-with-perf-ui
-go build -o otlp-cardinality-checker ./cmd/server
-./otlp-cardinality-checker
+make build
+./bin/occ
 ```
 
 ### To Merge to Main:

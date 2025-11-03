@@ -1,9 +1,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: otlp-cardinality-checker
+  name: occ
   labels:
-    app: otlp-cardinality-checker
+    app: occ
   annotations:
     # Nginx ingress annotations
     nginx.ingress.kubernetes.io/rewrite-target: /
@@ -21,7 +21,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: otlp-cardinality-checker
+            name: occ
             port:
               number: 8080
   # Uncomment for TLS

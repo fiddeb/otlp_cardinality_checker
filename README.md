@@ -1,5 +1,9 @@
 # OTLP Cardinality Checker
 
+<p align="center">
+  <img src="docs/logo.png" alt="OTLP Cardinality Checker Logo" width="400">
+</p>
+
 > A lightweight metadata analysis tool for OpenTelemetry Protocol (OTLP) telemetry
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev)
@@ -97,28 +101,28 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 git clone https://github.com/fiddeb/otlp_cardinality_checker.git
 cd otlp_cardinality_checker
 
-# Build
-go build -o otlp-cardinality-checker ./cmd/server
+# Build using Makefile (recommended)
+make build
 
 # Run
-./otlp-cardinality-checker
+./bin/occ
 ```
 
 #### Option 2: Deploy to Kubernetes
 
 ```bash
 # Build Docker image (on a machine with Docker)
-docker build -t otlp-cardinality-checker:latest .
+docker build -t occ:latest .
 
 # Tag and push to your registry
-docker tag otlp-cardinality-checker:latest your-registry/otlp-cardinality-checker:latest
-docker push your-registry/otlp-cardinality-checker:latest
+docker tag occ:latest your-registry/occ:latest
+docker push your-registry/occ:latest
 
 # Deploy to Kubernetes
 kubectl apply -f k8s/
 
 # Port-forward to access locally
-kubectl port-forward svc/otlp-cardinality-checker 8080:8080 4317:4317 4318:4318
+kubectl port-forward svc/occ 8080:8080 4317:4317 4318:4318
 ```
 
 See [k8s/README.md](k8s/README.md) for detailed Kubernetes deployment instructions.
@@ -187,7 +191,7 @@ Run the checker in your CI/CD pipeline to validate instrumentation:
 
 ```bash
 # Start checker
-./otlp-cardinality-checker &
+./bin/occ &
 
 # Run integration tests
 go test ./...
@@ -206,7 +210,7 @@ Understand what's driving your observability costs:
 
 ```bash
 # Run in staging for 24 hours
-./otlp-cardinality-checker
+./bin/occ
 
 # Export metadata to JSON
 curl -s 'http://localhost:8080/api/v1/metrics' | jq '.' > metrics.json
@@ -248,7 +252,7 @@ export API_ADDR="0.0.0.0:8080"
 export USE_AUTOTEMPLATE=true
 
 # Run the server
-./otlp-cardinality-checker
+./bin/occ
 ```
 
 ### Automatic Log Template Extraction
@@ -257,7 +261,7 @@ When `USE_AUTOTEMPLATE=true`, the tool uses the **Drain algorithm** to automatic
 
 ```bash
 # Enable autotemplate mode
-USE_AUTOTEMPLATE=true ./otlp-cardinality-checker
+USE_AUTOTEMPLATE=true ./bin/occ
 ```
 
 **Features:**
@@ -294,7 +298,7 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 Run with config:
 
 ```bash
-./otlp-cardinality-checker --config config.yaml
+./bin/occ --config config.yaml
 ```
 
 ## Documentation
@@ -478,10 +482,10 @@ See [k8s/README.md](k8s/README.md) for complete deployment instructions includin
 
 ```bash
 # Build image
-docker build -t otlp-cardinality-checker:latest .
+docker build -t occ:latest .
 
 # Run container
-docker run -p 4317:4317 -p 4318:4318 -p 8080:8080 otlp-cardinality-checker:latest
+docker run -p 4317:4317 -p 4318:4318 -p 8080:8080 occ:latest
 ```
 
 ## License
