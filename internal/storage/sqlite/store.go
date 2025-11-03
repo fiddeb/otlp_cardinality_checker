@@ -33,6 +33,9 @@ var migration004SQL string
 //go:embed migrations/005_span_otlp_fields.up.sql
 var migration005SQL string
 
+//go:embed migrations/006_add_metric_data.up.sql
+var migration006SQL string
+
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
 	db *sql.DB
@@ -96,6 +99,7 @@ func runMigrations(db *sql.DB) error {
 		{3, migration003SQL},
 		{4, migration004SQL},
 		{5, migration005SQL},
+		{6, migration006SQL},
 	}
 
 	// Get already applied migrations
