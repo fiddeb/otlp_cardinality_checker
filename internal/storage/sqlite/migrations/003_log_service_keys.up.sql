@@ -2,6 +2,9 @@
 -- Adds log_service_keys table to track attribute/resource keys per service
 -- This enables accurate per-service metadata analysis for log patterns
 
+-- Record this migration
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);
+
 -- ============================================================================
 -- CREATE LOG SERVICE KEYS TABLE
 -- ============================================================================
