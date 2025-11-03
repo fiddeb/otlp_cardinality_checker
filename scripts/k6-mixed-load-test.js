@@ -339,16 +339,20 @@ export default function () {
 
 // Summary at the end
 export function handleSummary(data) {
+  const requests = data.metrics.otlp_requests?.values?.count || 0;
+  const errors = data.metrics.otlp_errors?.values?.count || 0;
+  const duration = data.state.testRunDurationMs / 1000;
+  
   return {
     'stdout': JSON.stringify({
-      duration: data.state.testRunDurationMs / 1000,
-      requests: data.metrics.otlp_requests.values.count,
-      errors: data.metrics.otlp_errors.values.count,
-      errorRate: (data.metrics.otlp_errors.values.count / data.metrics.otlp_requests.values.count * 100).toFixed(2) + '%',
-      avgDuration: data.metrics.otlp_duration.values.avg.toFixed(2) + 'ms',
-      p95Duration: data.metrics.otlp_duration.values['p(95)'].toFixed(2) + 'ms',
-      p99Duration: data.metrics.otlp_duration.values['p(99)'].toFixed(2) + 'ms',
-      requestsPerSecond: (data.metrics.otlp_requests.values.count / (data.state.testRunDurationMs / 1000)).toFixed(2),
+      duration: duration,
+      requests: requests,
+      errors: errors,
+      errorRate: requests > 0 ? ((errors / requests * 100).toFixed(2) + '%') : '0.00%',
+      avgDuration: (data.metrics.otlp_duration?.values?.avg || 0).toFixed(2) + 'ms',
+      p95Duration: (data.metrics.otlp_duration?.values['p(95)'] || 0).toFixed(2) + 'ms',
+      p99Duration: (data.metrics.otlp_duration?.values['p(99)'] || 0).toFixed(2) + 'ms',
+      requestsPerSecond: duration > 0 ? (requests / duration).toFixed(2) : '0.00',
     }, null, 2),
   };
 }
