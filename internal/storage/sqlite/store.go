@@ -385,16 +385,27 @@ func (s *Store) StoreMetric(ctx context.Context, metric *models.MetricMetadata) 
 
 // storeMetricTx stores metric metadata within a transaction.
 func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
+	// Serialize metric data to JSON
+	var metricDataJSON string
+	if metric.Data != nil {
+		dataBytes, err := models.MarshalMetricData(metric.Data)
+		if err != nil {
+			return fmt.Errorf("marshaling metric data: %w", err)
+		}
+		metricDataJSON = string(dataBytes)
+	}
+
 	// 1. Upsert base metric
 	_, err := tx.Exec(`
-		INSERT INTO metrics (name, type, unit, description, total_sample_count)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO metrics (name, type, unit, description, total_sample_count, metric_data)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET
 			type = excluded.type,
 			unit = COALESCE(excluded.unit, unit),
 			description = COALESCE(excluded.description, description),
-			total_sample_count = total_sample_count + excluded.total_sample_count
-	`, metric.Name, metric.GetType(), metric.Unit, metric.Description, metric.SampleCount)
+			total_sample_count = total_sample_count + excluded.total_sample_count,
+			metric_data = COALESCE(excluded.metric_data, metric_data)
+	`, metric.Name, metric.GetType(), metric.Unit, metric.Description, metric.SampleCount, metricDataJSON)
 	if err != nil {
 		return fmt.Errorf("upserting metric: %w", err)
 	}
@@ -481,11 +492,12 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 	var metricType string
 	var metricName, unit, description string
 	var sampleCount int64
+	var metricDataJSON sql.NullString
 	
 	err := s.db.QueryRowContext(ctx, `
-		SELECT name, type, unit, description, total_sample_count
+		SELECT name, type, unit, description, total_sample_count, metric_data
 		FROM metrics WHERE name = ?
-	`, name).Scan(&metricName, &metricType, &unit, &description, &sampleCount)
+	`, name).Scan(&metricName, &metricType, &unit, &description, &sampleCount, &metricDataJSON)
 
 	if err == sql.ErrNoRows {
 		return nil, models.ErrNotFound
@@ -494,30 +506,37 @@ func (s *Store) GetMetric(ctx context.Context, name string) (*models.MetricMetad
 		return nil, fmt.Errorf("querying metric: %w", err)
 	}
 
-	// Create MetricData based on type string from database
-	// We don't have full type info in DB, so create basic instances
+	// Deserialize metric data from JSON if available
 	var metricData models.MetricData
-	switch metricType {
-	case "Gauge":
-		metricData = &models.GaugeMetric{DataPointCount: sampleCount}
-	case "Sum":
-		metricData = &models.SumMetric{DataPointCount: sampleCount}
-	case "Histogram":
-		metricData = &models.HistogramMetric{DataPointCount: sampleCount}
-	case "ExponentialHistogram":
-		metricData = &models.ExponentialHistogramMetric{DataPointCount: sampleCount}
-	case "Summary":
-		metricData = &models.SummaryMetric{DataPointCount: sampleCount}
-	default:
-		// Fallback to Gauge for unknown types
-		metricData = &models.GaugeMetric{DataPointCount: sampleCount}
+	if metricDataJSON.Valid && metricDataJSON.String != "" {
+		metricData, err = models.UnmarshalMetricData([]byte(metricDataJSON.String))
+		if err != nil {
+			return nil, fmt.Errorf("unmarshaling metric data: %w", err)
+		}
+	}
+	
+	// Fallback to basic type if no JSON data
+	if metricData == nil {
+		switch metricType {
+		case "Gauge":
+			metricData = &models.GaugeMetric{DataPointCount: sampleCount}
+		case "Sum":
+			metricData = &models.SumMetric{DataPointCount: sampleCount}
+		case "Histogram":
+			metricData = &models.HistogramMetric{DataPointCount: sampleCount}
+		case "ExponentialHistogram":
+			metricData = &models.ExponentialHistogramMetric{DataPointCount: sampleCount}
+		case "Summary":
+			metricData = &models.SummaryMetric{DataPointCount: sampleCount}
+		default:
+			// Fallback to Gauge for unknown types
+			metricData = &models.GaugeMetric{DataPointCount: sampleCount}
+		}
 	}
 	
 	metric := models.NewMetricMetadata(metricName, metricData)
 	metric.Unit = unit
 	metric.Description = description
-	metric.SampleCount = sampleCount
-
 	metric.SampleCount = sampleCount
 
 	// Get services
@@ -1843,18 +1862,40 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 	}
 
 	query := `
+		WITH metric_buckets AS (
+			SELECT 
+				name,
+				CASE 
+					WHEN type = 'Histogram' AND metric_data IS NOT NULL 
+					THEN json_extract(metric_data, '$.data.explicit_bounds')
+					ELSE NULL
+				END as bounds_json
+			FROM metrics
+		),
+		bucket_counts AS (
+			SELECT 
+				name,
+				CASE 
+					WHEN bounds_json IS NOT NULL 
+					THEN json_array_length(bounds_json) + 1
+					ELSE 0
+				END as bucket_count
+			FROM metric_buckets
+		)
 		SELECT 
-			signal_type,
-			signal_name,
-			COUNT(*) as total_keys,
-			SUM(CASE WHEN key_scope IN ('attribute', 'label') THEN 1 ELSE 0 END) as attribute_keys,
-			SUM(CASE WHEN key_scope = 'resource' THEN 1 ELSE 0 END) as resource_keys,
-			SUM(CASE WHEN key_scope = 'event' THEN 1 ELSE 0 END) as event_keys,
-			SUM(CASE WHEN key_scope = 'link' THEN 1 ELSE 0 END) as link_keys,
-			MAX(estimated_cardinality) as max_cardinality,
-			SUM(CASE WHEN estimated_cardinality > 100 THEN 1 ELSE 0 END) as high_card_count
-		FROM signal_keys
-		GROUP BY signal_type, signal_name
+			sk.signal_type,
+			sk.signal_name,
+			COUNT(*) + COALESCE(bc.bucket_count, 0) as total_keys,
+			SUM(CASE WHEN sk.key_scope IN ('attribute', 'label') THEN 1 ELSE 0 END) as attribute_keys,
+			SUM(CASE WHEN sk.key_scope = 'resource' THEN 1 ELSE 0 END) as resource_keys,
+			SUM(CASE WHEN sk.key_scope = 'event' THEN 1 ELSE 0 END) as event_keys,
+			SUM(CASE WHEN sk.key_scope = 'link' THEN 1 ELSE 0 END) as link_keys,
+			MAX(sk.estimated_cardinality) as max_cardinality,
+			SUM(CASE WHEN sk.estimated_cardinality > 100 THEN 1 ELSE 0 END) as high_card_count
+		FROM signal_keys sk
+		LEFT JOIN bucket_counts bc 
+			ON sk.signal_type = 'metric' AND sk.signal_name = bc.name
+		GROUP BY sk.signal_type, sk.signal_name
 		HAVING total_keys >= ?
 		ORDER BY total_keys DESC, max_cardinality DESC
 		LIMIT ?

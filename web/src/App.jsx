@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import MetadataComplexity from './components/MetadataComplexity'
 import MetricsView from './components/MetricsView'
+import MetricsOverview from './components/MetricsOverview'
 import TracesView from './components/TracesView'
 import LogsView from './components/LogsView'
 import ServiceExplorer from './components/ServiceExplorer'
@@ -150,10 +151,16 @@ function App() {
             Metadata Complexity
           </button>
           <button 
+            className={`tab ${activeTab === 'metrics-overview' ? 'active' : ''}`}
+            onClick={() => setActiveTab('metrics-overview')}
+          >
+            Metrics Overview
+          </button>
+          <button 
             className={`tab ${activeTab === 'metrics' ? 'active' : ''}`}
             onClick={() => setActiveTab('metrics')}
           >
-            Metrics
+            Metrics Details
           </button>
           <button 
             className={`tab ${activeTab === 'traces' ? 'active' : ''}`}
@@ -190,7 +197,11 @@ function App() {
         <MetadataComplexity onViewDetails={handleViewDetails} />
       )}
 
-      {activeTab === 'metrics' && (
+      {activeTab === 'metrics-overview' && (
+        <MetricsOverview onViewMetric={(name) => handleViewDetails('metrics', name)} />
+      )}
+
+      {activeTab === 'metrics' && !selectedItem && (
         <MetricsView onViewDetails={handleViewDetails} />
       )}
 

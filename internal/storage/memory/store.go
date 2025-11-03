@@ -599,6 +599,18 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 	s.metricsmu.RLock()
 	for metricName, metric := range s.metrics {
 		totalKeys := len(metric.LabelKeys) + len(metric.ResourceKeys)
+		
+		// Add histogram bucket count to total keys
+		if metric.Data != nil {
+			if histMetric, ok := metric.Data.(*models.HistogramMetric); ok && len(histMetric.ExplicitBounds) > 0 {
+				// Number of buckets = explicit bounds + 1 (infinity bucket)
+				totalKeys += len(histMetric.ExplicitBounds) + 1
+			} else if expHistMetric, ok := metric.Data.(*models.ExponentialHistogramMetric); ok && len(expHistMetric.Scales) > 0 {
+				// For exponential histograms, add a fixed count per scale
+				totalKeys += len(expHistMetric.Scales) * 10 // Approximate bucket count per scale
+			}
+		}
+		
 		if totalKeys < threshold {
 			continue
 		}
