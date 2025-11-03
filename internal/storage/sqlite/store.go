@@ -79,8 +79,8 @@ func DefaultConfig(dbPath string) Config {
 		DBPath:          dbPath,
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
-		BatchSize:       2000,       // Increased from 1000 - more RAM, fewer transactions
-		FlushInterval:   20 * time.Millisecond, // Increased from 15ms - batch even more
+		BatchSize:       750,        // Sweet spot: mellan 500 och 1000
+		FlushInterval:   12 * time.Millisecond, // Snabbare flushing
 	}
 }
 
@@ -141,22 +141,22 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	// Set connection pool limits for better concurrency
-	db.SetMaxOpenConns(20)   // Increased from 10 - more concurrent operations
-	db.SetMaxIdleConns(10)   // Increased from 5 - keep more connections warm
+	db.SetMaxOpenConns(15)   // Balanserad: mellan 10 och 20
+	db.SetMaxIdleConns(8)    // Balanserad: mellan 5 och 10
 	db.SetConnMaxLifetime(0) // Reuse connections indefinitely
 
 	// Set pragmas for performance
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",      // Write-Ahead Logging for better concurrency
 		"PRAGMA synchronous=NORMAL",    // Balance safety and speed
-		"PRAGMA cache_size=-256000",    // 256MB cache (increased from 128MB)
+		"PRAGMA cache_size=-192000",    // 192MB cache - balans mellan 128MB och 256MB
 		"PRAGMA temp_store=MEMORY",     // Temp tables in memory
 		"PRAGMA busy_timeout=30000",    // 30s timeout
 		"PRAGMA foreign_keys=ON",       // Enforce foreign keys
-		"PRAGMA mmap_size=536870912",   // 512MB memory-mapped I/O (increased from 256MB)
+		"PRAGMA mmap_size=402653184",   // 384MB memory-mapped I/O - balans
 		"PRAGMA page_size=4096",        // Optimal page size
 		"PRAGMA locking_mode=NORMAL",   // Allow concurrent access
-		"PRAGMA wal_autocheckpoint=0",  // Disable auto-checkpoint for better write performance
+		"PRAGMA wal_autocheckpoint=1000", // Checkpoint every 1000 pages instead of disabled
 	}
 
 	for _, pragma := range pragmas {
@@ -174,7 +174,7 @@ func New(cfg Config) (*Store, error) {
 
 	store := &Store{
 		db:              db,
-		writeCh:         make(chan writeOp, 10000), // Increased from 5000 - more buffering
+		writeCh:         make(chan writeOp, 7500), // Balanserad buffer
 		flushCh:         make(chan chan struct{}),
 		closeCh:         make(chan struct{}),
 		stmtCache:       make(map[string]*sql.Stmt),
