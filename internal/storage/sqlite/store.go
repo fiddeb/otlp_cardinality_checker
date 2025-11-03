@@ -79,8 +79,8 @@ func DefaultConfig(dbPath string) Config {
 		DBPath:          dbPath,
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
-		BatchSize:       750,        // Sweet spot: mellan 500 och 1000
-		FlushInterval:   12 * time.Millisecond, // Snabbare flushing
+		BatchSize:       1000,       // Optimal balance found via profiling
+		FlushInterval:   15 * time.Millisecond, // Sweet spot for batching
 	}
 }
 
@@ -141,22 +141,21 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	// Set connection pool limits for better concurrency
-	db.SetMaxOpenConns(15)   // Balanserad: mellan 10 och 20
-	db.SetMaxIdleConns(8)    // Balanserad: mellan 5 och 10
+	db.SetMaxOpenConns(10)   // Optimal based on profiling
+	db.SetMaxIdleConns(5)    // Keep connections warm
 	db.SetConnMaxLifetime(0) // Reuse connections indefinitely
 
 	// Set pragmas for performance
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",      // Write-Ahead Logging for better concurrency
 		"PRAGMA synchronous=NORMAL",    // Balance safety and speed
-		"PRAGMA cache_size=-192000",    // 192MB cache - balans mellan 128MB och 256MB
+		"PRAGMA cache_size=-128000",    // 128MB cache - proven optimal
 		"PRAGMA temp_store=MEMORY",     // Temp tables in memory
 		"PRAGMA busy_timeout=30000",    // 30s timeout
 		"PRAGMA foreign_keys=ON",       // Enforce foreign keys
-		"PRAGMA mmap_size=402653184",   // 384MB memory-mapped I/O - balans
+		"PRAGMA mmap_size=268435456",   // 256MB memory-mapped I/O
 		"PRAGMA page_size=4096",        // Optimal page size
 		"PRAGMA locking_mode=NORMAL",   // Allow concurrent access
-		"PRAGMA wal_autocheckpoint=1000", // Checkpoint every 1000 pages instead of disabled
 	}
 
 	for _, pragma := range pragmas {
@@ -174,7 +173,7 @@ func New(cfg Config) (*Store, error) {
 
 	store := &Store{
 		db:              db,
-		writeCh:         make(chan writeOp, 7500), // Balanserad buffer
+		writeCh:         make(chan writeOp, 5000), // Optimal buffer size
 		flushCh:         make(chan chan struct{}),
 		closeCh:         make(chan struct{}),
 		stmtCache:       make(map[string]*sql.Stmt),
