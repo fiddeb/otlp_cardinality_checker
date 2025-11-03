@@ -174,7 +174,9 @@ function MetricsView({ onViewDetails }) {
             <th>Type</th>
             <th>Samples</th>
             <th>Labels</th>
+            <th>Resources</th>
             <th>Max Cardinality</th>
+            <th>Buckets</th>
             <th>Services</th>
           </tr>
         </thead>
@@ -184,7 +186,17 @@ function MetricsView({ onViewDetails }) {
             .map((metric, i) => {
               const maxCard = getMaxCardinality(metric)
               const labelCount = metric.label_keys ? Object.keys(metric.label_keys).length : 0
+              const resourceCount = metric.resource_keys ? Object.keys(metric.resource_keys).length : 0
               const serviceCount = metric.services ? Object.keys(metric.services).length : 0
+              
+              // Calculate bucket count for histograms
+              let bucketInfo = '-'
+              if (metric.type === 'Histogram' && metric.data && metric.data.explicit_bounds) {
+                // Number of buckets = number of bounds + 1 (including infinity bucket)
+                bucketInfo = metric.data.explicit_bounds.length + 1
+              } else if (metric.type === 'ExponentialHistogram' && metric.data && metric.data.scales) {
+                bucketInfo = `Scale: ${metric.data.scales.join(', ')}`
+              }
               
               return (
                 <tr key={i}>
@@ -209,6 +221,7 @@ function MetricsView({ onViewDetails }) {
                   </td>
                   <td>{metric.sample_count.toLocaleString()}</td>
                   <td>{labelCount}</td>
+                  <td>{resourceCount}</td>
                   <td>
                     {maxCard > 0 ? (
                       <span className={`badge ${getCardinalityBadge(maxCard)}`}>
@@ -216,6 +229,7 @@ function MetricsView({ onViewDetails }) {
                       </span>
                     ) : '-'}
                   </td>
+                  <td>{bucketInfo}</td>
                   <td>{serviceCount}</td>
                 </tr>
               )

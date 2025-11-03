@@ -45,6 +45,40 @@ function Details({ type, name, onBack }) {
         {type === 'spans' && <p>Kind: {data.kind}</p>}
         <p>Samples: {data.sample_count}</p>
 
+        {/* Histogram Bucket Distribution (only for histogram metrics) */}
+        {type === 'metrics' && data.type === 'Histogram' && data.data && data.data.explicit_bounds && (
+          <>
+            <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>📊 Histogram Buckets</h3>
+            <div className="histogram-info">
+              <p>
+                <strong>Total Buckets:</strong> {data.data.explicit_bounds.length + 1} 
+                <span style={{ color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                  ({data.data.explicit_bounds.length} explicit boundaries + ∞)
+                </span>
+              </p>
+              <p><strong>Aggregation:</strong> {data.data.aggregation_temporality === 1 ? 'Delta' : data.data.aggregation_temporality === 2 ? 'Cumulative' : 'Unknown'}</p>
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <strong>Bucket Boundaries:</strong>
+              <div style={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '8px', 
+                marginTop: '8px',
+                fontFamily: 'monospace',
+                fontSize: '0.9em'
+              }}>
+                <span className="key-badge">(-∞, {data.data.explicit_bounds[0]}]</span>
+                {data.data.explicit_bounds.map((bound, idx) => (
+                  <span key={idx} className="key-badge">
+                    ({bound}, {data.data.explicit_bounds[idx + 1] || '∞'}]
+                  </span>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Body Templates Section (only for logs) */}
         {type === 'logs' && data.body_templates && data.body_templates.length > 0 && (
           <>
