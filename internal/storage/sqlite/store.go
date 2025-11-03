@@ -74,8 +74,8 @@ func DefaultConfig(dbPath string) Config {
 		DBPath:          dbPath,
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
-		BatchSize:       100,        // Smaller batches for lower memory usage
-		FlushInterval:   5 * time.Millisecond, // Faster flush for lower latency
+		BatchSize:       500,        // Increased from 100 for higher throughput
+		FlushInterval:   10 * time.Millisecond, // Increased from 5ms for better batching
 	}
 }
 
@@ -91,9 +91,9 @@ func New(cfg Config) (*Store, error) {
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=NORMAL",
-		"PRAGMA cache_size=-64000", // 64MB cache
+		"PRAGMA cache_size=-128000", // 128MB cache (increased from 64MB)
 		"PRAGMA temp_store=MEMORY",
-		"PRAGMA busy_timeout=5000",
+		"PRAGMA busy_timeout=30000", // 30s timeout (increased from 5s)
 		"PRAGMA foreign_keys=ON",
 	}
 
@@ -115,7 +115,7 @@ func New(cfg Config) (*Store, error) {
 
 	store := &Store{
 		db:              db,
-		writeCh:         make(chan writeOp, 500), // Reduced buffer for lower memory
+		writeCh:         make(chan writeOp, 2000), // Increased from 500 for high load
 		flushCh:         make(chan chan struct{}),
 		closeCh:         make(chan struct{}),
 		useAutoTemplate: cfg.UseAutoTemplate,

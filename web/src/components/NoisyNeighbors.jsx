@@ -17,11 +17,11 @@ function NoisyNeighbors() {
     setError(null)
 
     try {
-      // Fetch all data
+      // Fetch all data (reduced limit for faster loading)
       const [metricsRes, spansRes, logsRes] = await Promise.all([
-        fetch('/api/v1/metrics?limit=10000').then(r => r.json()),
-        fetch('/api/v1/spans?limit=10000').then(r => r.json()),
-        fetch('/api/v1/logs?limit=10000').then(r => r.json()),
+        fetch('/api/v1/metrics?limit=1000').then(r => r.json()),
+        fetch('/api/v1/spans?limit=1000').then(r => r.json()),
+        fetch('/api/v1/logs?limit=1000').then(r => r.json()),
       ])
 
       // 1. Calculate service volumes
