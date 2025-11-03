@@ -129,6 +129,12 @@ func New(cfg Config) (*Store, error) {
 	return store, nil
 }
 
+// DB returns the underlying database connection for direct queries.
+// This should only be used for read-only operations to avoid breaking batch writes.
+func (s *Store) DB() *sql.DB {
+	return s.db
+}
+
 // batchWriter runs in a goroutine and batches write operations.
 func (s *Store) batchWriter(batchSize int, flushInterval time.Duration) {
 	defer s.wg.Done()
