@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
-import CrossSignalCardinality from './components/CrossSignalCardinality'
 import MetadataComplexity from './components/MetadataComplexity'
 import MetricsView from './components/MetricsView'
 import TracesView from './components/TracesView'
 import LogsView from './components/LogsView'
-import ComparisonView from './components/ComparisonView'
 import ServiceExplorer from './components/ServiceExplorer'
 import Details from './components/Details'
 import MemoryView from './components/MemoryView'
 import NoisyNeighbors from './components/NoisyNeighbors'
-import PatternExplorer from './components/PatternExplorer'
 import TemplateDetails from './components/TemplateDetails'
 import LogServiceDetails from './components/LogServiceDetails'
 import LogPatternDetails from './components/LogPatternDetails'
@@ -147,12 +144,6 @@ function App() {
             Dashboard
           </button>
           <button 
-            className={`tab ${activeTab === 'cross-signal-cardinality' ? 'active' : ''}`}
-            onClick={() => setActiveTab('cross-signal-cardinality')}
-          >
-            Cross-Signal Keys
-          </button>
-          <button 
             className={`tab ${activeTab === 'metadata-complexity' ? 'active' : ''}`}
             onClick={() => setActiveTab('metadata-complexity')}
           >
@@ -177,18 +168,6 @@ function App() {
             Logs
           </button>
           <button 
-            className={`tab ${activeTab === 'pattern-explorer' ? 'active' : ''}`}
-            onClick={() => setActiveTab('pattern-explorer')}
-          >
-            Pattern Explorer
-          </button>
-          <button 
-            className={`tab ${activeTab === 'comparison' ? 'active' : ''}`}
-            onClick={() => setActiveTab('comparison')}
-          >
-            Compare
-          </button>
-          <button 
             className={`tab ${activeTab === 'noisy-neighbors' ? 'active' : ''}`}
             onClick={() => setActiveTab('noisy-neighbors')}
           >
@@ -207,10 +186,6 @@ function App() {
         <Dashboard onViewService={handleViewService} />
       )}
 
-      {activeTab === 'cross-signal-cardinality' && (
-        <CrossSignalCardinality />
-      )}
-
       {activeTab === 'metadata-complexity' && (
         <MetadataComplexity onViewDetails={handleViewDetails} />
       )}
@@ -225,14 +200,6 @@ function App() {
 
       {activeTab === 'logs' && (
         <LogsView onViewServiceDetails={handleViewLogServiceDetails} />
-      )}
-
-      {activeTab === 'pattern-explorer' && (
-        <PatternExplorer />
-      )}
-
-      {activeTab === 'comparison' && (
-        <ComparisonView onViewDetails={handleViewDetails} />
       )}
 
       {activeTab === 'noisy-neighbors' && (
