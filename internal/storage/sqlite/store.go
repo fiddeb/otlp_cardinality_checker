@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,10 +75,58 @@ func DefaultConfig(dbPath string) Config {
 		DBPath:          dbPath,
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
-		BatchSize:       100,        // Smaller batches for lower memory usage
-		FlushInterval:   5 * time.Millisecond, // Faster flush for lower latency
+		BatchSize:       500,        // Increased from 100 for higher throughput
+		FlushInterval:   10 * time.Millisecond, // Increased from 5ms for better batching
 	}
 }
+
+// runMigrations runs all migrations that haven't been applied yet.
+func runMigrations(db *sql.DB) error {
+	// Define all migrations with their version numbers
+	migrations := []struct {
+		version int
+		sql     string
+	}{
+		{1, migration001SQL},
+		{2, migration002SQL},
+		{3, migration003SQL},
+		{4, migration004SQL},
+		{5, migration005SQL},
+	}
+
+	// Get already applied migrations
+	appliedVersions := make(map[int]bool)
+	rows, err := db.Query("SELECT version FROM schema_migrations")
+	if err != nil {
+		// Table doesn't exist yet, this is fine - migration 1 will create it
+		if !strings.Contains(err.Error(), "no such table") {
+			return fmt.Errorf("querying schema_migrations: %w", err)
+		}
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var version int
+			if err := rows.Scan(&version); err != nil {
+				return fmt.Errorf("scanning version: %w", err)
+			}
+			appliedVersions[version] = true
+		}
+	}
+
+	// Run unapplied migrations in order
+	for _, m := range migrations {
+		if appliedVersions[m.version] {
+			continue // Already applied
+		}
+
+		if _, err := db.Exec(m.sql); err != nil {
+			return fmt.Errorf("running migration %d: %w", m.version, err)
+		}
+	}
+
+	return nil
+}
+
 
 // New creates a new SQLite store with the given configuration.
 func New(cfg Config) (*Store, error) {
@@ -91,9 +140,9 @@ func New(cfg Config) (*Store, error) {
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=NORMAL",
-		"PRAGMA cache_size=-64000", // 64MB cache
+		"PRAGMA cache_size=-128000", // 128MB cache (increased from 64MB)
 		"PRAGMA temp_store=MEMORY",
-		"PRAGMA busy_timeout=5000",
+		"PRAGMA busy_timeout=30000", // 30s timeout (increased from 5s)
 		"PRAGMA foreign_keys=ON",
 	}
 
@@ -104,18 +153,15 @@ func New(cfg Config) (*Store, error) {
 		}
 	}
 
-	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL, migration003SQL, migration004SQL, migration005SQL}
-	for i, migration := range migrations {
-		if _, err := db.Exec(migration); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("running migration %d: %w", i+1, err)
-		}
+	// Run migrations intelligently - only if not already applied
+	if err := runMigrations(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 
 	store := &Store{
 		db:              db,
-		writeCh:         make(chan writeOp, 500), // Reduced buffer for lower memory
+		writeCh:         make(chan writeOp, 2000), // Increased from 500 for high load
 		flushCh:         make(chan chan struct{}),
 		closeCh:         make(chan struct{}),
 		useAutoTemplate: cfg.UseAutoTemplate,
@@ -127,6 +173,12 @@ func New(cfg Config) (*Store, error) {
 	go store.batchWriter(cfg.BatchSize, cfg.FlushInterval)
 
 	return store, nil
+}
+
+// DB returns the underlying database connection for direct queries.
+// This should only be used for read-only operations to avoid breaking batch writes.
+func (s *Store) DB() *sql.DB {
+	return s.db
 }
 
 // batchWriter runs in a goroutine and batches write operations.
@@ -1089,14 +1141,20 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 		return fmt.Errorf("upserting attribute keys: %w", err)
 	}
 	
-	// 3a. Link attribute keys to services
+	// 3a. Link attribute keys to services with counts and cardinality
 	for service := range log.Services {
-		for keyName := range log.AttributeKeys {
+		for keyName, keyMeta := range log.AttributeKeys {
 			_, err := tx.Exec(`
-				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
-				VALUES (?, ?, 'attribute', ?)
-				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
-			`, service, log.Severity, keyName)
+				INSERT INTO log_service_keys (
+					service_name, severity, key_scope, key_name,
+					key_count, key_percentage, estimated_cardinality
+				)
+				VALUES (?, ?, 'attribute', ?, ?, ?, ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO UPDATE SET
+					key_count = key_count + excluded.key_count,
+					key_percentage = excluded.key_percentage,
+					estimated_cardinality = MAX(estimated_cardinality, excluded.estimated_cardinality)
+			`, service, log.Severity, keyName, keyMeta.Count, keyMeta.Percentage, keyMeta.EstimatedCardinality)
 			if err != nil {
 				return fmt.Errorf("linking attribute key %s to service %s: %w", keyName, service, err)
 			}
@@ -1108,14 +1166,20 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 		return fmt.Errorf("upserting resource keys: %w", err)
 	}
 	
-	// 4a. Link resource keys to services
+	// 4a. Link resource keys to services with counts and cardinality
 	for service := range log.Services {
-		for keyName := range log.ResourceKeys {
+		for keyName, keyMeta := range log.ResourceKeys {
 			_, err := tx.Exec(`
-				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
-				VALUES (?, ?, 'resource', ?)
-				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
-			`, service, log.Severity, keyName)
+				INSERT INTO log_service_keys (
+					service_name, severity, key_scope, key_name,
+					key_count, key_percentage, estimated_cardinality
+				)
+				VALUES (?, ?, 'resource', ?, ?, ?, ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO UPDATE SET
+					key_count = key_count + excluded.key_count,
+					key_percentage = excluded.key_percentage,
+					estimated_cardinality = MAX(estimated_cardinality, excluded.estimated_cardinality)
+			`, service, log.Severity, keyName, keyMeta.Count, keyMeta.Percentage, keyMeta.EstimatedCardinality)
 			if err != nil {
 				return fmt.Errorf("linking resource key %s to service %s: %w", keyName, service, err)
 			}

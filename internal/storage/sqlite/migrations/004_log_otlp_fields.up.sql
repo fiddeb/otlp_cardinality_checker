@@ -1,5 +1,8 @@
 -- Add OTLP-standard fields to logs table
 
+-- Record this migration
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (4);
+
 ALTER TABLE logs ADD COLUMN severity_number INTEGER;
 ALTER TABLE logs ADD COLUMN has_trace_context INTEGER DEFAULT 0;
 ALTER TABLE logs ADD COLUMN has_span_context INTEGER DEFAULT 0;

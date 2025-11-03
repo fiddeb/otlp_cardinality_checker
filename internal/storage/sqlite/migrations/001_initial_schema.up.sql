@@ -2,6 +2,18 @@
 -- Design: Normalized tables with service tracking and key metadata
 
 -- ============================================================================
+-- MIGRATION TRACKING
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Record this migration
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
+
+-- ============================================================================
 -- METRICS
 -- ============================================================================
 
