@@ -12,7 +12,7 @@ Set the pprof server address (default: `localhost:6060`):
 
 ```bash
 export PPROF_ADDR=localhost:6060
-./bin/otlp-cardinality-checker
+./bin/occ
 ```
 
 When the server starts, you'll see:
@@ -147,7 +147,7 @@ go tool pprof 'http://localhost:6060/debug/pprof/heap'
 
 ```bash
 # Start server
-./bin/otlp-cardinality-checker
+./bin/occ
 
 # Terminal 1: Collect CPU profile
 go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=60'
@@ -252,7 +252,7 @@ echo "Profiles saved to profiles/"
 
 ```bash
 # 1. Start server
-./bin/otlp-cardinality-checker
+./bin/occ
 
 # 2. Start profiling in background
 go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=60' &

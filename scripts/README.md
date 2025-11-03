@@ -185,7 +185,7 @@ Run all three load tests quickly to verify functionality:
 
 ```bash
 # Terminal 1: Start server
-./otlp-cardinality-checker
+./occ
 
 # Terminal 2: Run all tests
 k6 run --vus 2 --duration 5s scripts/load-test-metrics.js && \
@@ -237,9 +237,9 @@ Create a script to run all tests and capture results:
 echo "🚀 Starting comprehensive test suite..."
 
 # Reset server (optional)
-pkill -f otlp-cardinality-checker
+pkill -f occ
 sleep 1
-./otlp-cardinality-checker &
+./occ &
 sleep 2
 
 # Run metrics test
@@ -366,7 +366,7 @@ k6 run scripts/stress-test.js
 k6 run scripts/load-test-metrics.js
 
 # Terminal 2: Watch memory
-watch -n 1 'ps aux | grep otlp-cardinality-checker | grep -v grep | awk "{print \$6/1024 \" MB\"}"'
+watch -n 1 'ps aux | grep occ | grep -v grep | awk "{print \$6/1024 \" MB\"}"'
 ```
 
 ### API Performance

@@ -8,10 +8,11 @@ A practical guide for using the OTLP Cardinality Checker to analyze your telemet
 
 ```bash
 # Build
-go build -o otlp-cardinality-checker ./cmd/server
+# Build
+make build
 
 # Run
-./otlp-cardinality-checker
+./bin/occ
 
 # Server starts on:
 #   OTLP gRPC: localhost:4317

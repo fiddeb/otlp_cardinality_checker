@@ -23,7 +23,7 @@ This test simulates realistic production traffic with a mix of:
 
 2. **Start the OTLP Cardinality Checker**:
    ```bash
-   ./bin/otlp-cardinality-checker
+   ./bin/occ
    # Should be listening on http://localhost:4318
    ```
 
@@ -88,7 +88,7 @@ k6 run scripts/k6-mixed-load-test.js
 
 ### Terminal 2: Watch Server Logs
 ```bash
-./bin/otlp-cardinality-checker
+./bin/occ
 ```
 
 ### Terminal 3: Profile Performance (CPU)
@@ -103,10 +103,10 @@ go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=60'
 ### Terminal 4: Monitor System Resources
 ```bash
 # CPU and Memory
-top -pid $(pgrep -f otlp-cardinality-checker)
+top -pid $(pgrep -f occ)
 
 # Or use htop
-htop -p $(pgrep -f otlp-cardinality-checker)
+htop -p $(pgrep -f occ)
 ```
 
 ### Terminal 5: Query API During Load

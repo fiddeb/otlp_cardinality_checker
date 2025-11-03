@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: otlp-cardinality-checker
+  name: occ
   labels:
-    app: otlp-cardinality-checker
+    app: occ
 spec:
   type: ClusterIP
   ports:
@@ -20,4 +20,4 @@ spec:
     targetPort: api
     protocol: TCP
   selector:
-    app: otlp-cardinality-checker
+    app: occ

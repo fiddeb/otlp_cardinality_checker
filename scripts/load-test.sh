@@ -57,7 +57,7 @@ function send_metric_batch() {
 # Monitor memory usage
 function monitor_memory() {
     while true; do
-        local mem=$(ps aux | grep otlp-cardinality-checker | grep -v grep | awk '{print $6}')
+        local mem=$(ps aux | grep occ | grep -v grep | awk '{print $6}')
         if [ ! -z "$mem" ]; then
             log_metric "Memory: ${mem}KB ($(echo "scale=2; $mem/1024" | bc)MB)"
         fi
@@ -87,7 +87,7 @@ echo ""
 # Get baseline metrics
 log "Getting baseline metrics..."
 baseline_metrics=$(curl -s "http://localhost:8080/api/v1/metrics" | jq '.total')
-baseline_mem=$(ps aux | grep otlp-cardinality-checker | grep -v grep | awk '{print $6}')
+baseline_mem=$(ps aux | grep occ | grep -v grep | awk '{print $6}')
 
 echo "Baseline:"
 echo "  Metrics:   $baseline_metrics"
@@ -139,7 +139,7 @@ log "Collecting final statistics..."
 sleep 2
 
 final_metrics=$(curl -s "http://localhost:8080/api/v1/metrics" | jq '.total')
-final_mem=$(ps aux | grep otlp-cardinality-checker | grep -v grep | awk '{print $6}')
+final_mem=$(ps aux | grep occ | grep -v grep | awk '{print $6}')
 services=$(curl -s "http://localhost:8080/api/v1/services" | jq '. | length')
 
 # Calculate some sample metrics

@@ -69,7 +69,7 @@ echo ""
 if ! curl -s "$API_ENDPOINT/api/v1/health" > /dev/null 2>&1; then
     echo -e "${RED}❌ Server not responding at $API_ENDPOINT${NC}"
     echo "Please start the server first:"
-    echo "  ./otlp-cardinality-checker"
+    echo "  ./occ"
     exit 1
 fi
 

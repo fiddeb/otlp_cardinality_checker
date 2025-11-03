@@ -547,12 +547,12 @@ Memory: < 100MB for 10k unique metadata entries
 FROM golang:1.21-alpine AS builder
 WORKDIR /app
 COPY . .
-RUN go build -o otlp-cardinality-checker ./cmd/server
+RUN go build -o occ ./cmd/server
 
 FROM alpine:3.18
-COPY --from=builder /app/otlp-cardinality-checker /usr/local/bin/
+COPY --from=builder /app/occ /usr/local/bin/
 EXPOSE 4317 4318 8080
-CMD ["otlp-cardinality-checker"]
+CMD ["occ"]
 ```
 
 ### Kubernetes
@@ -560,14 +560,14 @@ CMD ["otlp-cardinality-checker"]
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: otlp-cardinality-checker
+  name: occ
 spec:
   replicas: 1
   template:
     spec:
       containers:
       - name: checker
-        image: otlp-cardinality-checker:latest
+        image: occ:latest
         ports:
         - containerPort: 4317  # gRPC
         - containerPort: 4318  # HTTP

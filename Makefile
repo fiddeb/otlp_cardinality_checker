@@ -29,8 +29,8 @@ install-deps:
 # Build backend
 backend:
 	@echo "🔨 Building Go backend..."
-	go build -o bin/otlp-cardinality-checker ./cmd/server
-	@echo "✅ Backend built: bin/otlp-cardinality-checker"
+	go build -o bin/occ ./cmd/server
+	@echo "✅ Backend built: bin/occ"
 
 # Build frontend
 ui:
@@ -41,7 +41,7 @@ ui:
 # Build both (production)
 build: backend ui
 	@echo "✅ Full build complete!"
-	@echo "   Backend: bin/otlp-cardinality-checker"
+	@echo "   Backend: bin/occ"
 	@echo "   Frontend: web/dist/"
 
 # Development mode (runs both servers)
@@ -58,7 +58,7 @@ dev:
 # Run production build
 run: build
 	@echo "🚀 Starting production server..."
-	./bin/otlp-cardinality-checker
+	./bin/occ
 
 # Run tests
 test:
@@ -79,8 +79,8 @@ clean:
 # Docker build (optional)
 docker-build:
 	@echo "🐳 Building Docker image..."
-	docker build -t otlp-cardinality-checker:latest .
-	@echo "✅ Docker image built: otlp-cardinality-checker:latest"
+	docker build -t occ:latest .
+	@echo "✅ Docker image built: occ:latest"
 
 # Quick rebuild (no clean)
 rebuild: build

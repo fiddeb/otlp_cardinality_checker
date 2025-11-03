@@ -14,11 +14,11 @@ This directory contains Kubernetes manifests for deploying the OTLP Cardinality 
 
 ```bash
 # Build the image
-docker build -t otlp-cardinality-checker:latest .
+docker build -t occ:latest .
 
 # Tag for your registry (if pushing to remote)
-docker tag otlp-cardinality-checker:latest your-registry/otlp-cardinality-checker:latest
-docker push your-registry/otlp-cardinality-checker:latest
+docker tag occ:latest your-registry/occ:latest
+docker push your-registry/occ:latest
 ```
 
 ### 2. Deploy to Kubernetes
@@ -36,27 +36,27 @@ kubectl apply -f k8s/service.yaml
 
 ```bash
 # Check pods
-kubectl get pods -l app=otlp-cardinality-checker
+kubectl get pods -l app=occ
 
 # Check service
-kubectl get svc otlp-cardinality-checker
+kubectl get svc occ
 
 # Check logs
-kubectl logs -l app=otlp-cardinality-checker -f
+kubectl logs -l app=occ -f
 ```
 
 ### 4. Access the Service
 
 ```bash
 # Port-forward to access locally
-kubectl port-forward svc/otlp-cardinality-checker 8080:8080 4318:4318
+kubectl port-forward svc/occ 8080:8080 4318:4318
 
 # Test API
 curl http://localhost:8080/api/v1/health
 
 # Test OTLP endpoint (from OpenTelemetry Collector)
 # Configure your collector to export to:
-# endpoint: http://otlp-cardinality-checker:4318
+# endpoint: http://occ:4318
 ```
 
 ## Configuration
@@ -100,7 +100,7 @@ Configure your OpenTelemetry Collector to export to this service:
 ```yaml
 exporters:
   otlphttp:
-    endpoint: http://otlp-cardinality-checker:4318
+    endpoint: http://occ:4318
     compression: gzip
 
 service:
@@ -139,11 +139,11 @@ If using Prometheus Operator, you can add a ServiceMonitor:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: otlp-cardinality-checker
+  name: occ
 spec:
   selector:
     matchLabels:
-      app: otlp-cardinality-checker
+      app: occ
   endpoints:
   - port: api
     path: /api/v1/metrics
@@ -156,31 +156,31 @@ spec:
 
 ```bash
 # Check pod status
-kubectl describe pod -l app=otlp-cardinality-checker
+kubectl describe pod -l app=occ
 
 # Check logs
-kubectl logs -l app=otlp-cardinality-checker --tail=50
+kubectl logs -l app=occ --tail=50
 ```
 
 ### Service not accessible
 
 ```bash
 # Check endpoints
-kubectl get endpoints otlp-cardinality-checker
+kubectl get endpoints occ
 
 # Test from another pod
 kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
-  curl http://otlp-cardinality-checker:8080/api/v1/health
+  curl http://occ:8080/api/v1/health
 ```
 
 ### High memory usage
 
 ```bash
 # Check resource usage
-kubectl top pod -l app=otlp-cardinality-checker
+kubectl top pod -l app=occ
 
 # Increase memory limits if needed
-kubectl edit deployment otlp-cardinality-checker
+kubectl edit deployment occ
 ```
 
 ## Cleanup
@@ -190,6 +190,6 @@ kubectl edit deployment otlp-cardinality-checker
 kubectl delete -f k8s/
 
 # Or delete individually
-kubectl delete deployment otlp-cardinality-checker
-kubectl delete service otlp-cardinality-checker
+kubectl delete deployment occ
+kubectl delete service occ
 ```

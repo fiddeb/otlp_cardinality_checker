@@ -1,5 +1,5 @@
 {
-  "name": "otlp-cardinality-checker-ui",
+  "name": "occ-ui",
   "version": "1.0.0",
   "private": true,
   "scripts": {

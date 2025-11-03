@@ -313,11 +313,11 @@ time curl -s "http://localhost:8080/api/v1/metrics?limit=1000&offset=5000" | jq 
 ### Memory Profiling
 
 ```bash
-# Build with profiling
-go build -o otlp-cardinality-checker ./cmd/server
+# Build
+make build
 
 # Run with profiling enabled
-./otlp-cardinality-checker &
+./bin/occ &
 
 # Take heap snapshot
 curl http://localhost:8080/debug/pprof/heap > heap.prof
