@@ -58,10 +58,12 @@ function MetricsOverview({ onViewMetric }) {
     // Get max cardinality
     let maxCardinality = 0
     if (metric.label_keys) {
-      maxCardinality = Math.max(maxCardinality, ...Object.values(metric.label_keys))
+      const labelCardinalities = Object.values(metric.label_keys).map(v => v.estimated_cardinality || 0)
+      maxCardinality = Math.max(maxCardinality, ...labelCardinalities)
     }
     if (metric.resource_keys) {
-      maxCardinality = Math.max(maxCardinality, ...Object.values(metric.resource_keys))
+      const resourceCardinalities = Object.values(metric.resource_keys).map(v => v.estimated_cardinality || 0)
+      maxCardinality = Math.max(maxCardinality, ...resourceCardinalities)
     }
     
     const complexity = totalKeys * maxCardinality
