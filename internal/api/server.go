@@ -135,11 +135,12 @@ func NewServer(addr string, store storage.Storage) *Server {
 
 		// Logs endpoints
 		r.Get("/logs", s.listLogs)
+		// IMPORTANT: More specific routes must come BEFORE generic {severity} route
 		r.Get("/logs/by-service", s.listLogsByService) // NEW: Service-based navigation
 		r.Get("/logs/service/{service}/severity/{severity}", s.getLogByServiceAndSeverity) // NEW
 		r.Get("/logs/patterns", s.getLogPatterns)
 		r.Get("/logs/patterns/{severity}/{template}", s.getPatternDetails)
-		r.Get("/logs/{severity}", s.getLog)
+		r.Get("/logs/{severity}", s.getLog) // Generic route - must be last
 
 		// Services endpoints
 		r.Get("/services", s.listServices)
@@ -455,7 +456,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 	// Get attribute keys for this service+severity
 	data.AttributeKeys = make(map[string]models.KeyMetadata)
 	attrRows, err := sqliteStore.DB().QueryContext(ctx, `
-		SELECT key_name, observed_count, estimated_cardinality
+		SELECT key_name, key_count, estimated_cardinality
 		FROM log_service_keys
 		WHERE service_name = ? AND severity = ? AND key_scope = 'attribute'
 	`, decodedService, decodedSeverity)
@@ -467,14 +468,14 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 
 	for attrRows.Next() {
 		var keyName string
-		var observedCount int64
+		var keyCount int64
 		var estCard int64
-		if err := attrRows.Scan(&keyName, &observedCount, &estCard); err != nil {
+		if err := attrRows.Scan(&keyName, &keyCount, &estCard); err != nil {
 			s.respondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		data.AttributeKeys[keyName] = models.KeyMetadata{
-			Count:                observedCount,
+			Count:                keyCount,
 			EstimatedCardinality: estCard,
 		}
 	}
@@ -482,7 +483,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 	// Get resource keys for this service+severity
 	data.ResourceKeys = make(map[string]models.KeyMetadata)
 	resRows, err := sqliteStore.DB().QueryContext(ctx, `
-		SELECT key_name, observed_count, estimated_cardinality
+		SELECT key_name, key_count, estimated_cardinality
 		FROM log_service_keys
 		WHERE service_name = ? AND severity = ? AND key_scope = 'resource'
 	`, decodedService, decodedSeverity)
@@ -494,14 +495,14 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 
 	for resRows.Next() {
 		var keyName string
-		var observedCount int64
+		var keyCount int64
 		var estCard int64
-		if err := resRows.Scan(&keyName, &observedCount, &estCard); err != nil {
+		if err := resRows.Scan(&keyName, &keyCount, &estCard); err != nil {
 			s.respondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		data.ResourceKeys[keyName] = models.KeyMetadata{
-			Count:                observedCount,
+			Count:                keyCount,
 			EstimatedCardinality: estCard,
 		}
 	}

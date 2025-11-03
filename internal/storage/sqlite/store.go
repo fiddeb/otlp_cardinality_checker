@@ -1095,14 +1095,20 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 		return fmt.Errorf("upserting attribute keys: %w", err)
 	}
 	
-	// 3a. Link attribute keys to services
+	// 3a. Link attribute keys to services with counts and cardinality
 	for service := range log.Services {
-		for keyName := range log.AttributeKeys {
+		for keyName, keyMeta := range log.AttributeKeys {
 			_, err := tx.Exec(`
-				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
-				VALUES (?, ?, 'attribute', ?)
-				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
-			`, service, log.Severity, keyName)
+				INSERT INTO log_service_keys (
+					service_name, severity, key_scope, key_name,
+					key_count, key_percentage, estimated_cardinality
+				)
+				VALUES (?, ?, 'attribute', ?, ?, ?, ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO UPDATE SET
+					key_count = key_count + excluded.key_count,
+					key_percentage = excluded.key_percentage,
+					estimated_cardinality = MAX(estimated_cardinality, excluded.estimated_cardinality)
+			`, service, log.Severity, keyName, keyMeta.Count, keyMeta.Percentage, keyMeta.EstimatedCardinality)
 			if err != nil {
 				return fmt.Errorf("linking attribute key %s to service %s: %w", keyName, service, err)
 			}
@@ -1114,14 +1120,20 @@ func (s *Store) storeLogTx(tx *sql.Tx, log *models.LogMetadata) error {
 		return fmt.Errorf("upserting resource keys: %w", err)
 	}
 	
-	// 4a. Link resource keys to services
+	// 4a. Link resource keys to services with counts and cardinality
 	for service := range log.Services {
-		for keyName := range log.ResourceKeys {
+		for keyName, keyMeta := range log.ResourceKeys {
 			_, err := tx.Exec(`
-				INSERT INTO log_service_keys (service_name, severity, key_scope, key_name)
-				VALUES (?, ?, 'resource', ?)
-				ON CONFLICT(service_name, severity, key_scope, key_name) DO NOTHING
-			`, service, log.Severity, keyName)
+				INSERT INTO log_service_keys (
+					service_name, severity, key_scope, key_name,
+					key_count, key_percentage, estimated_cardinality
+				)
+				VALUES (?, ?, 'resource', ?, ?, ?, ?)
+				ON CONFLICT(service_name, severity, key_scope, key_name) DO UPDATE SET
+					key_count = key_count + excluded.key_count,
+					key_percentage = excluded.key_percentage,
+					estimated_cardinality = MAX(estimated_cardinality, excluded.estimated_cardinality)
+			`, service, log.Severity, keyName, keyMeta.Count, keyMeta.Percentage, keyMeta.EstimatedCardinality)
 			if err != nil {
 				return fmt.Errorf("linking resource key %s to service %s: %w", keyName, service, err)
 			}
