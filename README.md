@@ -511,4 +511,3 @@ See our [Project Board](https://github.com/yourusername/otlp_cardinality_checker
 
 **Star ⭐ this repo if you find it useful!**
 
-Made with ❤️ by the OTLP Cardinality Checker team
