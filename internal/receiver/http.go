@@ -238,7 +238,9 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	fmt.Printf("Successfully analyzed %d spans\n", len(spansMetadata))
+	if verboseLogging {
+		fmt.Printf("Successfully analyzed %d spans\n", len(spansMetadata))
+	}
 
 	// Store metadata
 	for _, metadata := range spansMetadata {
