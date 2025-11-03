@@ -12,12 +12,16 @@ import MemoryView from './components/MemoryView'
 import NoisyNeighbors from './components/NoisyNeighbors'
 import PatternExplorer from './components/PatternExplorer'
 import TemplateDetails from './components/TemplateDetails'
+import LogServiceDetails from './components/LogServiceDetails'
+import LogPatternDetails from './components/LogPatternDetails'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedService, setSelectedService] = useState(null)
   const [selectedTemplate, setSelectedTemplate] = useState(null)
+  const [selectedLogService, setSelectedLogService] = useState(null)
+  const [selectedLogPattern, setSelectedLogPattern] = useState(null)
   const [isClearing, setIsClearing] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage or system preference
@@ -84,11 +88,28 @@ function App() {
     setActiveTab('template-details')
   }
 
+  const handleViewLogServiceDetails = (serviceName, severity) => {
+    setSelectedLogService({ serviceName, severity })
+    setActiveTab('log-service-details')
+  }
+
+  const handleViewLogPattern = (serviceName, severity, template) => {
+    setSelectedLogPattern({ serviceName, severity, template })
+    setActiveTab('log-pattern-details')
+  }
+
   const handleBack = () => {
     setSelectedItem(null)
     setSelectedService(null)
     setSelectedTemplate(null)
+    setSelectedLogService(null)
+    setSelectedLogPattern(null)
     setActiveTab('dashboard')
+  }
+
+  const handleBackToServiceDetails = () => {
+    setSelectedLogPattern(null)
+    setActiveTab('log-service-details')
   }
 
   return (
@@ -203,7 +224,7 @@ function App() {
       )}
 
       {activeTab === 'logs' && (
-        <LogsView onViewTemplate={handleViewTemplate} />
+        <LogsView onViewServiceDetails={handleViewLogServiceDetails} />
       )}
 
       {activeTab === 'pattern-explorer' && (
@@ -227,6 +248,24 @@ function App() {
           severity={selectedTemplate.severity}
           template={selectedTemplate.template}
           onBack={handleBack}
+        />
+      )}
+
+      {activeTab === 'log-service-details' && selectedLogService && (
+        <LogServiceDetails 
+          serviceName={selectedLogService.serviceName}
+          severity={selectedLogService.severity}
+          onBack={handleBack}
+          onViewPattern={handleViewLogPattern}
+        />
+      )}
+
+      {activeTab === 'log-pattern-details' && selectedLogPattern && (
+        <LogPatternDetails 
+          serviceName={selectedLogPattern.serviceName}
+          severity={selectedLogPattern.severity}
+          template={selectedLogPattern.template}
+          onBack={handleBackToServiceDetails}
         />
       )}
 
