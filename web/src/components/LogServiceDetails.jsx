@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 
 function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
   const [templates, setTemplates] = useState([])
+  const [attributeKeys, setAttributeKeys] = useState({})
+  const [resourceKeys, setResourceKeys] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState({
@@ -21,6 +23,8 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
       })
       .then(data => {
         setTemplates(data.body_templates || [])
+        setAttributeKeys(data.attribute_keys || {})
+        setResourceKeys(data.resource_keys || {})
         setLoading(false)
       })
       .catch(err => {

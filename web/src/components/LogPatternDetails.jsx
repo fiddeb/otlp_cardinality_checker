@@ -17,22 +17,22 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
         }
         return res.json()
       })
-      .then(templatesData => {
+      .then(data => {
         // Find the specific template
-        const templateData = templatesData.body_templates?.find(t => t.template === template)
+        const templateData = data.body_templates?.find(t => t.template === template)
         
         if (!templateData) {
           throw new Error('Template not found')
         }
         
-        // Use pattern-specific attribute and resource keys
-        const resourceKeys = templateData.resource_keys || []
-        const bodyKeys = templateData.attribute_keys || []
+        // Get attribute and resource keys from response (they are at top level, not per template)
+        const attributeKeys = Object.keys(data.attribute_keys || {})
+        const resourceKeys = Object.keys(data.resource_keys || {})
         
         setAttributes({
           template: templateData,
           resource_keys: resourceKeys,
-          body_keys: bodyKeys
+          body_keys: attributeKeys
         })
         setLoading(false)
       })
