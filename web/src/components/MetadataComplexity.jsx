@@ -156,13 +156,18 @@ function MetadataComplexity({ onViewDetails }) {
             </tr>
           </thead>
           <tbody>
-            {sortedSignals.map((signal, idx) => (
-              <tr 
-                key={idx}
-                onClick={() => onViewDetails(signal.signal_type, signal.signal_name)}
-                style={{ cursor: 'pointer' }}
-                className="clickable-row"
-              >
+            {sortedSignals.map((signal, idx) => {
+              // Convert singular to plural for Details component
+              const typeMap = { 'metric': 'metrics', 'span': 'spans', 'log': 'logs' }
+              const pluralType = typeMap[signal.signal_type] || signal.signal_type
+              
+              return (
+                <tr 
+                  key={idx}
+                  onClick={() => onViewDetails(pluralType, signal.signal_name)}
+                  style={{ cursor: 'pointer' }}
+                  className="clickable-row"
+                >
                 <td>
                   <span 
                     className="signal-type-badge"
@@ -206,7 +211,8 @@ function MetadataComplexity({ onViewDetails }) {
                   </span>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>

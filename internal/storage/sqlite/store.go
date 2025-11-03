@@ -1862,18 +1862,40 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 	}
 
 	query := `
+		WITH metric_buckets AS (
+			SELECT 
+				name,
+				CASE 
+					WHEN type = 'Histogram' AND metric_data IS NOT NULL 
+					THEN json_extract(metric_data, '$.data.explicit_bounds')
+					ELSE NULL
+				END as bounds_json
+			FROM metrics
+		),
+		bucket_counts AS (
+			SELECT 
+				name,
+				CASE 
+					WHEN bounds_json IS NOT NULL 
+					THEN json_array_length(bounds_json) + 1
+					ELSE 0
+				END as bucket_count
+			FROM metric_buckets
+		)
 		SELECT 
-			signal_type,
-			signal_name,
-			COUNT(*) as total_keys,
-			SUM(CASE WHEN key_scope IN ('attribute', 'label') THEN 1 ELSE 0 END) as attribute_keys,
-			SUM(CASE WHEN key_scope = 'resource' THEN 1 ELSE 0 END) as resource_keys,
-			SUM(CASE WHEN key_scope = 'event' THEN 1 ELSE 0 END) as event_keys,
-			SUM(CASE WHEN key_scope = 'link' THEN 1 ELSE 0 END) as link_keys,
-			MAX(estimated_cardinality) as max_cardinality,
-			SUM(CASE WHEN estimated_cardinality > 100 THEN 1 ELSE 0 END) as high_card_count
-		FROM signal_keys
-		GROUP BY signal_type, signal_name
+			sk.signal_type,
+			sk.signal_name,
+			COUNT(*) + COALESCE(bc.bucket_count, 0) as total_keys,
+			SUM(CASE WHEN sk.key_scope IN ('attribute', 'label') THEN 1 ELSE 0 END) as attribute_keys,
+			SUM(CASE WHEN sk.key_scope = 'resource' THEN 1 ELSE 0 END) as resource_keys,
+			SUM(CASE WHEN sk.key_scope = 'event' THEN 1 ELSE 0 END) as event_keys,
+			SUM(CASE WHEN sk.key_scope = 'link' THEN 1 ELSE 0 END) as link_keys,
+			MAX(sk.estimated_cardinality) as max_cardinality,
+			SUM(CASE WHEN sk.estimated_cardinality > 100 THEN 1 ELSE 0 END) as high_card_count
+		FROM signal_keys sk
+		LEFT JOIN bucket_counts bc 
+			ON sk.signal_type = 'metric' AND sk.signal_name = bc.name
+		GROUP BY sk.signal_type, sk.signal_name
 		HAVING total_keys >= ?
 		ORDER BY total_keys DESC, max_cardinality DESC
 		LIMIT ?

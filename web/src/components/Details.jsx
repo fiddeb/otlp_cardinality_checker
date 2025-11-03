@@ -7,10 +7,13 @@ function Details({ type, name, onBack }) {
   const [showTemplates, setShowTemplates] = useState(true)
 
   useEffect(() => {
-    const endpoint = type === 'metrics' ? `/api/v1/metrics/${encodeURIComponent(name)}` :
-                     type === 'spans' ? `/api/v1/spans/${encodeURIComponent(name)}` :
-                     `/api/v1/logs/${encodeURIComponent(name)}`
+    console.log('Details useEffect - type:', type, 'name:', name)
+    const endpoint = type === 'metrics' || type === 'metric' ? `/api/v1/metrics/${encodeURIComponent(name)}` :
+                     type === 'spans' || type === 'span' ? `/api/v1/spans/${encodeURIComponent(name)}` :
+                     type === 'logs' || type === 'log' ? `/api/v1/logs/${encodeURIComponent(name)}` :
+                     `/api/v1/logs/${encodeURIComponent(name)}`  // fallback
 
+    console.log('Fetching from endpoint:', endpoint)
     fetch(endpoint)
       .then(r => r.json())
       .then(data => {
