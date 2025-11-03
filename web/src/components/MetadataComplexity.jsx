@@ -38,8 +38,8 @@ function MetadataComplexity({ onViewDetails }) {
   }
 
   const getComplexityColor = (score) => {
-    if (score < 1000) return '#4CAF50'
-    if (score < 10000) return '#FF9800'
+    if (score < 50) return '#4CAF50'
+    if (score < 200) return '#FF9800'
     return '#f44336'
   }
 
@@ -229,9 +229,9 @@ function MetadataComplexity({ onViewDetails }) {
           <strong>Complexity Score</strong> = Total Keys × Max Cardinality
         </p>
         <ul>
-          <li><span style={{color: '#4CAF50'}}>Green (&lt;1000)</span>: Low complexity, efficient</li>
-          <li><span style={{color: '#FF9800'}}>Orange (1000-10000)</span>: Medium complexity, monitor</li>
-          <li><span style={{color: '#f44336'}}>Red (&gt;10000)</span>: High complexity, optimize</li>
+          <li><span style={{color: '#4CAF50'}}>Green (&lt;50)</span>: Low complexity, efficient</li>
+          <li><span style={{color: '#FF9800'}}>Orange (50-200)</span>: Medium complexity, monitor</li>
+          <li><span style={{color: '#f44336'}}>Red (&gt;200)</span>: High complexity, optimize</li>
         </ul>
         <p>
           <strong>High Card Keys</strong>: Number of keys with estimated cardinality &gt; 100

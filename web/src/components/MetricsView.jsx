@@ -176,7 +176,7 @@ function MetricsView({ onViewDetails }) {
             <th>Labels</th>
             <th>Resources</th>
             <th>Max Cardinality</th>
-            <th>Buckets</th>
+            <th>Complexity</th>
             <th>Services</th>
           </tr>
         </thead>
@@ -189,14 +189,16 @@ function MetricsView({ onViewDetails }) {
               const resourceCount = metric.resource_keys ? Object.keys(metric.resource_keys).length : 0
               const serviceCount = metric.services ? Object.keys(metric.services).length : 0
               
-              // Calculate bucket count for histograms
-              let bucketInfo = '-'
+              // Calculate complexity: total_keys × max_cardinality
+              let bucketCount = 0
               if (metric.type === 'Histogram' && metric.data && metric.data.explicit_bounds) {
-                // Number of buckets = number of bounds + 1 (including infinity bucket)
-                bucketInfo = metric.data.explicit_bounds.length + 1
+                bucketCount = metric.data.explicit_bounds.length + 1
               } else if (metric.type === 'ExponentialHistogram' && metric.data && metric.data.scales) {
-                bucketInfo = `Scale: ${metric.data.scales.join(', ')}`
+                bucketCount = metric.data.scales.length * 10
               }
+              
+              const totalKeys = labelCount + resourceCount + bucketCount
+              const complexity = totalKeys * maxCard
               
               return (
                 <tr key={i}>
@@ -229,7 +231,7 @@ function MetricsView({ onViewDetails }) {
                       </span>
                     ) : '-'}
                   </td>
-                  <td>{bucketInfo}</td>
+                  <td>{complexity > 0 ? complexity.toLocaleString() : '-'}</td>
                   <td>{serviceCount}</td>
                 </tr>
               )

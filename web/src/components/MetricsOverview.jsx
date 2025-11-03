@@ -41,16 +41,31 @@ function MetricsOverview({ onViewMetric }) {
     return colors[type] || 'var(--text-secondary)'
   }
 
-  const getBucketCount = (metric) => {
+  const getComplexity = (metric) => {
+    // Calculate total keys (labels + resources + histogram buckets if applicable)
+    const labelCount = metric.label_keys ? Object.keys(metric.label_keys).length : 0
+    const resourceCount = metric.resource_keys ? Object.keys(metric.resource_keys).length : 0
+    let bucketCount = 0
+    
     if (metric.type === 'Histogram' && metric.data && metric.data.explicit_bounds) {
-      // Number of buckets = number of bounds + 1 (including infinity bucket)
-      return metric.data.explicit_bounds.length + 1
+      bucketCount = metric.data.explicit_bounds.length + 1
+    } else if (metric.type === 'ExponentialHistogram' && metric.data && metric.data.scales) {
+      bucketCount = metric.data.scales.length * 10
     }
-    if (metric.type === 'ExponentialHistogram' && metric.data && metric.data.scales) {
-      // Exponential histograms have dynamic buckets based on scale
-      return `Scale: ${metric.data.scales.join(', ')}`
+    
+    const totalKeys = labelCount + resourceCount + bucketCount
+    
+    // Get max cardinality
+    let maxCardinality = 0
+    if (metric.label_keys) {
+      maxCardinality = Math.max(maxCardinality, ...Object.values(metric.label_keys))
     }
-    return '-'
+    if (metric.resource_keys) {
+      maxCardinality = Math.max(maxCardinality, ...Object.values(metric.resource_keys))
+    }
+    
+    const complexity = totalKeys * maxCardinality
+    return complexity > 0 ? complexity : 0
   }
 
   if (loading) return <div className="loading">Loading metrics...</div>
@@ -136,7 +151,7 @@ function MetricsOverview({ onViewMetric }) {
             <th>Unit</th>
             <th>Description</th>
             <th>Observations</th>
-            <th>Buckets</th>
+            <th>Complexity</th>
           </tr>
         </thead>
         <tbody>
@@ -169,7 +184,7 @@ function MetricsOverview({ onViewMetric }) {
                   {metric.description || '-'}
                 </td>
                 <td>{metric.sample_count.toLocaleString()}</td>
-                <td>{getBucketCount(metric)}</td>
+                <td>{getComplexity(metric).toLocaleString()}</td>
               </tr>
             ))}
         </tbody>
