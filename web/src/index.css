@@ -479,6 +479,24 @@ tr:hover {
   color: var(--accent);
 }
 
+/* Histogram bucket display */
+.histogram-info {
+  background: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.histogram-info p {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.histogram-info strong {
+  color: var(--text-primary);
+  margin-right: 8px;
+}
+
 .template-percentage {
   font-size: 12px;
   color: var(--text-secondary);
