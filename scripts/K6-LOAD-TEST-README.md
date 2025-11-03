@@ -91,7 +91,16 @@ k6 run scripts/k6-mixed-load-test.js
 ./bin/otlp-cardinality-checker
 ```
 
-### Terminal 3: Monitor System Resources
+### Terminal 3: Profile Performance (CPU)
+```bash
+# Start profiling when load test begins
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=60'
+
+# Opens interactive web UI at http://localhost:8081
+# View → Flame Graph to see where time is spent
+```
+
+### Terminal 4: Monitor System Resources
 ```bash
 # CPU and Memory
 top -pid $(pgrep -f otlp-cardinality-checker)
@@ -100,16 +109,16 @@ top -pid $(pgrep -f otlp-cardinality-checker)
 htop -p $(pgrep -f otlp-cardinality-checker)
 ```
 
-### Terminal 4: Query API During Load
+### Terminal 5: Query API During Load
 ```bash
 # Check metrics count
-watch -n 5 'curl -s http://localhost:3000/api/v1/metrics | jq ".data | length"'
+watch -n 5 'curl -s http://localhost:8080/api/v1/metrics | jq ".data | length"'
 
 # Check memory usage
-watch -n 5 'curl -s http://localhost:3000/api/v1/memory'
+watch -n 5 'curl -s http://localhost:8080/api/v1/memory'
 
 # Check metadata complexity
-watch -n 10 'curl -s http://localhost:3000/api/v1/metadata/complexity?limit=10'
+watch -n 10 'curl -s http://localhost:8080/api/v1/metadata/complexity?limit=10'
 ```
 
 ## Results Interpretation
@@ -140,8 +149,9 @@ watch -n 10 'curl -s http://localhost:3000/api/v1/metadata/complexity?limit=10'
 ## Troubleshooting
 
 ### High Latency
+- **Use profiling**: `go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=30'`
 - Check if database operations are slow
-- Look for lock contention
+- Look for lock contention (mutex profile)
 - Verify disk I/O isn't saturated
 
 ### High Error Rate
@@ -150,14 +160,19 @@ watch -n 10 'curl -s http://localhost:3000/api/v1/metadata/complexity?limit=10'
 - Look for JSON parsing errors
 
 ### Memory Issues
+- **Profile memory**: `go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/heap'`
 - Monitor memory growth over time
 - Check for memory leaks
 - Consider reducing cardinality
 
 ### Low Throughput
+- **Profile CPU**: See where time is spent
+- Check for goroutine leaks: `curl 'http://localhost:6060/debug/pprof/goroutine?debug=1'`
 - Increase VUs if server can handle more
 - Check network bandwidth
 - Look for bottlenecks in processing pipeline
+
+See [docs/PROFILING.md](../docs/PROFILING.md) for detailed profiling guide.
 
 ## Advanced Options
 

@@ -29,7 +29,7 @@ Profiling:
 
 ```bash
 # Collect 30 seconds of CPU profile during load test
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/profile?seconds=30
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=30'
 ```
 
 This will:
@@ -41,7 +41,7 @@ This will:
 
 ```bash
 # Terminal 1: Start profiling
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/profile?seconds=60
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=60'
 
 # Terminal 2: Run load test immediately
 k6 run --duration 30s --vus 100 scripts/k6-mixed-load-test.js
@@ -53,10 +53,10 @@ k6 run --duration 30s --vus 100 scripts/k6-mixed-load-test.js
 
 ```bash
 # Current heap allocations
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/heap
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/heap
 
 # Allocations since program start
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/allocs
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/allocs
 ```
 
 **What to look for**:
@@ -69,7 +69,7 @@ go tool pprof -http=:8081 http://localhost:6060/debug/pprof/allocs
 **Shows all running goroutines and their stack traces.**
 
 ```bash
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/goroutine
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/goroutine
 ```
 
 **What to look for**:
@@ -82,7 +82,7 @@ go tool pprof -http=:8081 http://localhost:6060/debug/pprof/goroutine
 **Shows lock contention issues.**
 
 ```bash
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/mutex
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/mutex
 ```
 
 **What to look for**:
@@ -94,7 +94,7 @@ go tool pprof -http=:8081 http://localhost:6060/debug/pprof/mutex
 **Shows where goroutines block waiting.**
 
 ```bash
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/block
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/block
 ```
 
 **What to look for**:
@@ -129,14 +129,14 @@ If you prefer terminal output:
 
 ```bash
 # CPU profile with top functions
-go tool pprof http://localhost:6060/debug/pprof/profile?seconds=30
+go tool pprof 'http://localhost:6060/debug/pprof/profile?seconds=30'
 # In pprof prompt:
 (pprof) top10
 (pprof) list functionName  # Show source code
 (pprof) web               # Open graph in browser
 
 # Memory profile
-go tool pprof http://localhost:6060/debug/pprof/heap
+go tool pprof 'http://localhost:6060/debug/pprof/heap'
 (pprof) top10
 (pprof) list functionName
 ```
@@ -150,7 +150,7 @@ go tool pprof http://localhost:6060/debug/pprof/heap
 ./bin/otlp-cardinality-checker
 
 # Terminal 1: Collect CPU profile
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/profile?seconds=60
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=60'
 
 # Terminal 2: Run load test
 k6 run --duration 30s --vus 100 scripts/k6-mixed-load-test.js
@@ -186,10 +186,10 @@ Focus on:
 
 ```bash
 # After optimization, collect new profile
-go tool pprof -http=:8082 http://localhost:6060/debug/pprof/profile?seconds=60
+go tool pprof -http=:8082 'http://localhost:6060/debug/pprof/profile?seconds=60'
 
 # Compare with baseline
-go tool pprof -http=:8083 -base baseline.pb.gz http://localhost:6060/debug/pprof/profile?seconds=60
+go tool pprof -http=:8083 -base baseline.pb.gz 'http://localhost:6060/debug/pprof/profile?seconds=60'
 ```
 
 The `-base` flag shows the **difference** between profiles.
@@ -255,7 +255,7 @@ echo "Profiles saved to profiles/"
 ./bin/otlp-cardinality-checker
 
 # 2. Start profiling in background
-go tool pprof -http=:8081 http://localhost:6060/debug/pprof/profile?seconds=60 &
+go tool pprof -http=:8081 'http://localhost:6060/debug/pprof/profile?seconds=60' &
 
 # 3. Generate load
 sleep 5  # Let pprof start
