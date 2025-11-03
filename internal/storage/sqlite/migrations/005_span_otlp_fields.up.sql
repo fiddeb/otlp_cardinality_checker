@@ -1,5 +1,8 @@
 -- Add OTLP-standard fields to spans table
 
+-- Record this migration
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (5);
+
 -- Add kind as INTEGER (OTLP SpanKind enum: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER)
 ALTER TABLE spans ADD COLUMN kind_number INTEGER;
 

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,6 +80,54 @@ func DefaultConfig(dbPath string) Config {
 	}
 }
 
+// runMigrations runs all migrations that haven't been applied yet.
+func runMigrations(db *sql.DB) error {
+	// Define all migrations with their version numbers
+	migrations := []struct {
+		version int
+		sql     string
+	}{
+		{1, migration001SQL},
+		{2, migration002SQL},
+		{3, migration003SQL},
+		{4, migration004SQL},
+		{5, migration005SQL},
+	}
+
+	// Get already applied migrations
+	appliedVersions := make(map[int]bool)
+	rows, err := db.Query("SELECT version FROM schema_migrations")
+	if err != nil {
+		// Table doesn't exist yet, this is fine - migration 1 will create it
+		if !strings.Contains(err.Error(), "no such table") {
+			return fmt.Errorf("querying schema_migrations: %w", err)
+		}
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var version int
+			if err := rows.Scan(&version); err != nil {
+				return fmt.Errorf("scanning version: %w", err)
+			}
+			appliedVersions[version] = true
+		}
+	}
+
+	// Run unapplied migrations in order
+	for _, m := range migrations {
+		if appliedVersions[m.version] {
+			continue // Already applied
+		}
+
+		if _, err := db.Exec(m.sql); err != nil {
+			return fmt.Errorf("running migration %d: %w", m.version, err)
+		}
+	}
+
+	return nil
+}
+
+
 // New creates a new SQLite store with the given configuration.
 func New(cfg Config) (*Store, error) {
 	// Open database
@@ -104,13 +153,10 @@ func New(cfg Config) (*Store, error) {
 		}
 	}
 
-	// Run migrations in order
-	migrations := []string{migration001SQL, migration002SQL, migration003SQL, migration004SQL, migration005SQL}
-	for i, migration := range migrations {
-		if _, err := db.Exec(migration); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("running migration %d: %w", i+1, err)
-		}
+	// Run migrations intelligently - only if not already applied
+	if err := runMigrations(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 
 	store := &Store{

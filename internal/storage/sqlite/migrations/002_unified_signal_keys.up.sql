@@ -2,6 +2,9 @@
 -- Consolidates metric_keys, span_keys, and log_keys into a single table
 -- This enables cross-signal cardinality analysis and simpler filtering
 
+-- Record this migration
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (2);
+
 -- ============================================================================
 -- CREATE NEW UNIFIED TABLE
 -- ============================================================================
