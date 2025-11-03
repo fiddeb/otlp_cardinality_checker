@@ -203,8 +203,26 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add convenience "type" field at top level for UI compatibility
+	type MetricResponse struct {
+		*models.MetricMetadata
+		Type string `json:"type"`
+	}
+	
+	metricsWithType := make([]*MetricResponse, len(metrics))
+	for i, m := range metrics {
+		metricType := "Unknown"
+		if m.Data != nil {
+			metricType = m.Data.GetType()
+		}
+		metricsWithType[i] = &MetricResponse{
+			MetricMetadata: m,
+			Type:           metricType,
+		}
+	}
+
 	// Apply pagination
-	_, response := paginateSlice(metrics, params)
+	_, response := paginateSlice(metricsWithType, params)
 	s.respondJSON(w, http.StatusOK, response)
 }
 
@@ -223,7 +241,23 @@ func (s *Server) getMetric(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, metric)
+	// Add convenience "type" field at top level for UI compatibility
+	type MetricResponse struct {
+		*models.MetricMetadata
+		Type string `json:"type"`
+	}
+	
+	metricType := "Unknown"
+	if metric.Data != nil {
+		metricType = metric.Data.GetType()
+	}
+	
+	response := &MetricResponse{
+		MetricMetadata: metric,
+		Type:           metricType,
+	}
+
+	s.respondJSON(w, http.StatusOK, response)
 }
 
 // listSpans returns all spans, optionally filtered by service.
