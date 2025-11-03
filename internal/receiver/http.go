@@ -10,6 +10,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer"
 	"github.com/fidde/otlp_cardinality_checker/internal/config"
@@ -20,6 +22,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
+
+// Log level configuration
+var verboseLogging = strings.ToLower(os.Getenv("VERBOSE_LOGGING")) == "true"
 
 // min returns the minimum of two integers
 func min(a, b int) int {
@@ -124,9 +129,11 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 	var exportReq colmetricspb.ExportMetricsServiceRequest
 	contentType := req.Header.Get("Content-Type")
 	
-	// Log for debugging
-	fmt.Printf("Received metrics request: Content-Type=%s, Content-Encoding=%s, Body length=%d\n", 
-		contentType, req.Header.Get("Content-Encoding"), len(body))
+	// Log for debugging (only if verbose logging is enabled)
+	if verboseLogging {
+		fmt.Printf("Received metrics request: Content-Type=%s, Content-Encoding=%s, Body length=%d\n", 
+			contentType, req.Header.Get("Content-Encoding"), len(body))
+	}
 
 	// Always try protobuf first (default for OTLP), then fallback to JSON
 	if err := proto.Unmarshal(body, &exportReq); err != nil {
@@ -135,32 +142,36 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 			DiscardUnknown: true,
 		}
 		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			fmt.Printf("Failed to parse as both protobuf and JSON\n")
-			fmt.Printf("Protobuf error: %v\n", err)
-			fmt.Printf("JSON error: %v\n", jsonErr)
-			fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			log.Printf("Failed to parse metrics request: protobuf error: %v, json error: %v", err, jsonErr)
+			if verboseLogging {
+				fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			}
 			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
 			return
 		}
-		fmt.Println("Parsed as JSON")
-	} else {
+		if verboseLogging {
+			fmt.Println("Parsed as JSON")
+		}
+	} else if verboseLogging {
 		fmt.Println("Parsed as protobuf")
 	}
 
 	// Analyze metrics
 	metricsMetadata, err := r.metricsAnalyzer.Analyze(&exportReq)
 	if err != nil {
-		fmt.Printf("Analysis error: %v\n", err)
+		log.Printf("Metrics analysis error: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze metrics: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Printf("Successfully analyzed %d metrics\n", len(metricsMetadata))
+	if verboseLogging {
+		fmt.Printf("Successfully analyzed %d metrics\n", len(metricsMetadata))
+	}
 
 	// Store metadata
 	for _, metadata := range metricsMetadata {
 		if err := r.store.StoreMetric(ctx, metadata); err != nil {
-			fmt.Printf("Storage error: %v\n", err)
+			log.Printf("Storage error: %v\n", err)
 			http.Error(w, fmt.Sprintf("Failed to store metric: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -205,22 +216,24 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 	if err := proto.Unmarshal(body, &exportReq); err != nil {
 		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
 		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			fmt.Printf("Failed to parse traces as both protobuf and JSON\n")
-			fmt.Printf("Protobuf error: %v\n", err)
-			fmt.Printf("JSON error: %v\n", jsonErr)
-			fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			log.Printf("Failed to parse traces request: protobuf error: %v, json error: %v", err, jsonErr)
+			if verboseLogging {
+				fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			}
 			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
 			return
 		}
-		fmt.Println("Parsed traces as JSON")
-	} else {
+		if verboseLogging {
+			fmt.Println("Parsed traces as JSON")
+		}
+	} else if verboseLogging {
 		fmt.Println("Parsed traces as protobuf")
 	}
 
 	// Analyze traces
 	spansMetadata, err := r.tracesAnalyzer.Analyze(&exportReq)
 	if err != nil {
-		fmt.Printf("Trace analysis error: %v\n", err)
+		log.Printf("Trace analysis error: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze traces: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -230,7 +243,7 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 	// Store metadata
 	for _, metadata := range spansMetadata {
 		if err := r.store.StoreSpan(ctx, metadata); err != nil {
-			fmt.Printf("Span storage error: %v\n", err)
+			log.Printf("Span storage error: %v\n", err)
 			http.Error(w, fmt.Sprintf("Failed to store span: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -275,32 +288,38 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 	if err := proto.Unmarshal(body, &exportReq); err != nil {
 		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
 		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			fmt.Printf("Failed to parse logs as both protobuf and JSON\n")
-			fmt.Printf("Protobuf error: %v\n", err)
-			fmt.Printf("JSON error: %v\n", jsonErr)
-			fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+			log.Printf("Failed to parse logs as both protobuf and JSON\n")
+			log.Printf("Protobuf error: %v\n", err)
+			log.Printf("JSON error: %v\n", jsonErr)
+			log.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
 			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
 			return
 		}
-		fmt.Println("Parsed logs as JSON")
+		if verboseLogging {
+			fmt.Println("Parsed logs as JSON")
+		}
 	} else {
-		fmt.Println("Parsed logs as protobuf")
+		if verboseLogging {
+			fmt.Println("Parsed logs as protobuf")
+		}
 	}
 
 	// Analyze logs
 	logsMetadata, err := r.logsAnalyzer.Analyze(&exportReq)
 	if err != nil {
-		fmt.Printf("Log analysis error: %v\n", err)
+		log.Printf("Log analysis error: %v\n", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze logs: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Printf("Successfully analyzed %d log severities\n", len(logsMetadata))
+	if verboseLogging {
+		fmt.Printf("Successfully analyzed %d log severities\n", len(logsMetadata))
+	}
 
 	// Store metadata
 	for _, metadata := range logsMetadata {
 		if err := r.store.StoreLog(ctx, metadata); err != nil {
-			fmt.Printf("Log storage error: %v\n", err)
+			log.Printf("Log storage error: %v\n", err)
 			http.Error(w, fmt.Sprintf("Failed to store log: %v", err), http.StatusInternalServerError)
 			return
 		}
