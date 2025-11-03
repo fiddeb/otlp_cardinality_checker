@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -56,6 +58,15 @@ func main() {
 	apiAddr := getEnv("API_ADDR", "0.0.0.0:8080")
 	apiServer := api.NewServer(apiAddr, store)
 
+	// Start pprof server for profiling (separate port)
+	pprofAddr := getEnv("PPROF_ADDR", "localhost:6060")
+	go func() {
+		log.Printf("Starting pprof server on http://%s/debug/pprof", pprofAddr)
+		if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+			log.Printf("pprof server error: %v", err)
+		}
+	}()
+
 	// Start servers in goroutines
 	errChan := make(chan error, 3)
 
@@ -94,6 +105,8 @@ func main() {
 	log.Printf("  - Logs: http://%s/api/v1/logs", apiAddr)
 	log.Printf("  - Services: http://%s/api/v1/services", apiAddr)
 	log.Printf("  - Health: http://%s/health", apiAddr)
+	log.Println("Profiling:")
+	log.Printf("  - pprof: http://%s/debug/pprof", pprofAddr)
 
 	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
