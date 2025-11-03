@@ -20,6 +20,7 @@ function App() {
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [selectedLogService, setSelectedLogService] = useState(null)
   const [selectedLogPattern, setSelectedLogPattern] = useState(null)
+  const [navigationHistory, setNavigationHistory] = useState([])
   const [isClearing, setIsClearing] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage or system preference
@@ -40,6 +41,25 @@ function App() {
     // Save preference
     localStorage.setItem('darkMode', darkMode)
   }, [darkMode])
+
+  useEffect(() => {
+    // Handle browser back/forward button
+    const handlePopState = (event) => {
+      event.preventDefault()
+      // Trigger our internal back handler
+      handleBack()
+    }
+
+    // Push initial state when app loads
+    window.history.pushState({ page: 'app' }, '', window.location.href)
+    
+    // Listen for popstate (browser back/forward)
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [navigationHistory]) // Re-attach when history changes
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode)
@@ -71,41 +91,78 @@ function App() {
     }
   }
 
+  const pushNavigation = (tab, state = {}) => {
+    // Save current state to history before navigating
+    const currentState = {
+      tab: activeTab,
+      selectedItem,
+      selectedService,
+      selectedTemplate,
+      selectedLogService,
+      selectedLogPattern
+    }
+    setNavigationHistory(prev => [...prev, currentState])
+    
+    // Push to browser history to prevent leaving the page
+    window.history.pushState({ page: 'app' }, '', window.location.href)
+    
+    // Navigate to new state
+    setActiveTab(tab)
+    setSelectedItem(state.selectedItem || null)
+    setSelectedService(state.selectedService || null)
+    setSelectedTemplate(state.selectedTemplate || null)
+    setSelectedLogService(state.selectedLogService || null)
+    setSelectedLogPattern(state.selectedLogPattern || null)
+  }
+
   const handleViewDetails = (type, name) => {
-    setSelectedItem({ type, name })
-    setActiveTab('details')
+    pushNavigation('details', { selectedItem: { type, name } })
   }
 
   const handleViewService = (serviceName) => {
-    setSelectedService(serviceName)
-    setActiveTab('service')
+    pushNavigation('service', { selectedService: serviceName })
   }
 
   const handleViewTemplate = (severity, template) => {
-    setSelectedTemplate({ severity, template })
-    setActiveTab('template-details')
+    pushNavigation('template-details', { selectedTemplate: { severity, template } })
   }
 
-  const handleViewLogServiceDetails = (serviceName, severity) => {
-    setSelectedLogService({ serviceName, severity })
-    setActiveTab('log-service-details')
+  const handleViewLogService = (serviceName, severity) => {
+    pushNavigation('log-service-details', { selectedLogService: { serviceName, severity } })
   }
 
   const handleViewLogPattern = (serviceName, severity, template) => {
-    setSelectedLogPattern({ serviceName, severity, template })
-    setActiveTab('log-pattern-details')
+    pushNavigation('log-pattern-details', { selectedLogPattern: { serviceName, severity, template } })
   }
 
   const handleBack = () => {
-    setSelectedItem(null)
-    setSelectedService(null)
-    setSelectedTemplate(null)
-    setSelectedLogService(null)
-    setSelectedLogPattern(null)
-    setActiveTab('dashboard')
+    if (navigationHistory.length === 0) {
+      // No history, go to dashboard
+      setSelectedItem(null)
+      setSelectedService(null)
+      setSelectedTemplate(null)
+      setSelectedLogService(null)
+      setSelectedLogPattern(null)
+      setActiveTab('dashboard')
+      return
+    }
+
+    // Pop last state from history
+    const previousState = navigationHistory[navigationHistory.length - 1]
+    setNavigationHistory(prev => prev.slice(0, -1))
+    
+    // Restore previous state
+    setActiveTab(previousState.tab)
+    setSelectedItem(previousState.selectedItem)
+    setSelectedService(previousState.selectedService)
+    setSelectedTemplate(previousState.selectedTemplate)
+    setSelectedLogService(previousState.selectedLogService)
+    setSelectedLogPattern(previousState.selectedLogPattern)
   }
 
   const handleBackToServiceDetails = () => {
+    // This is a special case for log pattern -> log service navigation
+    // Instead of using history, we know we want to go back to log-service-details
     setSelectedLogPattern(null)
     setActiveTab('log-service-details')
   }
@@ -140,49 +197,73 @@ function App() {
         <div className="tabs">
           <button 
             className={`tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => {
+              setActiveTab('dashboard')
+              setNavigationHistory([]) // Clear history when clicking tabs
+            }}
           >
             Dashboard
           </button>
           <button 
             className={`tab ${activeTab === 'metadata-complexity' ? 'active' : ''}`}
-            onClick={() => setActiveTab('metadata-complexity')}
+            onClick={() => {
+              setActiveTab('metadata-complexity')
+              setNavigationHistory([])
+            }}
           >
             Metadata Complexity
           </button>
           <button 
             className={`tab ${activeTab === 'metrics-overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('metrics-overview')}
+            onClick={() => {
+              setActiveTab('metrics-overview')
+              setNavigationHistory([])
+            }}
           >
             Metrics Overview
           </button>
           <button 
             className={`tab ${activeTab === 'metrics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('metrics')}
+            onClick={() => {
+              setActiveTab('metrics')
+              setNavigationHistory([])
+            }}
           >
             Metrics Details
           </button>
           <button 
             className={`tab ${activeTab === 'traces' ? 'active' : ''}`}
-            onClick={() => setActiveTab('traces')}
+            onClick={() => {
+              setActiveTab('traces')
+              setNavigationHistory([])
+            }}
           >
             Traces
           </button>
           <button 
             className={`tab ${activeTab === 'logs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('logs')}
+            onClick={() => {
+              setActiveTab('logs')
+              setNavigationHistory([])
+            }}
           >
             Logs
           </button>
           <button 
             className={`tab ${activeTab === 'noisy-neighbors' ? 'active' : ''}`}
-            onClick={() => setActiveTab('noisy-neighbors')}
+            onClick={() => {
+              setActiveTab('noisy-neighbors')
+              setNavigationHistory([])
+            }}
           >
             Noisy Neighbors
           </button>
           <button 
             className={`tab ${activeTab === 'memory' ? 'active' : ''}`}
-            onClick={() => setActiveTab('memory')}
+            onClick={() => {
+              setActiveTab('memory')
+              setNavigationHistory([])
+            }}
           >
             Memory
           </button>
@@ -210,7 +291,7 @@ function App() {
       )}
 
       {activeTab === 'logs' && (
-        <LogsView onViewServiceDetails={handleViewLogServiceDetails} />
+        <LogsView onViewServiceDetails={handleViewLogService} />
       )}
 
       {activeTab === 'noisy-neighbors' && (
