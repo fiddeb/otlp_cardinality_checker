@@ -8,6 +8,8 @@ function MetricsOverview({ onViewMetric }) {
     type: 'all',
     search: ''
   })
+  const [sortField, setSortField] = useState('sample_count')
+  const [sortDirection, setSortDirection] = useState('desc')
 
   useEffect(() => {
     fetch('/api/v1/metrics?limit=1000')
@@ -68,6 +70,55 @@ function MetricsOverview({ onViewMetric }) {
     
     const complexity = totalKeys * maxCardinality
     return complexity > 0 ? complexity : 0
+  }
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
+
+  const getSortedMetrics = (metrics) => {
+    return [...metrics].sort((a, b) => {
+      let aVal, bVal
+      
+      switch(sortField) {
+        case 'name':
+          aVal = a.name
+          bVal = b.name
+          break
+        case 'type':
+          aVal = a.type
+          bVal = b.type
+          break
+        case 'unit':
+          aVal = a.unit || ''
+          bVal = b.unit || ''
+          break
+        case 'sample_count':
+          aVal = a.sample_count
+          bVal = b.sample_count
+          break
+        case 'complexity':
+          aVal = getComplexity(a)
+          bVal = getComplexity(b)
+          break
+        default:
+          aVal = a.sample_count
+          bVal = b.sample_count
+      }
+      
+      if (typeof aVal === 'string') {
+        return sortDirection === 'asc' 
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal)
+      } else {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
+      }
+    })
   }
 
   if (loading) return <div className="loading">Loading metrics...</div>
@@ -148,17 +199,26 @@ function MetricsOverview({ onViewMetric }) {
       <table>
         <thead>
           <tr>
-            <th>Metric Name</th>
-            <th>Type</th>
-            <th>Unit</th>
+            <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
+              Metric Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('type')} style={{ cursor: 'pointer' }}>
+              Type {sortField === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('unit')} style={{ cursor: 'pointer' }}>
+              Unit {sortField === 'unit' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
             <th>Description</th>
-            <th>Observations</th>
-            <th>Complexity</th>
+            <th onClick={() => handleSort('sample_count')} style={{ cursor: 'pointer' }}>
+              Observations {sortField === 'sample_count' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('complexity')} style={{ cursor: 'pointer' }}>
+              Complexity {sortField === 'complexity' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
           </tr>
         </thead>
         <tbody>
-          {filteredMetrics
-            .sort((a, b) => b.sample_count - a.sample_count)
+          {getSortedMetrics(filteredMetrics)
             .map((metric, i) => (
               <tr key={i}>
                 <td>

@@ -11,6 +11,8 @@ function MetricsView({ onViewDetails }) {
     minCardinality: 0,
     search: ''
   })
+  const [sortField, setSortField] = useState('sample_count')
+  const [sortDirection, setSortDirection] = useState('desc')
 
   const itemsPerPage = 100
 
@@ -67,6 +69,85 @@ function MetricsView({ onViewDetails }) {
       'ExponentialHistogram': '#d32f2f'
     }
     return colors[type] || 'var(--text-secondary)'
+  }
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
+
+  const getSortedMetrics = (metrics) => {
+    return [...metrics].sort((a, b) => {
+      let aVal, bVal
+      
+      switch(sortField) {
+        case 'name':
+          aVal = a.name
+          bVal = b.name
+          break
+        case 'type':
+          aVal = a.type
+          bVal = b.type
+          break
+        case 'sample_count':
+          aVal = a.sample_count
+          bVal = b.sample_count
+          break
+        case 'labels':
+          aVal = a.label_keys ? Object.keys(a.label_keys).length : 0
+          bVal = b.label_keys ? Object.keys(b.label_keys).length : 0
+          break
+        case 'resources':
+          aVal = a.resource_keys ? Object.keys(a.resource_keys).length : 0
+          bVal = b.resource_keys ? Object.keys(b.resource_keys).length : 0
+          break
+        case 'cardinality':
+          aVal = getMaxCardinality(a)
+          bVal = getMaxCardinality(b)
+          break
+        case 'complexity':
+          // Calculate complexity inline
+          const aLabels = a.label_keys ? Object.keys(a.label_keys).length : 0
+          const aResources = a.resource_keys ? Object.keys(a.resource_keys).length : 0
+          let aBuckets = 0
+          if (a.type === 'Histogram' && a.data && a.data.explicit_bounds) {
+            aBuckets = a.data.explicit_bounds.length + 1
+          } else if (a.type === 'ExponentialHistogram' && a.data && a.data.scales) {
+            aBuckets = a.data.scales.length * 10
+          }
+          aVal = (aLabels + aResources + aBuckets) * getMaxCardinality(a)
+          
+          const bLabels = b.label_keys ? Object.keys(b.label_keys).length : 0
+          const bResources = b.resource_keys ? Object.keys(b.resource_keys).length : 0
+          let bBuckets = 0
+          if (b.type === 'Histogram' && b.data && b.data.explicit_bounds) {
+            bBuckets = b.data.explicit_bounds.length + 1
+          } else if (b.type === 'ExponentialHistogram' && b.data && b.data.scales) {
+            bBuckets = b.data.scales.length * 10
+          }
+          bVal = (bLabels + bResources + bBuckets) * getMaxCardinality(b)
+          break
+        case 'services':
+          aVal = a.services ? Object.keys(a.services).length : 0
+          bVal = b.services ? Object.keys(b.services).length : 0
+          break
+        default:
+          aVal = a.sample_count
+          bVal = b.sample_count
+      }
+      
+      if (typeof aVal === 'string') {
+        return sortDirection === 'asc' 
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal)
+      } else {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
+      }
+    })
   }
 
   if (loading) return <div className="loading">Loading...</div>
@@ -170,19 +251,34 @@ function MetricsView({ onViewDetails }) {
       <table>
         <thead>
           <tr>
-            <th>Metric Name</th>
-            <th>Type</th>
-            <th>Samples</th>
-            <th>Labels</th>
-            <th>Resources</th>
-            <th>Max Cardinality</th>
-            <th>Complexity</th>
-            <th>Services</th>
+            <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
+              Metric Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('type')} style={{ cursor: 'pointer' }}>
+              Type {sortField === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('sample_count')} style={{ cursor: 'pointer' }}>
+              Samples {sortField === 'sample_count' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('labels')} style={{ cursor: 'pointer' }}>
+              Labels {sortField === 'labels' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('resources')} style={{ cursor: 'pointer' }}>
+              Resources {sortField === 'resources' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('cardinality')} style={{ cursor: 'pointer' }}>
+              Max Cardinality {sortField === 'cardinality' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('complexity')} style={{ cursor: 'pointer' }}>
+              Complexity {sortField === 'complexity' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
+            <th onClick={() => handleSort('services')} style={{ cursor: 'pointer' }}>
+              Services {sortField === 'services' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
           </tr>
         </thead>
         <tbody>
-          {currentMetrics
-            .sort((a, b) => b.sample_count - a.sample_count)
+          {getSortedMetrics(currentMetrics)
             .map((metric, i) => {
               const maxCard = getMaxCardinality(metric)
               const labelCount = metric.label_keys ? Object.keys(metric.label_keys).length : 0
