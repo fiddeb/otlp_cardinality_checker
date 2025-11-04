@@ -35,6 +35,11 @@ type Storage interface {
 	// Metadata complexity analysis
 	GetMetadataComplexity(ctx context.Context, threshold int, limit int) (*models.MetadataComplexityResponse, error)
 
+	// Attribute catalog operations
+	StoreAttributeValue(ctx context.Context, key, value, signalType, scope string) error
+	GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error)
+	ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, error)
+
 	// Service operations
 	ListServices(ctx context.Context) ([]string, error)
 	GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error)

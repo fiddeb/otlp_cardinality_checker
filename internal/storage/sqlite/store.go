@@ -289,6 +289,25 @@ func (s *Store) executeBatch(batch []writeOp) error {
 	return nil
 }
 
+// StoreAttributeValue stores or updates an attribute key-value observation.
+// TODO: Implement full SQLite persistence for attribute catalog
+func (s *Store) StoreAttributeValue(ctx context.Context, key, value, signalType, scope string) error {
+	// For now, return not implemented - will be implemented in next commit
+	return fmt.Errorf("attribute catalog SQLite storage not yet implemented")
+}
+
+// GetAttribute retrieves attribute metadata by key.
+// TODO: Implement full SQLite persistence for attribute catalog
+func (s *Store) GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error) {
+	return nil, fmt.Errorf("attribute catalog SQLite storage not yet implemented")
+}
+
+// ListAttributes lists all attributes with optional filtering.
+// TODO: Implement full SQLite persistence for attribute catalog
+func (s *Store) ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, error) {
+	return nil, fmt.Errorf("attribute catalog SQLite storage not yet implemented")
+}
+
 // Close closes the store and releases resources.
 func (s *Store) Close() error {
 	var err error
