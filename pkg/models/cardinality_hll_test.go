@@ -49,7 +49,7 @@ func TestCardinalityInfoHLL_LargeCardinality(t *testing.T) {
 	}
 
 	count := c.Count()
-	errorPct := float64(count-numValues) / float64(numValues) * 100
+	errorPct := float64(int(count)-numValues) / float64(numValues) * 100
 	if errorPct < 0 {
 		errorPct = -errorPct
 	}
@@ -84,8 +84,8 @@ func TestCardinalityInfoHLL_Merge(t *testing.T) {
 	}
 
 	count := c1.Count()
-	expected := uint64(10000)
-	errorPct := float64(count-expected) / float64(expected) * 100
+	expected := 10000
+	errorPct := float64(int(count)-expected) / float64(expected) * 100
 	if errorPct < 0 {
 		errorPct = -errorPct
 	}
