@@ -410,7 +410,31 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	// Merge resource keys
 	for key, otherKeyMeta := range other.ResourceKeys {
 		if existing, exists := m.ResourceKeys[key]; exists {
+			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
+			
+			// Merge HLL sketches for accurate cardinality
+			existing.hll.Merge(otherKeyMeta.hll)
+			existing.EstimatedCardinality = int64(existing.hll.Count())
+			
+			// Merge value samples (keep first N unique)
+			for _, sample := range otherKeyMeta.ValueSamples {
+				if len(existing.ValueSamples) >= existing.MaxSamples {
+					break
+				}
+				// Check if sample already exists
+				found := false
+				for _, existingSample := range existing.ValueSamples {
+					if existingSample == sample {
+						found = true
+						break
+					}
+				}
+				if !found {
+					existing.ValueSamples = append(existing.ValueSamples, sample)
+				}
+			}
+			existing.mu.Unlock()
 		} else {
 			m.ResourceKeys[key] = otherKeyMeta
 		}

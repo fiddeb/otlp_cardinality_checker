@@ -405,6 +405,15 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // StoreMetric stores or updates metric metadata.
 func (s *Store) StoreMetric(ctx context.Context, metric *models.MetricMetadata) error {
+	// Read existing metric if it exists, merge before storing
+	existingMetric, err := s.GetMetric(ctx, metric.Name)
+	if err == nil && existingMetric != nil {
+		// Metric exists - merge new data with existing using HLL
+		existingMetric.MergeMetricMetadata(metric)
+		metric = existingMetric
+	}
+	// If error (not found), just use new metric as-is
+	
 	// Fire-and-forget: send to batch writer without waiting
 	select {
 	case s.writeCh <- writeOp{opType: "StoreMetric", data: metric, done: nil}:
@@ -418,6 +427,8 @@ func (s *Store) StoreMetric(ctx context.Context, metric *models.MetricMetadata) 
 
 // storeMetricTx stores metric metadata within a transaction.
 func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
+	// Note: Merging is already done in StoreMetric() before calling this function
+	
 	// Serialize metric data to JSON
 	var metricDataJSON string
 	if metric.Data != nil {
@@ -436,7 +447,7 @@ func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
 			type = excluded.type,
 			unit = COALESCE(excluded.unit, unit),
 			description = COALESCE(excluded.description, description),
-			total_sample_count = total_sample_count + excluded.total_sample_count,
+			total_sample_count = excluded.total_sample_count,
 			metric_data = COALESCE(excluded.metric_data, metric_data)
 	`, metric.Name, metric.GetType(), metric.Unit, metric.Description, metric.SampleCount, metricDataJSON)
 	if err != nil {
@@ -445,11 +456,11 @@ func (s *Store) storeMetricTx(tx *sql.Tx, metric *models.MetricMetadata) error {
 
 	// 2. Upsert service mappings
 	for service, count := range metric.Services {
-		_, err := tx.Exec(`
+		_, err = tx.Exec(`
 			INSERT INTO metric_services (metric_name, service_name, sample_count)
 			VALUES (?, ?, ?)
 			ON CONFLICT(metric_name, service_name) DO UPDATE SET
-				sample_count = sample_count + excluded.sample_count
+				sample_count = excluded.sample_count
 		`, metric.Name, service, count)
 		if err != nil {
 			return fmt.Errorf("upserting metric service %s: %w", service, err)
@@ -485,7 +496,7 @@ func (s *Store) upsertKeysForMetric(tx *sql.Tx, metricName, keyScope string, key
 				estimated_cardinality, value_samples, hll_sketch
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(metric_name, key_scope, key_name) DO UPDATE SET
-				key_count = key_count + excluded.key_count,
+				key_count = excluded.key_count,
 				key_percentage = excluded.key_percentage,
 				estimated_cardinality = excluded.estimated_cardinality,
 				value_samples = excluded.value_samples,
@@ -504,7 +515,7 @@ func (s *Store) upsertKeysForMetric(tx *sql.Tx, metricName, keyScope string, key
 				key_count, key_percentage, estimated_cardinality, value_samples, hll_sketch
 			) VALUES ('metric', ?, ?, ?, '', ?, ?, ?, ?, ?)
 			ON CONFLICT(signal_type, signal_name, key_scope, key_name, event_name) DO UPDATE SET
-				key_count = key_count + excluded.key_count,
+				key_count = excluded.key_count,
 				key_percentage = excluded.key_percentage,
 				estimated_cardinality = excluded.estimated_cardinality,
 				value_samples = excluded.value_samples,
@@ -638,7 +649,15 @@ func (s *Store) getKeysForMetric(ctx context.Context, metricName, keyScope strin
 			return nil, fmt.Errorf("decoding samples for key %s: %w", keyName, err)
 		}
 
-		keys[keyName] = &keyMeta
+		// Initialize HLL for merging (since we don't store HLL sketch in DB yet)
+		// We'll lose exact HLL state but cardinality count is preserved
+		km := models.NewKeyMetadata()
+		km.Count = keyMeta.Count
+		km.Percentage = keyMeta.Percentage
+		km.EstimatedCardinality = keyMeta.EstimatedCardinality
+		km.ValueSamples = keyMeta.ValueSamples
+		
+		keys[keyName] = km
 	}
 
 	return keys, rows.Err()
