@@ -26,6 +26,10 @@ type Store struct {
 	logs map[string]*models.LogMetadata
 	logsmu sync.RWMutex
 
+	// Attributes storage: attribute key -> metadata
+	attributes map[string]*models.AttributeMetadata
+	attributesmu sync.RWMutex
+
 	// Services tracks all service names seen
 	services map[string]struct{}
 	servicesmu sync.RWMutex
@@ -50,6 +54,7 @@ func NewWithAutoTemplate(useAutoTemplate bool) *Store {
 		metrics:         make(map[string]*models.MetricMetadata),
 		spans:           make(map[string]*models.SpanMetadata),
 		logs:            make(map[string]*models.LogMetadata),
+		attributes:      make(map[string]*models.AttributeMetadata),
 		services:        make(map[string]struct{}),
 		useAutoTemplate: useAutoTemplate,
 		autoTemplateCfg: cfg,
@@ -783,6 +788,137 @@ func (s *Store) Clear(ctx context.Context) error {
 	s.services = make(map[string]struct{})
 
 	return nil
+}
+
+// StoreAttributeValue stores or updates an attribute key-value observation.
+func (s *Store) StoreAttributeValue(ctx context.Context, key, value, signalType, scope string) error {
+	if key == "" {
+		return errors.New("attribute key cannot be empty")
+	}
+
+	s.attributesmu.Lock()
+	defer s.attributesmu.Unlock()
+
+	// Get or create attribute metadata
+	attr, exists := s.attributes[key]
+	if !exists {
+		attr = models.NewAttributeMetadata(key)
+		s.attributes[key] = attr
+	}
+
+	// Add value observation
+	attr.AddValue(value, signalType, scope)
+	return nil
+}
+
+// GetAttribute retrieves attribute metadata by key.
+func (s *Store) GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error) {
+	s.attributesmu.RLock()
+	defer s.attributesmu.RUnlock()
+
+	attr, exists := s.attributes[key]
+	if !exists {
+		return nil, fmt.Errorf("attribute not found: %s", key)
+	}
+
+	return attr, nil
+}
+
+// ListAttributes lists all attributes with optional filtering.
+func (s *Store) ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, error) {
+	s.attributesmu.RLock()
+	defer s.attributesmu.RUnlock()
+
+	// Collect all attributes
+	attrs := make([]*models.AttributeMetadata, 0, len(s.attributes))
+	for _, attr := range s.attributes {
+		// Apply filters
+		if filter != nil {
+			// Filter by signal type
+			if filter.SignalType != "" {
+				found := false
+				for _, st := range attr.SignalTypes {
+					if st == filter.SignalType {
+						found = true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+			}
+
+			// Filter by scope
+			if filter.Scope != "" && attr.Scope != filter.Scope && attr.Scope != "both" {
+				continue
+			}
+
+			// Filter by cardinality range
+			if filter.MinCardinality > 0 && attr.EstimatedCardinality < filter.MinCardinality {
+				continue
+			}
+			if filter.MaxCardinality > 0 && attr.EstimatedCardinality > filter.MaxCardinality {
+				continue
+			}
+		}
+
+		attrs = append(attrs, attr)
+	}
+
+	// Sort results
+	sortBy := "cardinality"
+	sortOrder := "desc"
+	if filter != nil {
+		if filter.SortBy != "" {
+			sortBy = filter.SortBy
+		}
+		if filter.SortOrder != "" {
+			sortOrder = filter.SortOrder
+		}
+	}
+
+	sort.Slice(attrs, func(i, j int) bool {
+		var less bool
+		switch sortBy {
+		case "cardinality":
+			less = attrs[i].EstimatedCardinality < attrs[j].EstimatedCardinality
+		case "count":
+			less = attrs[i].Count < attrs[j].Count
+		case "key":
+			less = attrs[i].Key < attrs[j].Key
+		case "first_seen":
+			less = attrs[i].FirstSeen.Before(attrs[j].FirstSeen)
+		case "last_seen":
+			less = attrs[i].LastSeen.Before(attrs[j].LastSeen)
+		default:
+			less = attrs[i].EstimatedCardinality < attrs[j].EstimatedCardinality
+		}
+
+		if sortOrder == "desc" {
+			return !less
+		}
+		return less
+	})
+
+	// Apply pagination
+	if filter != nil && (filter.Limit > 0 || filter.Offset > 0) {
+		start := filter.Offset
+		if start > len(attrs) {
+			start = len(attrs)
+		}
+
+		end := len(attrs)
+		if filter.Limit > 0 {
+			end = start + filter.Limit
+			if end > len(attrs) {
+				end = len(attrs)
+			}
+		}
+
+		attrs = attrs[start:end]
+	}
+
+	return attrs, nil
 }
 
 // trackServices adds services to the global service set.

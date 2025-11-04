@@ -2,6 +2,7 @@
 package analyzer
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
@@ -11,15 +12,29 @@ import (
 )
 
 // MetricsAnalyzer extracts metadata from OTLP metrics.
-type MetricsAnalyzer struct{}
+type MetricsAnalyzer struct {
+	catalog AttributeCatalog
+}
 
 // NewMetricsAnalyzer creates a new metrics analyzer.
 func NewMetricsAnalyzer() *MetricsAnalyzer {
 	return &MetricsAnalyzer{}
 }
 
+// NewMetricsAnalyzerWithCatalog creates a new metrics analyzer with attribute catalog.
+func NewMetricsAnalyzerWithCatalog(catalog AttributeCatalog) *MetricsAnalyzer {
+	return &MetricsAnalyzer{
+		catalog: catalog,
+	}
+}
+
 // Analyze extracts metadata from an OTLP metrics export request.
 func (a *MetricsAnalyzer) Analyze(req *colmetricspb.ExportMetricsServiceRequest) ([]*models.MetricMetadata, error) {
+	return a.AnalyzeWithContext(context.Background(), req)
+}
+
+// AnalyzeWithContext extracts metadata with context for attribute catalog.
+func (a *MetricsAnalyzer) AnalyzeWithContext(ctx context.Context, req *colmetricspb.ExportMetricsServiceRequest) ([]*models.MetricMetadata, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -30,6 +45,9 @@ func (a *MetricsAnalyzer) Analyze(req *colmetricspb.ExportMetricsServiceRequest)
 		// Extract resource attributes
 		resourceAttrs := extractAttributes(resourceMetrics.Resource.GetAttributes())
 		serviceName := getServiceName(resourceAttrs)
+		
+		// Feed resource attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, resourceAttrs, "metric", "resource")
 
 		for _, scopeMetrics := range resourceMetrics.ScopeMetrics {
 			scopeInfo := &models.ScopeMetadata{
@@ -38,7 +56,7 @@ func (a *MetricsAnalyzer) Analyze(req *colmetricspb.ExportMetricsServiceRequest)
 			}
 
 			for _, metric := range scopeMetrics.Metrics {
-				metadata := a.analyzeMetric(metric, resourceAttrs, serviceName, scopeInfo)
+				metadata := a.analyzeMetricWithContext(ctx, metric, resourceAttrs, serviceName, scopeInfo)
 				if metadata != nil {
 					results = append(results, metadata)
 				}
@@ -49,8 +67,19 @@ func (a *MetricsAnalyzer) Analyze(req *colmetricspb.ExportMetricsServiceRequest)
 	return results, nil
 }
 
-// analyzeMetric extracts metadata from a single metric.
+// analyzeMetric extracts metadata from a single metric (backward compatibility).
 func (a *MetricsAnalyzer) analyzeMetric(
+	metric *metricspb.Metric,
+	resourceAttrs map[string]string,
+	serviceName string,
+	scopeInfo *models.ScopeMetadata,
+) *models.MetricMetadata {
+	return a.analyzeMetricWithContext(context.Background(), metric, resourceAttrs, serviceName, scopeInfo)
+}
+
+// analyzeMetricWithContext extracts metadata from a single metric with context.
+func (a *MetricsAnalyzer) analyzeMetricWithContext(
+	ctx context.Context,
 	metric *metricspb.Metric,
 	resourceAttrs map[string]string,
 	serviceName string,
@@ -116,22 +145,22 @@ func (a *MetricsAnalyzer) analyzeMetric(
 	// Extract data point attributes based on metric type
 	switch data := metric.Data.(type) {
 	case *metricspb.Metric_Gauge:
-		a.extractGaugeKeys(data.Gauge, metadata, serviceName)
+		a.extractGaugeKeys(ctx, data.Gauge, metadata, serviceName)
 	case *metricspb.Metric_Sum:
-		a.extractSumKeys(data.Sum, metadata, serviceName)
+		a.extractSumKeys(ctx, data.Sum, metadata, serviceName)
 	case *metricspb.Metric_Histogram:
-		a.extractHistogramKeys(data.Histogram, metadata, serviceName)
+		a.extractHistogramKeys(ctx, data.Histogram, metadata, serviceName)
 	case *metricspb.Metric_ExponentialHistogram:
-		a.extractExponentialHistogramKeys(data.ExponentialHistogram, metadata, serviceName)
+		a.extractExponentialHistogramKeys(ctx, data.ExponentialHistogram, metadata, serviceName)
 	case *metricspb.Metric_Summary:
-		a.extractSummaryKeys(data.Summary, metadata, serviceName)
+		a.extractSummaryKeys(ctx, data.Summary, metadata, serviceName)
 	}
 
 	return metadata
 }
 
 // extractGaugeKeys extracts label keys from gauge data points.
-func (a *MetricsAnalyzer) extractGaugeKeys(gauge *metricspb.Gauge, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, gauge *metricspb.Gauge, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range gauge.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -139,6 +168,10 @@ func (a *MetricsAnalyzer) extractGaugeKeys(gauge *metricspb.Gauge, metadata *mod
 		}
 
 		attrs := extractAttributes(dp.Attributes)
+		
+		// Feed attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
@@ -160,7 +193,7 @@ func (a *MetricsAnalyzer) extractGaugeKeys(gauge *metricspb.Gauge, metadata *mod
 }
 
 // extractSumKeys extracts label keys from sum data points.
-func (a *MetricsAnalyzer) extractSumKeys(sum *metricspb.Sum, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, sum *metricspb.Sum, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range sum.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -168,6 +201,10 @@ func (a *MetricsAnalyzer) extractSumKeys(sum *metricspb.Sum, metadata *models.Me
 		}
 
 		attrs := extractAttributes(dp.Attributes)
+		
+		// Feed attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
@@ -189,7 +226,7 @@ func (a *MetricsAnalyzer) extractSumKeys(sum *metricspb.Sum, metadata *models.Me
 }
 
 // extractHistogramKeys extracts label keys from histogram data points.
-func (a *MetricsAnalyzer) extractHistogramKeys(histogram *metricspb.Histogram, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, histogram *metricspb.Histogram, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range histogram.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -197,6 +234,10 @@ func (a *MetricsAnalyzer) extractHistogramKeys(histogram *metricspb.Histogram, m
 		}
 
 		attrs := extractAttributes(dp.Attributes)
+		
+		// Feed attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
@@ -218,7 +259,7 @@ func (a *MetricsAnalyzer) extractHistogramKeys(histogram *metricspb.Histogram, m
 }
 
 // extractExponentialHistogramKeys extracts label keys from exponential histogram data points.
-func (a *MetricsAnalyzer) extractExponentialHistogramKeys(histogram *metricspb.ExponentialHistogram, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, histogram *metricspb.ExponentialHistogram, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range histogram.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -226,6 +267,10 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(histogram *metricspb.E
 		}
 
 		attrs := extractAttributes(dp.Attributes)
+		
+		// Feed attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
@@ -247,7 +292,7 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(histogram *metricspb.E
 }
 
 // extractSummaryKeys extracts label keys from summary data points.
-func (a *MetricsAnalyzer) extractSummaryKeys(summary *metricspb.Summary, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, summary *metricspb.Summary, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range summary.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -255,6 +300,10 @@ func (a *MetricsAnalyzer) extractSummaryKeys(summary *metricspb.Summary, metadat
 		}
 
 		attrs := extractAttributes(dp.Attributes)
+		
+		// Feed attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
