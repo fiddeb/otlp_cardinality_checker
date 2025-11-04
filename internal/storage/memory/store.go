@@ -83,11 +83,15 @@ func (s *Store) StoreMetric(ctx context.Context, metric *models.MetricMetadata) 
 
 	// If metric exists, merge with existing
 	if existing, exists := s.metrics[metric.Name]; exists {
+		// DEBUG
+		fmt.Printf("[DEBUG] Merging metric %s (existing samples: %d, new samples: %d)\n",
+			metric.Name, existing.SampleCount, metric.SampleCount)
 		existing.MergeMetricMetadata(metric)
 		return nil
 	}
 
 	// Store new metric
+	fmt.Printf("[DEBUG] Storing new metric %s (samples: %d)\n", metric.Name, metric.SampleCount)
 	s.metrics[metric.Name] = metric
 	return nil
 }
