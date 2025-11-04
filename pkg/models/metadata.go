@@ -9,6 +9,8 @@ import (
 	"errors"
 	"sort"
 	"sync"
+
+	"github.com/fidde/otlp_cardinality_checker/pkg/hyperloglog"
 )
 
 // ErrNotFound is returned when a requested item is not found.
@@ -220,13 +222,44 @@ type KeyMetadata struct {
 	// Limited to MaxSamples to prevent memory issues
 	ValueSamples []string `json:"value_samples,omitempty"`
 
-	// valueSampleSet is used internally to track unique samples
-	valueSampleSet map[string]struct{} `json:"-"`
+	// hll is the HyperLogLog sketch for cardinality estimation
+	// Uses fixed ~16KB memory regardless of cardinality
+	hll *hyperloglog.HyperLogLog `json:"-"`
 
 	// MaxSamples is the maximum number of value samples to keep
 	MaxSamples int `json:"-"`
 
 	mu sync.RWMutex `json:"-"`
+}
+
+// MarshalHLL serializes the HLL sketch to bytes for storage.
+func (k *KeyMetadata) MarshalHLL() ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	
+	if k.hll == nil {
+		return nil, nil
+	}
+	return k.hll.MarshalBinary()
+}
+
+// UnmarshalHLL deserializes an HLL sketch from bytes.
+func (k *KeyMetadata) UnmarshalHLL(data []byte) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	
+	if len(data) == 0 {
+		return nil
+	}
+	
+	hll, err := hyperloglog.FromBytes(data)
+	if err != nil {
+		return err
+	}
+	
+	k.hll = hll
+	k.EstimatedCardinality = int64(hll.Count())
+	return nil
 }
 
 // ScopeMetadata contains information about the instrumentation scope.
@@ -287,29 +320,40 @@ func NewLogMetadata(severity string) *LogMetadata {
 // NewKeyMetadata creates a new KeyMetadata instance with default max samples.
 func NewKeyMetadata() *KeyMetadata {
 	return &KeyMetadata{
-		ValueSamples:   []string{},
-		valueSampleSet: make(map[string]struct{}),
-		MaxSamples:     10, // Default: keep first 10 unique values (enough for sampling)
+		ValueSamples: []string{},
+		hll:          hyperloglog.New(14), // Precision 14 = ~0.81% standard error
+		MaxSamples:   10,                  // Default: keep first 10 unique values (enough for sampling)
 	}
 }
 
 // AddValue adds a value observation to the key metadata.
-// It updates cardinality estimation and value samples.
+// It updates cardinality estimation using HyperLogLog and value samples.
 func (k *KeyMetadata) AddValue(value string) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
 	k.Count++
 
-	// Add to sample set if not full
-	if _, exists := k.valueSampleSet[value]; !exists {
-		if len(k.valueSampleSet) < k.MaxSamples {
-			k.valueSampleSet[value] = struct{}{}
+	// Add to HyperLogLog for cardinality estimation
+	k.hll.Add(value)
+
+	// Add to sample list if not full and value is new
+	if len(k.ValueSamples) < k.MaxSamples {
+		// Check if value already exists in samples
+		exists := false
+		for _, sample := range k.ValueSamples {
+			if sample == value {
+				exists = true
+				break
+			}
+		}
+		if !exists {
 			k.ValueSamples = append(k.ValueSamples, value)
 		}
-		// Update estimated cardinality (includes values beyond MaxSamples)
-		k.EstimatedCardinality++
 	}
+
+	// Update estimated cardinality from HLL
+	k.EstimatedCardinality = int64(k.hll.Count())
 }
 
 // GetSortedSamples returns the value samples in sorted order.
@@ -366,15 +410,25 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
 			
-			// Merge value samples
+			// Merge HLL sketches for accurate cardinality
+			existing.hll.Merge(otherKeyMeta.hll)
+			existing.EstimatedCardinality = int64(existing.hll.Count())
+			
+			// Merge value samples (keep first N unique)
 			for _, sample := range otherKeyMeta.ValueSamples {
-				if _, exists := existing.valueSampleSet[sample]; !exists {
-					if len(existing.valueSampleSet) < existing.MaxSamples {
-						existing.valueSampleSet[sample] = struct{}{}
-						existing.ValueSamples = append(existing.ValueSamples, sample)
+				if len(existing.ValueSamples) >= existing.MaxSamples {
+					break
+				}
+				// Check if sample already exists
+				found := false
+				for _, existingSample := range existing.ValueSamples {
+					if existingSample == sample {
+						found = true
+						break
 					}
-					// Always update cardinality count (even beyond MaxSamples)
-					existing.EstimatedCardinality++
+				}
+				if !found {
+					existing.ValueSamples = append(existing.ValueSamples, sample)
 				}
 			}
 			existing.mu.Unlock()
@@ -386,7 +440,31 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	// Merge resource keys
 	for key, otherKeyMeta := range other.ResourceKeys {
 		if existing, exists := m.ResourceKeys[key]; exists {
+			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
+			
+			// Merge HLL sketches for accurate cardinality
+			existing.hll.Merge(otherKeyMeta.hll)
+			existing.EstimatedCardinality = int64(existing.hll.Count())
+			
+			// Merge value samples (keep first N unique)
+			for _, sample := range otherKeyMeta.ValueSamples {
+				if len(existing.ValueSamples) >= existing.MaxSamples {
+					break
+				}
+				// Check if sample already exists
+				found := false
+				for _, existingSample := range existing.ValueSamples {
+					if existingSample == sample {
+						found = true
+						break
+					}
+				}
+				if !found {
+					existing.ValueSamples = append(existing.ValueSamples, sample)
+				}
+			}
+			existing.mu.Unlock()
 		} else {
 			m.ResourceKeys[key] = otherKeyMeta
 		}

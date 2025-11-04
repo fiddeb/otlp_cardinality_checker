@@ -32,7 +32,7 @@ export const options = {
 const OTLP_ENDPOINT = __ENV.OTLP_ENDPOINT || 'http://localhost:4318';
 const API_ENDPOINT = __ENV.API_ENDPOINT || 'http://localhost:8080';
 const NUM_SPANS = parseInt(__ENV.NUM_SPANS || '100');
-const CARDINALITY = parseInt(__ENV.CARDINALITY || '50');
+const CARDINALITY = parseInt(__ENV.CARDINALITY || '10000'); // Increased from 50 to 10000
 
 // Realistic span names based on microservices architecture
 const spanTemplates = [
@@ -110,13 +110,51 @@ function generateTraceBatch(vu, iter) {
                     attributes.push({ key: 'http.status_code', value: { int_value: [200, 201, 204, 400, 404, 500][Math.floor(Math.random() * 6)] } });
                     break;
                 case 'user_id':
-                    attributes.push({ key: 'user_id', value: { string_value: `user_${userValue}` } });
+                    // High cardinality user_id
+                    attributes.push({ key: 'user_id', value: { string_value: `user_${userValue}_${Math.floor(Math.random() * 1000)}` } });
+                    break;
+                case 'client_ip':
+                    // High cardinality IP addresses
+                    attributes.push({ key: 'client_ip', value: { string_value: `${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}` } });
                     break;
                 case 'order_id':
-                    attributes.push({ key: 'order_id', value: { string_value: `order_${Math.floor(Math.random() * 10000)}` } });
+                    // High cardinality order IDs using timestamp
+                    attributes.push({ key: 'order_id', value: { string_value: `order_${timestamp}_${Math.floor(Math.random() * 10000)}` } });
                     break;
                 case 'product_id':
-                    attributes.push({ key: 'product_id', value: { string_value: `prod_${Math.floor(Math.random() * 500)}` } });
+                    // Increased product range
+                    attributes.push({ key: 'product_id', value: { string_value: `prod_${Math.floor(Math.random() * 5000)}` } });
+                    break;
+                case 'query':
+                    // High cardinality search queries
+                    attributes.push({ key: 'query', value: { string_value: `search_term_${Math.floor(Math.random() * CARDINALITY)}` } });
+                    break;
+                case 'total_amount':
+                    // Variable amounts
+                    attributes.push({ key: 'total_amount', value: { double_value: Math.random() * 1000 } });
+                    break;
+                case 'quantity':
+                    attributes.push({ key: 'quantity', value: { int_value: Math.floor(Math.random() * 100) } });
+                    break;
+                case 'payment_method':
+                    attributes.push({ key: 'payment_method', value: { string_value: ['credit_card', 'debit_card', 'paypal', 'bank_transfer'][Math.floor(Math.random() * 4)] } });
+                    break;
+                case 'user_email':
+                    // High cardinality email addresses
+                    attributes.push({ key: 'user_email', value: { string_value: `user${userValue}@example${Math.floor(Math.random() * 100)}.com` } });
+                    break;
+                case 'category':
+                    attributes.push({ key: 'category', value: { string_value: `category_${Math.floor(Math.random() * 50)}` } });
+                    break;
+                case 'email':
+                    attributes.push({ key: 'email', value: { string_value: `user${Math.floor(Math.random() * CARDINALITY)}@example.com` } });
+                    break;
+                case 'signup_method':
+                    attributes.push({ key: 'signup_method', value: { string_value: ['email', 'google', 'facebook', 'apple'][Math.floor(Math.random() * 4)] } });
+                    break;
+                case 'reset_token':
+                    // High cardinality tokens
+                    attributes.push({ key: 'reset_token', value: { string_value: `token_${timestamp}_${Math.random().toString(36).substring(7)}` } });
                     break;
                 case 'db.system':
                     attributes.push({ key: 'db.system', value: { string_value: 'postgresql' } });
@@ -131,7 +169,11 @@ function generateTraceBatch(vu, iter) {
                     attributes.push({ key: 'cache.hit', value: { bool_value: Math.random() > 0.3 } });
                     break;
                 case 'cache.key':
-                    attributes.push({ key: 'cache.key', value: { string_value: spanTemplate.name.split(': ')[1] } });
+                    // High cardinality cache keys
+                    attributes.push({ key: 'cache.key', value: { string_value: `${spanTemplate.name.split(': ')[1]}_${Math.floor(Math.random() * CARDINALITY)}` } });
+                    break;
+                case 'cache.ttl':
+                    attributes.push({ key: 'cache.ttl', value: { int_value: [300, 600, 1800, 3600][Math.floor(Math.random() * 4)] } });
                     break;
                 case 'messaging.system':
                     attributes.push({ key: 'messaging.system', value: { string_value: 'kafka' } });
@@ -139,11 +181,34 @@ function generateTraceBatch(vu, iter) {
                 case 'messaging.destination':
                     attributes.push({ key: 'messaging.destination', value: { string_value: 'order-events' } });
                     break;
+                case 'messaging.source':
+                    attributes.push({ key: 'messaging.source', value: { string_value: 'payment-events' } });
+                    break;
                 case 'payment.provider':
                     attributes.push({ key: 'payment.provider', value: { string_value: ['stripe', 'paypal', 'klarna'][Math.floor(Math.random() * 3)] } });
                     break;
+                case 'payment.method':
+                    attributes.push({ key: 'payment.method', value: { string_value: ['card', 'bank', 'wallet'][Math.floor(Math.random() * 3)] } });
+                    break;
+                case 'amount':
+                    attributes.push({ key: 'amount', value: { double_value: Math.random() * 1000 } });
+                    break;
+                case 'phone_number':
+                    // High cardinality phone numbers
+                    attributes.push({ key: 'phone_number', value: { string_value: `+1${Math.floor(Math.random() * 10000000000)}` } });
+                    break;
+                case 'message_type':
+                    attributes.push({ key: 'message_type', value: { string_value: ['order_confirmation', 'shipping_update', 'promo'][Math.floor(Math.random() * 3)] } });
+                    break;
+                case 'limit':
+                    attributes.push({ key: 'limit', value: { int_value: [10, 20, 50, 100][Math.floor(Math.random() * 4)] } });
+                    break;
+                case 'stock_delta':
+                    attributes.push({ key: 'stock_delta', value: { int_value: Math.floor(Math.random() * 100) - 50 } });
+                    break;
                 default:
-                    attributes.push({ key: attr, value: { string_value: `value_${Math.floor(Math.random() * 100)}` } });
+                    // High cardinality default
+                    attributes.push({ key: attr, value: { string_value: `value_${Math.floor(Math.random() * CARDINALITY)}` } });
             }
         });
         
