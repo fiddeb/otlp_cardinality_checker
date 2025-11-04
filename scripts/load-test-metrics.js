@@ -42,7 +42,7 @@ export const options = {
 const OTLP_ENDPOINT = __ENV.OTLP_ENDPOINT || 'http://localhost:4318';
 const API_ENDPOINT = __ENV.API_ENDPOINT || 'http://localhost:8080';
 const NUM_METRICS = parseInt(__ENV.NUM_METRICS || '1000');
-const CARDINALITY = parseInt(__ENV.CARDINALITY || '50');
+const CARDINALITY = parseInt(__ENV.CARDINALITY || '10000'); // Increased from 50 to 10000
 
 // Generate random metric data
 function generateMetricBatch(vu, iter) {
@@ -54,12 +54,15 @@ function generateMetricBatch(vu, iter) {
     const batchSize = 10;
     
     for (let i = 0; i < batchSize; i++) {
-        // Hybrid approach: sequential base + small random offset
-        // This ensures better coverage while maintaining some randomness
+        // Generate high cardinality by using VU, iteration, and timestamp
         const baseMetric = (iter * batchSize + i);
         const randomOffset = Math.floor(Math.random() * 100);
         const metricNum = (baseMetric + randomOffset) % NUM_METRICS;
+        
+        // High cardinality labels - use unique values per request
         const labelValue = Math.floor(Math.random() * CARDINALITY);
+        const userId = `user_${vu}_${iter}_${i}_${Math.floor(Math.random() * 1000)}`;
+        const requestId = `req_${timestamp}_${vu}_${i}`;
         
         // Vary metric types to test different MetricData types
         const metricType = metricNum % 5;
@@ -71,11 +74,12 @@ function generateMetricBatch(vu, iter) {
         };
         
         if (metricType === 0) {
-            // Gauge metric
+            // Gauge metric with high cardinality labels
             metric.gauge = {
                 data_points: [{
                     attributes: [
                         { key: 'label1', value: { string_value: `value_${labelValue}` } },
+                        { key: 'user_id', value: { string_value: userId } },
                         { key: 'method', value: { string_value: 'GET' } },
                     ],
                     as_double: Math.random() * 100,
@@ -83,40 +87,43 @@ function generateMetricBatch(vu, iter) {
                 }],
             };
         } else if (metricType === 1) {
-            // Sum metric (DELTA)
+            // Sum metric (DELTA) with high cardinality endpoint
             metric.sum = {
                 aggregation_temporality: 1, // DELTA
                 is_monotonic: true,
                 data_points: [{
                     attributes: [
                         { key: 'label1', value: { string_value: `value_${labelValue}` } },
-                        { key: 'endpoint', value: { string_value: `/api/v${Math.floor(Math.random() * 3) + 1}` } },
+                        { key: 'request_id', value: { string_value: requestId } },
+                        { key: 'endpoint', value: { string_value: `/api/v${Math.floor(Math.random() * 3) + 1}/user/${labelValue}` } },
                     ],
                     as_int: Math.floor(Math.random() * 1000),
                     time_unix_nano: timestamp,
                 }],
             };
         } else if (metricType === 2) {
-            // Sum metric (CUMULATIVE)
+            // Sum metric (CUMULATIVE) with multiple high cardinality labels
             metric.sum = {
                 aggregation_temporality: 2, // CUMULATIVE
                 is_monotonic: false,
                 data_points: [{
                     attributes: [
                         { key: 'label1', value: { string_value: `value_${labelValue}` } },
-                        { key: 'label2', value: { string_value: `value_${Math.floor(Math.random() * 10)}` } },
+                        { key: 'session_id', value: { string_value: `session_${vu}_${iter}` } },
+                        { key: 'label2', value: { string_value: `value_${Math.floor(Math.random() * 1000)}` } },
                     ],
                     as_int: Math.floor(Math.random() * 1000),
                     time_unix_nano: timestamp,
                 }],
             };
         } else if (metricType === 3) {
-            // Histogram metric
+            // Histogram metric with high cardinality path
             metric.histogram = {
                 aggregation_temporality: 2, // CUMULATIVE
                 data_points: [{
                     attributes: [
                         { key: 'method', value: { string_value: 'GET' } },
+                        { key: 'path', value: { string_value: `/api/resource/${labelValue}` } },
                         { key: 'status', value: { string_value: '200' } },
                     ],
                     count: Math.floor(Math.random() * 100),
@@ -127,12 +134,13 @@ function generateMetricBatch(vu, iter) {
                 }],
             };
         } else {
-            // ExponentialHistogram metric
+            // ExponentialHistogram metric with high cardinality operation
             metric.exponential_histogram = {
                 aggregation_temporality: 2, // CUMULATIVE
                 data_points: [{
                     attributes: [
-                        { key: 'operation', value: { string_value: 'query' } },
+                        { key: 'operation', value: { string_value: `query_${labelValue}` } },
+                        { key: 'trace_id', value: { string_value: requestId } },
                     ],
                     count: Math.floor(Math.random() * 100),
                     sum: Math.random() * 1000,
