@@ -41,15 +41,15 @@ func NewGRPCReceiver(addr string, store storage.Storage) *GRPCReceiver {
 	// Create logs analyzer based on store configuration
 	var logsAnalyzer *analyzer.LogsAnalyzer
 	if store.UseAutoTemplate() {
-		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplateAndPatterns(store.AutoTemplateCfg(), patterns)
+		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplateAndCatalog(store.AutoTemplateCfg(), patterns, store)
 	} else {
-		logsAnalyzer = analyzer.NewLogsAnalyzer()
+		logsAnalyzer = analyzer.NewLogsAnalyzerWithCatalog(store)
 	}
 	
 	return &GRPCReceiver{
 		store:           store,
-		metricsAnalyzer: analyzer.NewMetricsAnalyzer(),
-		tracesAnalyzer:  analyzer.NewTracesAnalyzer(),
+		metricsAnalyzer: analyzer.NewMetricsAnalyzerWithCatalog(store),
+		tracesAnalyzer:  analyzer.NewTracesAnalyzerWithCatalog(store),
 		logsAnalyzer:    logsAnalyzer,
 		addr:            addr,
 	}
@@ -96,7 +96,7 @@ func (r *GRPCReceiver) Shutdown(ctx context.Context) error {
 // Export implements the MetricsService Export RPC.
 func (r *GRPCReceiver) Export(ctx context.Context, req *colmetricspb.ExportMetricsServiceRequest) (*colmetricspb.ExportMetricsServiceResponse, error) {
 	// Analyze metrics metadata
-	metadata, err := r.metricsAnalyzer.Analyze(req)
+	metadata, err := r.metricsAnalyzer.AnalyzeWithContext(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze metrics: %w", err)
 	}
@@ -123,7 +123,7 @@ type traceService struct {
 // Export implements the TraceService Export RPC.
 func (s *traceService) Export(ctx context.Context, req *coltracepb.ExportTraceServiceRequest) (*coltracepb.ExportTraceServiceResponse, error) {
 	// Analyze traces metadata
-	metadata, err := s.tracesAnalyzer.Analyze(req)
+	metadata, err := s.tracesAnalyzer.AnalyzeWithContext(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze traces: %w", err)
 	}
@@ -150,7 +150,7 @@ type logsService struct {
 // Export implements the LogsService Export RPC.
 func (s *logsService) Export(ctx context.Context, req *collogspb.ExportLogsServiceRequest) (*collogspb.ExportLogsServiceResponse, error) {
 	// Analyze logs metadata
-	metadata, err := s.logsAnalyzer.Analyze(req)
+	metadata, err := s.logsAnalyzer.AnalyzeWithContext(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze logs: %w", err)
 	}

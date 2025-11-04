@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
@@ -21,6 +22,7 @@ type LogsAnalyzer struct {
 	useAutoTemplate  bool                                // Whether to use autotemplate
 	autoTemplateCfg  autotemplate.Config                 // Config for autotemplate
 	patterns         []config.CompiledPattern            // Pre-masking patterns
+	catalog          AttributeCatalog                    // Attribute catalog for global tracking
 }
 
 // NewLogsAnalyzer creates a new logs analyzer with regex-based template extraction.
@@ -46,6 +48,26 @@ func NewLogsAnalyzerWithAutoTemplateAndPatterns(cfg autotemplate.Config, pattern
 	}
 }
 
+// NewLogsAnalyzerWithCatalog creates a logs analyzer with attribute catalog.
+func NewLogsAnalyzerWithCatalog(catalog AttributeCatalog) *LogsAnalyzer {
+	return &LogsAnalyzer{
+		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
+		useAutoTemplate: false,
+		catalog:         catalog,
+	}
+}
+
+// NewLogsAnalyzerWithAutoTemplateAndCatalog creates a logs analyzer with autotemplate and catalog.
+func NewLogsAnalyzerWithAutoTemplateAndCatalog(cfg autotemplate.Config, patterns []config.CompiledPattern, catalog AttributeCatalog) *LogsAnalyzer {
+	return &LogsAnalyzer{
+		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
+		useAutoTemplate: true,
+		autoTemplateCfg: cfg,
+		patterns:        patterns,
+		catalog:         catalog,
+	}
+}
+
 // createBodyAnalyzer creates the appropriate analyzer type
 func (a *LogsAnalyzer) createBodyAnalyzer() LogBodyAnalyzerInterface {
 	if a.useAutoTemplate {
@@ -56,6 +78,11 @@ func (a *LogsAnalyzer) createBodyAnalyzer() LogBodyAnalyzerInterface {
 
 // Analyze extracts metadata from an OTLP logs export request.
 func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*models.LogMetadata, error) {
+	return a.AnalyzeWithContext(context.Background(), req)
+}
+
+// AnalyzeWithContext extracts metadata with context for attribute catalog.
+func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.ExportLogsServiceRequest) ([]*models.LogMetadata, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -71,6 +98,9 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 		// Extract resource attributes
 		resourceAttrs := extractAttributes(resourceLogs.Resource.GetAttributes())
 		serviceName := getServiceName(resourceAttrs)
+		
+		// Feed resource attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, resourceAttrs, "log", "resource")
 
 		for _, scopeLogs := range resourceLogs.ScopeLogs {
 			scopeInfo := &models.ScopeMetadata{
@@ -142,6 +172,10 @@ func (a *LogsAnalyzer) Analyze(req *collogspb.ExportLogsServiceRequest) ([]*mode
 
 				// Extract log record attributes
 				logAttrs := extractAttributes(logRecord.Attributes)
+				
+				// Feed log attributes to catalog
+				extractAttributesToCatalog(ctx, a.catalog, logAttrs, "log", "attribute")
+				
 				for attrKey, attrValue := range logAttrs {
 					// Track event.name separately
 					if attrKey == "event.name" && attrValue != "" {
