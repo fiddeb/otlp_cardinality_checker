@@ -873,6 +873,12 @@ func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys ma
 			return fmt.Errorf("encoding samples for key %s: %w", keyName, err)
 		}
 
+		// Serialize HLL sketch for persistence
+		hllData, err := keyMeta.MarshalHLL()
+		if err != nil {
+			return fmt.Errorf("marshaling HLL for key %s: %w", keyName, err)
+		}
+
 		eventNameVal := eventNameOrEmpty(eventName)
 
 		// Write to legacy span_keys table for backward compatibility
@@ -888,7 +894,7 @@ func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys ma
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
 		`, spanName, keyScope, keyName, eventNameVal, keyMeta.Count, keyMeta.Percentage,
-			keyMeta.EstimatedCardinality, samples, nil)
+			keyMeta.EstimatedCardinality, samples, hllData)
 
 		if err != nil {
 			return fmt.Errorf("upserting key %s to span_keys: %w", keyName, err)
@@ -907,7 +913,7 @@ func (s *Store) upsertKeysForSpan(tx *sql.Tx, spanName, keyScope string, keys ma
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
 		`, spanName, keyScope, keyName, eventNameVal, keyMeta.Count, keyMeta.Percentage,
-			keyMeta.EstimatedCardinality, samples, nil)
+			keyMeta.EstimatedCardinality, samples, hllData)
 
 		if err != nil {
 			return fmt.Errorf("upserting key %s to signal_keys: %w", keyName, err)
@@ -1058,13 +1064,13 @@ func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventNam
 
 	if eventName != "" {
 		rows, err = s.db.QueryContext(ctx, `
-			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
+			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples, hll_sketch
 			FROM signal_keys
 			WHERE signal_type = 'span' AND signal_name = ? AND key_scope = ? AND event_name = ?
 		`, spanName, keyScope, eventName)
 	} else {
 		rows, err = s.db.QueryContext(ctx, `
-			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
+			SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples, hll_sketch
 			FROM signal_keys
 			WHERE signal_type = 'span' AND signal_name = ? AND key_scope = ? AND event_name = ''
 		`, spanName, keyScope)
@@ -1080,9 +1086,10 @@ func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventNam
 		var keyName string
 		var keyMeta models.KeyMetadata
 		var samplesJSON string
+		var hllData []byte
 
 		if err := rows.Scan(&keyName, &keyMeta.Count, &keyMeta.Percentage,
-			&keyMeta.EstimatedCardinality, &samplesJSON); err != nil {
+			&keyMeta.EstimatedCardinality, &samplesJSON, &hllData); err != nil {
 			return nil, fmt.Errorf("scanning key: %w", err)
 		}
 
@@ -1090,7 +1097,21 @@ func (s *Store) getKeysForSpan(ctx context.Context, spanName, keyScope, eventNam
 			return nil, fmt.Errorf("decoding samples for key %s: %w", keyName, err)
 		}
 
-		keys[keyName] = &keyMeta
+		// Initialize KeyMetadata with HLL state
+		km := models.NewKeyMetadata()
+		km.Count = keyMeta.Count
+		km.Percentage = keyMeta.Percentage
+		km.EstimatedCardinality = keyMeta.EstimatedCardinality
+		km.ValueSamples = keyMeta.ValueSamples
+		
+		// Restore HLL sketch from database
+		if len(hllData) > 0 {
+			if err := km.UnmarshalHLL(hllData); err != nil {
+				return nil, fmt.Errorf("deserializing HLL for key %s: %w", keyName, err)
+			}
+		}
+
+		keys[keyName] = km
 	}
 
 	return keys, rows.Err()
@@ -1314,6 +1335,12 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 			return fmt.Errorf("encoding samples for key %s: %w", keyName, err)
 		}
 
+		// Serialize HLL sketch for persistence
+		hllData, err := keyMeta.MarshalHLL()
+		if err != nil {
+			return fmt.Errorf("marshaling HLL for key %s: %w", keyName, err)
+		}
+
 		_, err = tx.Exec(`
 			INSERT INTO log_keys (
 				severity, key_scope, key_name, key_count, key_percentage,
@@ -1326,7 +1353,7 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
 		`, severity, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
-			keyMeta.EstimatedCardinality, samples, nil)
+			keyMeta.EstimatedCardinality, samples, hllData)
 
 		if err != nil {
 			return fmt.Errorf("upserting key %s: %w", keyName, err)
@@ -1388,7 +1415,7 @@ func (s *Store) upsertKeysForLog(tx *sql.Tx, severity, keyScope string, keys map
 				value_samples = excluded.value_samples,
 				hll_sketch = excluded.hll_sketch
 		`, severity, keyScope, keyName, keyMeta.Count, keyMeta.Percentage,
-			mergedCard, mergedSamples, nil)
+			mergedCard, mergedSamples, hllData)
 
 		if err != nil {
 			return fmt.Errorf("upserting signal key %s: %w", keyName, err)
@@ -1525,7 +1552,7 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 // getKeysForLog retrieves key metadata for a log and scope.
 func (s *Store) getKeysForLog(ctx context.Context, severity, keyScope string) (map[string]*models.KeyMetadata, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples
+		SELECT key_name, key_count, key_percentage, estimated_cardinality, value_samples, hll_sketch
 		FROM log_keys
 		WHERE severity = ? AND key_scope = ?
 	`, severity, keyScope)
@@ -1539,9 +1566,10 @@ func (s *Store) getKeysForLog(ctx context.Context, severity, keyScope string) (m
 		var keyName string
 		var keyMeta models.KeyMetadata
 		var samplesJSON string
+		var hllData []byte
 
 		if err := rows.Scan(&keyName, &keyMeta.Count, &keyMeta.Percentage,
-			&keyMeta.EstimatedCardinality, &samplesJSON); err != nil {
+			&keyMeta.EstimatedCardinality, &samplesJSON, &hllData); err != nil {
 			return nil, fmt.Errorf("scanning key: %w", err)
 		}
 
@@ -1549,7 +1577,21 @@ func (s *Store) getKeysForLog(ctx context.Context, severity, keyScope string) (m
 			return nil, fmt.Errorf("decoding samples for key %s: %w", keyName, err)
 		}
 
-		keys[keyName] = &keyMeta
+		// Initialize KeyMetadata with HLL state
+		km := models.NewKeyMetadata()
+		km.Count = keyMeta.Count
+		km.Percentage = keyMeta.Percentage
+		km.EstimatedCardinality = keyMeta.EstimatedCardinality
+		km.ValueSamples = keyMeta.ValueSamples
+		
+		// Restore HLL sketch from database
+		if len(hllData) > 0 {
+			if err := km.UnmarshalHLL(hllData); err != nil {
+				return nil, fmt.Errorf("deserializing HLL for key %s: %w", keyName, err)
+			}
+		}
+
+		keys[keyName] = km
 	}
 
 	return keys, rows.Err()
