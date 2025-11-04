@@ -32,7 +32,7 @@ export const options = {
 const OTLP_ENDPOINT = __ENV.OTLP_ENDPOINT || 'http://localhost:4318';
 const API_ENDPOINT = __ENV.API_ENDPOINT || 'http://localhost:8080';
 const NUM_MODULES = parseInt(__ENV.NUM_MODULES || '100');
-const CARDINALITY = parseInt(__ENV.CARDINALITY || '50');
+const CARDINALITY = parseInt(__ENV.CARDINALITY || '10000'); // Increased from 50 to 10000
 
 // Severity levels mapping
 const SEVERITIES = [
@@ -52,23 +52,27 @@ function generateLogBatch(vu, iter) {
     const batchSize = 10;
     
     // Different log message templates to create varied patterns
-    // Use predictable values that will be replaced by template extraction regex
+    // High cardinality values for better HLL testing
     const logTemplates = [
-        (logNum, serviceName) => `Log message from ${serviceName} - event ${logNum}`,
-        (logNum) => `User ${logNum} logged in from 192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-        (logNum) => `Processing request ${logNum} took ${Math.floor(Math.random() * 1000)}ms`,
-        (logNum) => `Database query executed in ${Math.floor(Math.random() * 500)}ms - affected ${Math.floor(Math.random() * 100)} rows`,
-        (logNum) => `Cache hit for key cache_key_${logNum} - returned ${Math.floor(Math.random() * 10000)}B`,
-        (logNum) => `HTTP ${['GET', 'POST', 'PUT', 'DELETE'][Math.floor(Math.random() * 4)]} /api/v1/resource/${logNum} - status ${[200, 201, 404, 500][Math.floor(Math.random() * 4)]}`,
-        (logNum) => `Order ${logNum} was ${['placed', 'shipped', 'delivered', 'cancelled'][Math.floor(Math.random() * 4)]} successfully`,
-        (logNum) => `Payment transaction ${logNum} completed - amount $${(Math.random() * 1000).toFixed(2)}`,
-        (logNum) => `File ${logNum}.log uploaded - size ${Math.floor(Math.random() * 10)}MB`,
-        // Email pattern will match the email address
-        (logNum) => `Email sent to user_${logNum}@example.com successfully`
+        (logNum, serviceName, timestamp, vu) => `Log message from ${serviceName} - event ${logNum}_${timestamp}`,
+        (logNum, timestamp) => `User user_${logNum}_${Math.floor(Math.random() * CARDINALITY)} logged in from ${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`,
+        (logNum, timestamp) => `Processing request req_${timestamp}_${logNum} took ${Math.floor(Math.random() * 1000)}ms`,
+        (logNum, timestamp) => `Database query query_${logNum}_${Math.floor(Math.random() * CARDINALITY)} executed in ${Math.floor(Math.random() * 500)}ms - affected ${Math.floor(Math.random() * 100)} rows`,
+        (logNum, timestamp) => `Cache hit for key cache_key_${logNum}_${timestamp} - returned ${Math.floor(Math.random() * 10000)}B`,
+        (logNum, timestamp) => `HTTP ${['GET', 'POST', 'PUT', 'DELETE'][Math.floor(Math.random() * 4)]} /api/v1/resource/${logNum}/item/${Math.floor(Math.random() * CARDINALITY)} - status ${[200, 201, 404, 500][Math.floor(Math.random() * 4)]}`,
+        (logNum, timestamp) => `Order order_${timestamp}_${logNum} was ${['placed', 'shipped', 'delivered', 'cancelled'][Math.floor(Math.random() * 4)]} successfully`,
+        (logNum, timestamp) => `Payment transaction txn_${timestamp}_${logNum} completed - amount $${(Math.random() * 1000).toFixed(2)}`,
+        (logNum, timestamp) => `File file_${logNum}_${Math.floor(Math.random() * CARDINALITY)}.log uploaded - size ${Math.floor(Math.random() * 10)}MB`,
+        // High cardinality email addresses
+        (logNum, timestamp) => `Email sent to user_${logNum}_${Math.floor(Math.random() * CARDINALITY)}@example${Math.floor(Math.random() * 100)}.com successfully`,
+        // Session IDs
+        (logNum, timestamp) => `Session session_${timestamp}_${Math.random().toString(36).substring(7)} created for user ${logNum}`,
+        // API tokens
+        (logNum, timestamp) => `API token token_${timestamp}_${Math.random().toString(36).substring(7)} generated`,
     ];
     
     for (let i = 0; i < batchSize; i++) {
-        // Hybrid approach: sequential base + small random offset
+        // High cardinality log generation
         const baseLog = (iter * batchSize + i);
         const randomOffset = Math.floor(Math.random() * 100);
         const logNum = (baseLog + randomOffset) % NUM_MODULES;
@@ -78,11 +82,11 @@ function generateLogBatch(vu, iter) {
         
         // Select a template based on logNum to get good distribution
         const templateIndex = logNum % logTemplates.length;
-        const logMessage = logTemplates[templateIndex](logNum, serviceName);
+        const logMessage = logTemplates[templateIndex](logNum, serviceName, timestamp, vu);
         
-        // Generate trace_id and span_id (16 and 8 bytes as hex strings)
-        const traceId = Math.floor(Math.random() * 1e16).toString(16).padStart(32, '0');
-        const spanId = Math.floor(Math.random() * 1e16).toString(16).padStart(16, '0');
+        // Generate high cardinality trace_id and span_id
+        const traceId = `${timestamp.toString(16)}${Math.floor(Math.random() * 1e16).toString(16)}`.padStart(32, '0');
+        const spanId = `${vu}${iter}${i}${Math.floor(Math.random() * 1e8).toString(16)}`.padStart(16, '0');
         
         const logRecord = {
             time_unix_nano: timestamp + (i * 1000000), // Spread logs over time
@@ -93,7 +97,9 @@ function generateLogBatch(vu, iter) {
                 { key: 'log.level', value: { string_value: severity.text.toLowerCase() } },
                 { key: 'module', value: { string_value: `module_${logNum % 20}` } },
                 { key: 'user_id', value: { string_value: `user_${Math.floor(Math.random() * CARDINALITY)}` } },
-                { key: 'request_id', value: { string_value: `req_${logNum}` } },
+                { key: 'request_id', value: { string_value: `req_${timestamp}_${logNum}_${i}` } },
+                { key: 'session_id', value: { string_value: `session_${vu}_${iter}_${Math.floor(Math.random() * 1000)}` } },
+                { key: 'trace_context', value: { string_value: `trace_${traceValue}` } },
             ],
             trace_id: traceId,
             span_id: spanId,
