@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
@@ -9,15 +10,29 @@ import (
 )
 
 // TracesAnalyzer extracts metadata from OTLP traces.
-type TracesAnalyzer struct{}
+type TracesAnalyzer struct {
+	catalog AttributeCatalog
+}
 
 // NewTracesAnalyzer creates a new traces analyzer.
 func NewTracesAnalyzer() *TracesAnalyzer {
 	return &TracesAnalyzer{}
 }
 
+// NewTracesAnalyzerWithCatalog creates a new traces analyzer with attribute catalog.
+func NewTracesAnalyzerWithCatalog(catalog AttributeCatalog) *TracesAnalyzer {
+	return &TracesAnalyzer{
+		catalog: catalog,
+	}
+}
+
 // Analyze extracts metadata from an OTLP traces export request.
 func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*models.SpanMetadata, error) {
+	return a.AnalyzeWithContext(context.Background(), req)
+}
+
+// AnalyzeWithContext extracts metadata with context for attribute catalog.
+func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb.ExportTraceServiceRequest) ([]*models.SpanMetadata, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -28,6 +43,9 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 		// Extract resource attributes
 		resourceAttrs := extractAttributes(resourceSpans.Resource.GetAttributes())
 		serviceName := getServiceName(resourceAttrs)
+		
+		// Feed resource attributes to catalog
+		extractAttributesToCatalog(ctx, a.catalog, resourceAttrs, "span", "resource")
 
 		for _, scopeSpans := range resourceSpans.ScopeSpans {
 			scopeInfo := &models.ScopeMetadata{
@@ -121,6 +139,10 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 
 			// Extract span attributes
 			spanAttrs := extractAttributes(span.Attributes)
+			
+			// Feed span attributes to catalog
+			extractAttributesToCatalog(ctx, a.catalog, spanAttrs, "span", "attribute")
+			
 			for attrKey, attrValue := range spanAttrs {
 				if metadata.AttributeKeys[attrKey] == nil {
 					metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
@@ -146,6 +168,10 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 					}
 
 					eventAttrs := extractAttributes(event.Attributes)
+					
+					// Feed event attributes to catalog
+					extractAttributesToCatalog(ctx, a.catalog, eventAttrs, "span", "attribute")
+					
 					for key, value := range eventAttrs {
 						if metadata.EventAttributeKeys[event.Name][key] == nil {
 							metadata.EventAttributeKeys[event.Name][key] = models.NewKeyMetadata()
@@ -157,6 +183,10 @@ func (a *TracesAnalyzer) Analyze(req *coltracepb.ExportTraceServiceRequest) ([]*
 				// Extract link attributes
 				for _, link := range span.Links {
 					linkAttrs := extractAttributes(link.Attributes)
+					
+					// Feed link attributes to catalog
+					extractAttributesToCatalog(ctx, a.catalog, linkAttrs, "span", "attribute")
+					
 					for key, value := range linkAttrs {
 						if metadata.LinkAttributeKeys[key] == nil {
 							metadata.LinkAttributeKeys[key] = models.NewKeyMetadata()
