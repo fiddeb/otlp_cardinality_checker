@@ -12,6 +12,7 @@ import NoisyNeighbors from './components/NoisyNeighbors'
 import TemplateDetails from './components/TemplateDetails'
 import LogServiceDetails from './components/LogServiceDetails'
 import LogPatternDetails from './components/LogPatternDetails'
+import AttributesView from './components/AttributesView'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -250,6 +251,15 @@ function App() {
             Logs
           </button>
           <button 
+            className={`tab ${activeTab === 'attributes' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('attributes')
+              setNavigationHistory([])
+            }}
+          >
+            Attributes
+          </button>
+          <button 
             className={`tab ${activeTab === 'noisy-neighbors' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('noisy-neighbors')
@@ -292,6 +302,10 @@ function App() {
 
       {activeTab === 'logs' && (
         <LogsView onViewServiceDetails={handleViewLogService} />
+      )}
+
+      {activeTab === 'attributes' && (
+        <AttributesView />
       )}
 
       {activeTab === 'noisy-neighbors' && (

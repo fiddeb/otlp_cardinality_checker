@@ -60,15 +60,15 @@ func NewHTTPReceiver(addr string, store storage.Storage) *HTTPReceiver {
 	// Create logs analyzer based on store configuration
 	var logsAnalyzer *analyzer.LogsAnalyzer
 	if store.UseAutoTemplate() {
-		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplateAndPatterns(store.AutoTemplateCfg(), patterns)
+		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplateAndCatalog(store.AutoTemplateCfg(), patterns, store)
 	} else {
-		logsAnalyzer = analyzer.NewLogsAnalyzer()
+		logsAnalyzer = analyzer.NewLogsAnalyzerWithCatalog(store)
 	}
 	
 	r := &HTTPReceiver{
 		store:           store,
-		metricsAnalyzer: analyzer.NewMetricsAnalyzer(),
-		tracesAnalyzer:  analyzer.NewTracesAnalyzer(),
+		metricsAnalyzer: analyzer.NewMetricsAnalyzerWithCatalog(store),
+		tracesAnalyzer:  analyzer.NewTracesAnalyzerWithCatalog(store),
 		logsAnalyzer:    logsAnalyzer,
 	}
 
@@ -157,7 +157,7 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Analyze metrics
-	metricsMetadata, err := r.metricsAnalyzer.Analyze(&exportReq)
+	metricsMetadata, err := r.metricsAnalyzer.AnalyzeWithContext(ctx, &exportReq)
 	if err != nil {
 		log.Printf("Metrics analysis error: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze metrics: %v", err), http.StatusInternalServerError)
@@ -231,7 +231,7 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Analyze traces
-	spansMetadata, err := r.tracesAnalyzer.Analyze(&exportReq)
+	spansMetadata, err := r.tracesAnalyzer.AnalyzeWithContext(ctx, &exportReq)
 	if err != nil {
 		log.Printf("Trace analysis error: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze traces: %v", err), http.StatusInternalServerError)
@@ -307,7 +307,7 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Analyze logs
-	logsMetadata, err := r.logsAnalyzer.Analyze(&exportReq)
+	logsMetadata, err := r.logsAnalyzer.AnalyzeWithContext(ctx, &exportReq)
 	if err != nil {
 		log.Printf("Log analysis error: %v\n", err)
 		http.Error(w, fmt.Sprintf("Failed to analyze logs: %v", err), http.StatusInternalServerError)

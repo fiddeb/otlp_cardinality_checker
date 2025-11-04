@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -150,6 +151,10 @@ func NewServer(addr string, store storage.Storage) *Server {
 		r.Get("/cardinality/high", s.getHighCardinalityKeys)
 		r.Get("/cardinality/complexity", s.getMetadataComplexity)
 
+		// Attribute catalog endpoints
+		r.Get("/attributes", s.listAttributes)
+		r.Get("/attributes/{key}", s.getAttribute)
+
 		// Admin endpoints
 		r.Post("/admin/clear", s.clearAllData)
 	})
@@ -188,6 +193,30 @@ func (s *Server) Start() error {
 // Shutdown gracefully shuts down the API server.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
+}
+
+// parseInt parses a string to int with default value.
+func parseInt(s string, defaultVal int) int {
+	if s == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultVal
+	}
+	return val
+}
+
+// parseInt64 parses a string to int64 with default value.
+func parseInt64(s string, defaultVal int64) int64 {
+	if s == "" {
+		return defaultVal
+	}
+	val, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return defaultVal
+	}
+	return val
 }
 
 // listMetrics returns all metrics, optionally filtered by service.
@@ -762,6 +791,77 @@ func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}
 func (s *Server) respondError(w http.ResponseWriter, status int, message string) {
 	s.respondJSON(w, status, map[string]string{
 		"error": message,
+	})
+}
+
+// listAttributes returns list of all attributes with optional filtering.
+// GET /api/v1/attributes?signal_type=metric&scope=resource&sort_by=cardinality&sort_order=desc&limit=100&offset=0
+func (s *Server) listAttributes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	
+	// Parse query parameters
+	filter := &models.AttributeFilter{
+		SignalType:     r.URL.Query().Get("signal_type"),
+		Scope:          r.URL.Query().Get("scope"),
+		MinCardinality: parseInt64(r.URL.Query().Get("min_cardinality"), 0),
+		MaxCardinality: parseInt64(r.URL.Query().Get("max_cardinality"), 0),
+		SortBy:         r.URL.Query().Get("sort_by"),
+		SortOrder:      r.URL.Query().Get("sort_order"),
+		Limit:          parseInt(r.URL.Query().Get("limit"), 100),
+		Offset:         parseInt(r.URL.Query().Get("offset"), 0),
+	}
+	
+	// Get attributes from storage
+	attributes, err := s.store.ListAttributes(ctx, filter)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list attributes: %v", err))
+		return
+	}
+	
+	// Count total (for pagination)
+	totalFilter := &models.AttributeFilter{
+		SignalType:     filter.SignalType,
+		Scope:          filter.Scope,
+		MinCardinality: filter.MinCardinality,
+		MaxCardinality: filter.MaxCardinality,
+	}
+	allAttributes, err := s.store.ListAttributes(ctx, totalFilter)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "Failed to count attributes")
+		return
+	}
+	
+	total := len(allAttributes)
+	hasMore := filter.Offset+len(attributes) < total
+	
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"data":     attributes,
+		"total":    total,
+		"limit":    filter.Limit,
+		"offset":   filter.Offset,
+		"has_more": hasMore,
+	})
+}
+
+// getAttribute returns details for a specific attribute key.
+// GET /api/v1/attributes/{key}
+func (s *Server) getAttribute(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+	
+	if key == "" {
+		s.respondError(w, http.StatusBadRequest, "Attribute key is required")
+		return
+	}
+	
+	attribute, err := s.store.GetAttribute(ctx, key)
+	if err != nil {
+		s.respondError(w, http.StatusNotFound, fmt.Sprintf("Attribute not found: %v", err))
+		return
+	}
+	
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"data": attribute,
 	})
 }
 
