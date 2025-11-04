@@ -154,6 +154,9 @@ func (h *HyperLogLog) hash(s string) uint64 {
 var (
 	// ErrPrecisionMismatch is returned when trying to merge HLLs with different precisions.
 	ErrPrecisionMismatch = &HLLError{"precision mismatch"}
+	
+	// ErrInvalidData is returned when trying to deserialize invalid HLL data.
+	ErrInvalidData = &HLLError{"invalid serialized data"}
 )
 
 // HLLError represents an error in HyperLogLog operations.
@@ -163,4 +166,45 @@ type HLLError struct {
 
 func (e *HLLError) Error() string {
 	return "hyperloglog: " + e.message
+}
+
+// MarshalBinary encodes the HLL into a binary format.
+// Format: [precision:1byte][registers:m bytes]
+func (h *HyperLogLog) MarshalBinary() ([]byte, error) {
+	data := make([]byte, 1+len(h.registers))
+	data[0] = h.precision
+	copy(data[1:], h.registers)
+	return data, nil
+}
+
+// UnmarshalBinary decodes an HLL from binary format.
+func (h *HyperLogLog) UnmarshalBinary(data []byte) error {
+	if len(data) < 2 {
+		return ErrInvalidData
+	}
+	
+	precision := data[0]
+	if precision < 4 || precision > 18 {
+		return ErrInvalidData
+	}
+	
+	expectedSize := 1 + (1 << precision)
+	if len(data) != expectedSize {
+		return ErrInvalidData
+	}
+	
+	// Reinitialize HLL with correct precision
+	*h = *New(precision)
+	copy(h.registers, data[1:])
+	
+	return nil
+}
+
+// FromBytes creates a new HLL from serialized bytes.
+func FromBytes(data []byte) (*HyperLogLog, error) {
+	h := &HyperLogLog{}
+	if err := h.UnmarshalBinary(data); err != nil {
+		return nil, err
+	}
+	return h, nil
 }

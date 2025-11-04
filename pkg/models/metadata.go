@@ -232,6 +232,36 @@ type KeyMetadata struct {
 	mu sync.RWMutex `json:"-"`
 }
 
+// MarshalHLL serializes the HLL sketch to bytes for storage.
+func (k *KeyMetadata) MarshalHLL() ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	
+	if k.hll == nil {
+		return nil, nil
+	}
+	return k.hll.MarshalBinary()
+}
+
+// UnmarshalHLL deserializes an HLL sketch from bytes.
+func (k *KeyMetadata) UnmarshalHLL(data []byte) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	
+	if len(data) == 0 {
+		return nil
+	}
+	
+	hll, err := hyperloglog.FromBytes(data)
+	if err != nil {
+		return err
+	}
+	
+	k.hll = hll
+	k.EstimatedCardinality = int64(hll.Count())
+	return nil
+}
+
 // ScopeMetadata contains information about the instrumentation scope.
 type ScopeMetadata struct {
 	Name    string `json:"name"`
