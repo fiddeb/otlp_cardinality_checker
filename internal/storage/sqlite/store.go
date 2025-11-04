@@ -36,6 +36,9 @@ var migration005SQL string
 //go:embed migrations/006_add_metric_data.up.sql
 var migration006SQL string
 
+//go:embed migrations/007_attribute_catalog.up.sql
+var migration007SQL string
+
 // Store is a SQLite-backed storage for telemetry metadata.
 type Store struct {
 	db *sql.DB
@@ -100,6 +103,7 @@ func runMigrations(db *sql.DB) error {
 		{4, migration004SQL},
 		{5, migration005SQL},
 		{6, migration006SQL},
+		{7, migration007SQL},
 	}
 
 	// Get already applied migrations
@@ -290,22 +294,253 @@ func (s *Store) executeBatch(batch []writeOp) error {
 }
 
 // StoreAttributeValue stores or updates an attribute key-value observation.
-// TODO: Implement full SQLite persistence for attribute catalog
 func (s *Store) StoreAttributeValue(ctx context.Context, key, value, signalType, scope string) error {
-	// For now, return not implemented - will be implemented in next commit
-	return fmt.Errorf("attribute catalog SQLite storage not yet implemented")
+	// Get or create attribute metadata
+	var hllData []byte
+	var count int64
+	var valueSamplesJSON, signalTypesJSON, currentScope string
+	var firstSeen, lastSeen time.Time
+	
+	// Try to get existing attribute
+	err := s.db.QueryRowContext(ctx,
+		`SELECT hll_sketch, count, value_samples, signal_types, scope, first_seen, last_seen 
+		 FROM attribute_catalog WHERE key = ?`,
+		key,
+	).Scan(&hllData, &count, &valueSamplesJSON, &signalTypesJSON, &currentScope, &firstSeen, &lastSeen)
+	
+	var attr *models.AttributeMetadata
+	if err == sql.ErrNoRows {
+		// New attribute
+		attr = models.NewAttributeMetadata(key)
+		firstSeen = time.Now()
+	} else if err != nil {
+		return fmt.Errorf("querying attribute: %w", err)
+	} else {
+		// Existing attribute - deserialize
+		attr = &models.AttributeMetadata{Key: key}
+		if err := attr.UnmarshalHLL(hllData); err != nil {
+			return fmt.Errorf("deserializing HLL: %w", err)
+		}
+		attr.Count = count
+		attr.FirstSeen = firstSeen
+		
+		// Deserialize value samples
+		if valueSamplesJSON != "" {
+			json.Unmarshal([]byte(valueSamplesJSON), &attr.ValueSamples)
+		}
+		
+		// Deserialize signal types
+		if signalTypesJSON != "" {
+			json.Unmarshal([]byte(signalTypesJSON), &attr.SignalTypes)
+		}
+		
+		attr.Scope = currentScope
+	}
+	
+	// Add the new value
+	attr.AddValue(value, signalType, scope)
+	
+	// Signal types and scope are already handled by AddValue in the model
+	attr.LastSeen = time.Now()
+	
+	// Serialize for storage
+	hllData, err = attr.MarshalHLL()
+	if err != nil {
+		return fmt.Errorf("serializing HLL: %w", err)
+	}
+	
+	valueSamplesJSON = ""
+	if len(attr.ValueSamples) > 0 {
+		data, _ := json.Marshal(attr.ValueSamples)
+		valueSamplesJSON = string(data)
+	}
+	
+	signalTypesJSON = ""
+	if len(attr.SignalTypes) > 0 {
+		data, _ := json.Marshal(attr.SignalTypes)
+		signalTypesJSON = string(data)
+	}
+	
+	// Upsert
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO attribute_catalog 
+		 (key, hll_sketch, count, estimated_cardinality, value_samples, signal_types, scope, first_seen, last_seen)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET
+		   hll_sketch = excluded.hll_sketch,
+		   count = excluded.count,
+		   estimated_cardinality = excluded.estimated_cardinality,
+		   value_samples = excluded.value_samples,
+		   signal_types = excluded.signal_types,
+		   scope = excluded.scope,
+		   last_seen = excluded.last_seen`,
+		key, hllData, attr.Count, attr.EstimatedCardinality, valueSamplesJSON, 
+		signalTypesJSON, attr.Scope, attr.FirstSeen, attr.LastSeen,
+	)
+	
+	return err
 }
 
 // GetAttribute retrieves attribute metadata by key.
-// TODO: Implement full SQLite persistence for attribute catalog
 func (s *Store) GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error) {
-	return nil, fmt.Errorf("attribute catalog SQLite storage not yet implemented")
+	var hllData []byte
+	var count int64
+	var estimatedCard int64
+	var valueSamplesJSON, signalTypesJSON, scope string
+	var firstSeen, lastSeen time.Time
+	
+	err := s.db.QueryRowContext(ctx,
+		`SELECT hll_sketch, count, estimated_cardinality, value_samples, signal_types, scope, first_seen, last_seen
+		 FROM attribute_catalog WHERE key = ?`,
+		key,
+	).Scan(&hllData, &count, &estimatedCard, &valueSamplesJSON, &signalTypesJSON, &scope, &firstSeen, &lastSeen)
+	
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("attribute not found: %s", key)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying attribute: %w", err)
+	}
+	
+	attr := &models.AttributeMetadata{
+		Key:                  key,
+		Count:                count,
+		EstimatedCardinality: estimatedCard,
+		Scope:                scope,
+		FirstSeen:            firstSeen,
+		LastSeen:             lastSeen,
+	}
+	
+	// Deserialize HLL
+	if err := attr.UnmarshalHLL(hllData); err != nil {
+		return nil, fmt.Errorf("deserializing HLL: %w", err)
+	}
+	
+	// Deserialize value samples
+	if valueSamplesJSON != "" {
+		json.Unmarshal([]byte(valueSamplesJSON), &attr.ValueSamples)
+	}
+	
+	// Deserialize signal types
+	if signalTypesJSON != "" {
+		json.Unmarshal([]byte(signalTypesJSON), &attr.SignalTypes)
+	}
+	
+	return attr, nil
 }
 
 // ListAttributes lists all attributes with optional filtering.
-// TODO: Implement full SQLite persistence for attribute catalog
 func (s *Store) ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, error) {
-	return nil, fmt.Errorf("attribute catalog SQLite storage not yet implemented")
+	if filter == nil {
+		filter = &models.AttributeFilter{}
+	}
+	
+	// Build query with filters
+	query := `SELECT key, hll_sketch, count, estimated_cardinality, value_samples, signal_types, scope, first_seen, last_seen
+	          FROM attribute_catalog WHERE 1=1`
+	args := []interface{}{}
+	
+	// Filter by signal type (JSON contains)
+	if filter.SignalType != "" {
+		query += ` AND signal_types LIKE ?`
+		args = append(args, "%\""+filter.SignalType+"\"%")
+	}
+	
+	// Filter by scope
+	if filter.Scope != "" {
+		query += ` AND scope = ?`
+		args = append(args, filter.Scope)
+	}
+	
+	// Filter by cardinality range
+	if filter.MinCardinality > 0 {
+		query += ` AND estimated_cardinality >= ?`
+		args = append(args, filter.MinCardinality)
+	}
+	if filter.MaxCardinality > 0 {
+		query += ` AND estimated_cardinality <= ?`
+		args = append(args, filter.MaxCardinality)
+	}
+	
+	// Sorting
+	orderBy := "key"
+	switch filter.SortBy {
+	case "cardinality":
+		orderBy = "estimated_cardinality"
+	case "count":
+		orderBy = "count"
+	case "first_seen":
+		orderBy = "first_seen"
+	case "last_seen":
+		orderBy = "last_seen"
+	case "key":
+		orderBy = "key"
+	}
+	
+	sortOrder := "ASC"
+	if filter.SortOrder == "desc" {
+		sortOrder = "DESC"
+	}
+	
+	query += fmt.Sprintf(" ORDER BY %s %s", orderBy, sortOrder)
+	
+	// Pagination
+	if filter.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, filter.Limit)
+		
+		if filter.Offset > 0 {
+			query += ` OFFSET ?`
+			args = append(args, filter.Offset)
+		}
+	}
+	
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying attributes: %w", err)
+	}
+	defer rows.Close()
+	
+	var attributes []*models.AttributeMetadata
+	for rows.Next() {
+		var hllData []byte
+		var count, estimatedCard int64
+		var valueSamplesJSON, signalTypesJSON, key, scope string
+		var firstSeen, lastSeen time.Time
+		
+		if err := rows.Scan(&key, &hllData, &count, &estimatedCard, &valueSamplesJSON, 
+			&signalTypesJSON, &scope, &firstSeen, &lastSeen); err != nil {
+			return nil, fmt.Errorf("scanning attribute: %w", err)
+		}
+		
+		attr := &models.AttributeMetadata{
+			Key:                  key,
+			Count:                count,
+			EstimatedCardinality: estimatedCard,
+			Scope:                scope,
+			FirstSeen:            firstSeen,
+			LastSeen:             lastSeen,
+		}
+		
+		// Deserialize HLL
+		if err := attr.UnmarshalHLL(hllData); err != nil {
+			return nil, fmt.Errorf("deserializing HLL: %w", err)
+		}
+		
+		// Deserialize value samples
+		if valueSamplesJSON != "" {
+			json.Unmarshal([]byte(valueSamplesJSON), &attr.ValueSamples)
+		}
+		
+		// Deserialize signal types
+		if signalTypesJSON != "" {
+			json.Unmarshal([]byte(signalTypesJSON), &attr.SignalTypes)
+		}
+		
+		attributes = append(attributes, attr)
+	}
+	
+	return attributes, rows.Err()
 }
 
 // Close closes the store and releases resources.
