@@ -34,7 +34,7 @@ func TestDualWrite(t *testing.T) {
 	// Test metric dual write
 	metric := &models.MetricMetadata{
 		Name:        "test_metric",
-		Type:        "gauge",
+		Data:        &models.GaugeMetric{DataPointCount: 100},
 		SampleCount: 100,
 		Services: map[string]int64{
 			"test-service": 100,
@@ -83,7 +83,7 @@ func TestReadFromPrimary(t *testing.T) {
 	// Write directly to primary only
 	metric := &models.MetricMetadata{
 		Name:        "primary_only",
-		Type:        "counter",
+		Data:        &models.SumMetric{DataPointCount: 50, IsMonotonic: true, AggregationTemporality: models.AggregationTemporalityCumulative},
 		SampleCount: 50,
 	}
 	err := primary.StoreMetric(ctx, metric)
@@ -127,7 +127,7 @@ func TestSecondaryWriteFailure(t *testing.T) {
 	// Write should succeed even if secondary fails
 	metric := &models.MetricMetadata{
 		Name:        "test_metric",
-		Type:        "gauge",
+		Data:        &models.GaugeMetric{DataPointCount: 100},
 		SampleCount: 100,
 	}
 
@@ -161,7 +161,8 @@ func TestDualWriteAllSignals(t *testing.T) {
 	// Test span dual write
 	span := &models.SpanMetadata{
 		Name:        "test_span",
-		Kind:        "server",
+		Kind:        2,
+		KindName:    "Server",
 		SampleCount: 50,
 	}
 	if err := store.StoreSpan(ctx, span); err != nil {
@@ -262,4 +263,28 @@ func (f *failingStore) Clear(ctx context.Context) error {
 
 func (f *failingStore) Close() error {
 	return nil
+}
+
+func (f *failingStore) StoreAttributeValue(ctx context.Context, key, value, signalType, scope string) error {
+	return errors.New("simulated failure")
+}
+
+func (f *failingStore) GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error) {
+	return nil, models.ErrNotFound
+}
+
+func (f *failingStore) ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, int, error) {
+	return nil, 0, nil
+}
+
+func (f *failingStore) GetHighCardinalityKeys(ctx context.Context, threshold int, limit int) (*models.CrossSignalCardinalityResponse, error) {
+	return nil, nil
+}
+
+func (f *failingStore) GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error) {
+	return nil, nil
+}
+
+func (f *failingStore) GetMetadataComplexity(ctx context.Context, threshold int) (*models.MetadataComplexityResponse, error) {
+	return nil, nil
 }

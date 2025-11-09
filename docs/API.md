@@ -238,3 +238,194 @@ curl -s "http://localhost:8080/api/v1/metrics" | \
 curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
   jq '.label_keys | to_entries[] | select(.value.percentage < 100) | {key: .key, percentage: .value.percentage}'
 ```
+
+## Attribute Catalog
+
+The attribute catalog provides a **global view** of all attribute keys across metrics, spans, and logs. This helps identify high-cardinality attributes that may be causing performance or cost issues in your observability system.
+
+### List All Attributes
+
+```
+GET /api/v1/attributes
+```
+
+Query Parameters:
+- `signal_type` (optional): Filter by signal type (`metric`, `span`, `log`)
+- `scope` (optional): Filter by scope (`resource`, `attribute`, `both`)
+- `min_cardinality` (optional): Minimum estimated cardinality (e.g., `1000` for high-cardinality only)
+- `sort_by` (optional): Sort field (`cardinality`, `count`, `first_seen`, `last_seen`, `key`) (default: `cardinality`)
+- `sort_direction` (optional): Sort direction (`asc`, `desc`) (default: `desc`)
+- `page` (optional): Page number (1-indexed, default: 1)
+- `page_size` (optional): Items per page (default: 50, max: 100)
+
+Response:
+```json
+{
+  "attributes": [
+    {
+      "key": "user_id",
+      "count": 1234567,
+      "estimated_cardinality": 10523,
+      "value_samples": ["user_1", "user_42", "user_999", ...],
+      "signal_types": ["metric", "span", "log"],
+      "scope": "attribute",
+      "first_seen": "2025-11-01T10:00:00Z",
+      "last_seen": "2025-11-09T15:30:00Z"
+    }
+  ],
+  "total": 342,
+  "page": 1,
+  "page_size": 50
+}
+```
+
+#### Examples
+
+**List all high-cardinality attributes (>1000 unique values):**
+```bash
+curl "http://localhost:8080/api/v1/attributes?min_cardinality=1000&sort_by=cardinality&sort_direction=desc"
+```
+
+**Find attributes only used in metrics:**
+```bash
+curl "http://localhost:8080/api/v1/attributes?signal_type=metric"
+```
+
+**Find resource attributes with high cardinality:**
+```bash
+curl "http://localhost:8080/api/v1/attributes?scope=resource&min_cardinality=100"
+```
+
+**Get second page of attributes sorted by count:**
+```bash
+curl "http://localhost:8080/api/v1/attributes?sort_by=count&sort_direction=desc&page=2&page_size=20"
+```
+
+**Identify cross-signal attributes (used in all signal types):**
+```bash
+curl -s "http://localhost:8080/api/v1/attributes" | \
+  jq '.attributes[] | select(.signal_types | length == 3) | {key, cardinality: .estimated_cardinality, signals: .signal_types}'
+```
+
+### Get Specific Attribute
+
+```
+GET /api/v1/attributes/{key}
+```
+
+Response:
+```json
+{
+  "key": "http.method",
+  "count": 987654,
+  "estimated_cardinality": 9,
+  "value_samples": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT"],
+  "signal_types": ["metric", "span"],
+  "scope": "attribute",
+  "first_seen": "2025-11-01T10:00:00Z",
+  "last_seen": "2025-11-09T15:30:00Z"
+}
+```
+
+#### Examples
+
+**Get details for a specific attribute:**
+```bash
+curl "http://localhost:8080/api/v1/attributes/http.method"
+```
+
+**Check if an attribute exists:**
+```bash
+curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/attributes/user_id"
+# Returns 200 if exists, 404 if not found
+```
+
+**Get cardinality for specific attribute:**
+```bash
+curl -s "http://localhost:8080/api/v1/attributes/user_id" | jq '.estimated_cardinality'
+```
+
+### Understanding Attribute Catalog Fields
+
+#### `key`
+The attribute key name (e.g., `user_id`, `http.method`, `service.name`)
+
+#### `count`
+Total number of times this attribute key was observed across all signals
+
+#### `estimated_cardinality`
+Estimated number of unique values for this attribute key using HyperLogLog algorithm:
+- **Precision**: 14 (±0.81% error)
+- **Memory**: ~16KB per attribute
+- **Accuracy**: Very accurate even for millions of unique values
+
+#### `value_samples`
+Array of up to 10 sample values observed for this attribute:
+- First 10 unique values encountered
+- Useful for understanding what type of data the attribute contains
+- **Not** a statistical sample - just the first few unique values
+
+#### `signal_types`
+Array of signal types where this attribute was observed:
+- `metric`: Used in metric labels or resource attributes
+- `span`: Used in span attributes or resource attributes
+- `log`: Used in log attributes or resource attributes
+
+#### `scope`
+Where the attribute appears:
+- `resource`: Only in resource attributes (e.g., `service.name`, `host.name`)
+- `attribute`: Only in data-point attributes (e.g., `http.status_code`, `user_id`)
+- `both`: Appears in both resource and data-point attributes
+
+#### `first_seen` / `last_seen`
+Timestamps for when this attribute key was first/last observed
+
+### Use Cases
+
+#### 1. Identify High-Cardinality Attributes
+Find attributes that may be causing storage or performance issues:
+```bash
+curl -s "http://localhost:8080/api/v1/attributes?min_cardinality=10000&sort_by=cardinality&sort_direction=desc" | \
+  jq '.attributes[] | {key, cardinality: .estimated_cardinality, signals: .signal_types}'
+```
+
+#### 2. Find Unused Attributes
+Identify attributes that are rarely used (low count):
+```bash
+curl -s "http://localhost:8080/api/v1/attributes?sort_by=count&sort_direction=asc&page_size=20" | \
+  jq '.attributes[] | {key, count, cardinality: .estimated_cardinality}'
+```
+
+#### 3. Audit Attribute Naming Conventions
+Find attributes that don't follow semantic conventions:
+```bash
+curl -s "http://localhost:8080/api/v1/attributes" | \
+  jq '.attributes[] | select(.key | test("^[a-z]") | not) | .key'
+```
+
+#### 4. Identify Resource vs Data Attributes
+See which attributes are mixed between resource and data scopes:
+```bash
+curl -s "http://localhost:8080/api/v1/attributes?scope=both" | \
+  jq '.attributes[] | {key, scope, signals: .signal_types}'
+```
+
+#### 5. Cross-Signal Attribute Analysis
+Find attributes used across all three signal types:
+```bash
+curl -s "http://localhost:8080/api/v1/attributes" | \
+  jq '[.attributes[] | select(.signal_types | length == 3)] | length'
+```
+
+### Performance Considerations
+
+- **In-memory mode**: Sub-millisecond response times for queries
+- **SQLite mode**: <100ms for most queries (uses indexes)
+- **Pagination**: Always use pagination for large result sets
+- **Filtering**: Apply filters (`signal_type`, `scope`, `min_cardinality`) to reduce result size
+
+### Known Limitations
+
+- **Sample values**: Only first 10 unique values are stored
+- **SQLite performance**: Under high load, synchronous writes can be slow (future optimization planned)
+- **No historical data**: Only tracks attributes from telemetry received while running

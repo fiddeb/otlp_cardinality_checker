@@ -73,16 +73,18 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 - ✅ **Source Agnostic** - Works with any Collector receiver (Kafka, Redis, Prometheus, etc.)
 - ✅ **Metadata Extraction** - Analyzes metrics, traces, and logs
 - ✅ **Automatic Log Template Extraction** - Drain algorithm for pattern detection (20-30k+ EPS)
-- ✅ **Cardinality Tracking** - Estimates unique value counts per label
+- ✅ **Cardinality Tracking** - Estimates unique value counts per label using HyperLogLog
+- ✅ **Global Attribute Catalog** - Track all attribute keys across ALL signals (metrics/spans/logs)
 - ✅ **In-Memory Storage** - Fast, handles 500,000+ metrics
-- ✅ **REST API** - Query metadata with pagination support
+- ✅ **SQLite Persistence** - Optional persistence with automatic migrations
+- ✅ **REST API** - Query metadata with pagination, filtering, and sorting
+- ✅ **Web UI** - Visual exploration with interactive dashboards and filtering
 - ✅ **Service-Level Filtering** - View telemetry by service.name
 - ✅ **Docker & Kubernetes** - Production-ready deployment manifests
 
 **Planned (Phase 3):**
-- **Web UI** - Visual exploration of metadata
-- **PostgreSQL Persistence** - Optional historical tracking (on hold)
-- **Alerting** - Notify on cardinality thresholds  
+- **Alerting** - Notify on cardinality thresholds
+- **Performance Optimization** - Batch writes for SQLite attribute catalog  
 
 ## Quick Start
 

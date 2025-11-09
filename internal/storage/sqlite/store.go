@@ -57,6 +57,10 @@ type Store struct {
 	// Autotemplate configuration
 	useAutoTemplate bool
 	autoTemplateCfg autotemplate.Config
+	
+	// Attribute catalog in-memory cache
+	attrCache   sync.Map // map[string]*models.AttributeMetadata
+	attrDirty   sync.Map // map[string]bool - tracks modified attributes
 }
 
 // writeOp represents a write operation to be batched.
@@ -192,6 +196,10 @@ func New(cfg Config) (*Store, error) {
 	// Start batch writer goroutine
 	store.wg.Add(1)
 	go store.batchWriter(cfg.BatchSize, cfg.FlushInterval)
+	
+	// Start attribute cache flusher (every 5 seconds)
+	store.wg.Add(1)
+	go store.attributeCacheFlusher(5 * time.Second)
 
 	return store, nil
 }
@@ -294,95 +302,200 @@ func (s *Store) executeBatch(batch []writeOp) error {
 }
 
 // StoreAttributeValue stores or updates an attribute key-value observation.
+// This method now uses an in-memory cache for high performance.
 func (s *Store) StoreAttributeValue(ctx context.Context, key, value, signalType, scope string) error {
-	// Get or create attribute metadata
-	var hllData []byte
-	var count int64
-	var valueSamplesJSON, signalTypesJSON, currentScope string
-	var firstSeen, lastSeen time.Time
+	// Get or create attribute in cache
+	attrInterface, loaded := s.attrCache.LoadOrStore(key, models.NewAttributeMetadata(key))
+	attr := attrInterface.(*models.AttributeMetadata)
 	
-	// Try to get existing attribute
-	err := s.db.QueryRowContext(ctx,
-		`SELECT hll_sketch, count, value_samples, signal_types, scope, first_seen, last_seen 
-		 FROM attribute_catalog WHERE key = ?`,
-		key,
-	).Scan(&hllData, &count, &valueSamplesJSON, &signalTypesJSON, &currentScope, &firstSeen, &lastSeen)
-	
-	var attr *models.AttributeMetadata
-	if err == sql.ErrNoRows {
-		// New attribute
-		attr = models.NewAttributeMetadata(key)
-		firstSeen = time.Now()
-	} else if err != nil {
-		return fmt.Errorf("querying attribute: %w", err)
-	} else {
-		// Existing attribute - deserialize
-		attr = &models.AttributeMetadata{Key: key}
-		if err := attr.UnmarshalHLL(hllData); err != nil {
-			return fmt.Errorf("deserializing HLL: %w", err)
+	// If newly created, try to load from database
+	if !loaded {
+		if existing := s.loadAttributeFromDB(ctx, key); existing != nil {
+			// Replace the new one with existing from DB
+			s.attrCache.Store(key, existing)
+			attr = existing
 		}
-		attr.Count = count
-		attr.FirstSeen = firstSeen
-		
-		// Deserialize value samples
-		if valueSamplesJSON != "" {
-			json.Unmarshal([]byte(valueSamplesJSON), &attr.ValueSamples)
-		}
-		
-		// Deserialize signal types
-		if signalTypesJSON != "" {
-			json.Unmarshal([]byte(signalTypesJSON), &attr.SignalTypes)
-		}
-		
-		attr.Scope = currentScope
 	}
 	
-	// Add the new value
+	// Add value to in-memory HLL (thread-safe via HLL's internal sync)
 	attr.AddValue(value, signalType, scope)
 	
-	// Signal types and scope are already handled by AddValue in the model
-	attr.LastSeen = time.Now()
+	// Mark as dirty for next flush
+	s.attrDirty.Store(key, true)
 	
-	// Serialize for storage
-	hllData, err = attr.MarshalHLL()
+	return nil
+}
+
+// loadAttributeFromDB loads an attribute from database (if exists).
+func (s *Store) loadAttributeFromDB(ctx context.Context, key string) *models.AttributeMetadata {
+	var hllData []byte
+	var count int64
+	var estimatedCard int64
+	var valueSamplesJSON, signalTypesJSON, scope string
+	var firstSeen, lastSeen time.Time
+	
+	err := s.db.QueryRowContext(ctx,
+		`SELECT hll_sketch, count, estimated_cardinality, value_samples, signal_types, scope, first_seen, last_seen
+		 FROM attribute_catalog WHERE key = ?`,
+		key,
+	).Scan(&hllData, &count, &estimatedCard, &valueSamplesJSON, &signalTypesJSON, &scope, &firstSeen, &lastSeen)
+	
 	if err != nil {
-		return fmt.Errorf("serializing HLL: %w", err)
+		return nil // Not found or error - treat as new
 	}
 	
-	valueSamplesJSON = ""
-	if len(attr.ValueSamples) > 0 {
-		data, _ := json.Marshal(attr.ValueSamples)
-		valueSamplesJSON = string(data)
+	attr := &models.AttributeMetadata{
+		Key:                  key,
+		Count:                count,
+		EstimatedCardinality: estimatedCard,
+		Scope:                scope,
+		FirstSeen:            firstSeen,
+		LastSeen:             lastSeen,
 	}
 	
-	signalTypesJSON = ""
-	if len(attr.SignalTypes) > 0 {
-		data, _ := json.Marshal(attr.SignalTypes)
-		signalTypesJSON = string(data)
+	// Deserialize HLL
+	if err := attr.UnmarshalHLL(hllData); err != nil {
+		return nil
 	}
 	
-	// Upsert
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO attribute_catalog 
-		 (key, hll_sketch, count, estimated_cardinality, value_samples, signal_types, scope, first_seen, last_seen)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(key) DO UPDATE SET
-		   hll_sketch = excluded.hll_sketch,
-		   count = excluded.count,
-		   estimated_cardinality = excluded.estimated_cardinality,
-		   value_samples = excluded.value_samples,
-		   signal_types = excluded.signal_types,
-		   scope = excluded.scope,
-		   last_seen = excluded.last_seen`,
-		key, hllData, attr.Count, attr.EstimatedCardinality, valueSamplesJSON, 
-		signalTypesJSON, attr.Scope, attr.FirstSeen, attr.LastSeen,
-	)
+	// Deserialize value samples
+	if valueSamplesJSON != "" {
+		json.Unmarshal([]byte(valueSamplesJSON), &attr.ValueSamples)
+	}
 	
-	return err
+	// Deserialize signal types
+	if signalTypesJSON != "" {
+		json.Unmarshal([]byte(signalTypesJSON), &attr.SignalTypes)
+	}
+	
+	return attr
+}
+
+// attributeCacheFlusher periodically flushes dirty attributes to database.
+func (s *Store) attributeCacheFlusher(interval time.Duration) {
+	defer s.wg.Done()
+	
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ticker.C:
+			s.flushAttributeCache()
+		case <-s.closeCh:
+			// Final flush on shutdown
+			s.flushAttributeCache()
+			return
+		}
+	}
+}
+
+// flushAttributeCache writes all dirty attributes to database in a single transaction.
+func (s *Store) flushAttributeCache() {
+	// Collect dirty keys
+	var dirtyKeys []string
+	s.attrDirty.Range(func(key, value interface{}) bool {
+		dirtyKeys = append(dirtyKeys, key.(string))
+		return true
+	})
+	
+	if len(dirtyKeys) == 0 {
+		return // Nothing to flush
+	}
+	
+	// Begin transaction
+	tx, err := s.db.Begin()
+	if err != nil {
+		return // Log error in production
+	}
+	defer tx.Rollback()
+	
+	// Prepare upsert statement
+	stmt, err := tx.Prepare(`
+		INSERT INTO attribute_catalog 
+		(key, hll_sketch, count, estimated_cardinality, value_samples, signal_types, scope, first_seen, last_seen)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(key) DO UPDATE SET
+			hll_sketch = excluded.hll_sketch,
+			count = excluded.count,
+			estimated_cardinality = excluded.estimated_cardinality,
+			value_samples = excluded.value_samples,
+			signal_types = excluded.signal_types,
+			scope = excluded.scope,
+			last_seen = excluded.last_seen
+	`)
+	if err != nil {
+		return
+	}
+	defer stmt.Close()
+	
+	// Write all dirty attributes
+	for _, key := range dirtyKeys {
+		attrInterface, ok := s.attrCache.Load(key)
+		if !ok {
+			continue
+		}
+		
+		attr := attrInterface.(*models.AttributeMetadata)
+		attr.LastSeen = time.Now()
+		
+		// Serialize HLL
+		hllData, err := attr.MarshalHLL()
+		if err != nil {
+			continue
+		}
+		
+		// Serialize samples and signal types
+		valueSamplesJSON := ""
+		if len(attr.ValueSamples) > 0 {
+			data, _ := json.Marshal(attr.ValueSamples)
+			valueSamplesJSON = string(data)
+		}
+		
+		signalTypesJSON := ""
+		if len(attr.SignalTypes) > 0 {
+			data, _ := json.Marshal(attr.SignalTypes)
+			signalTypesJSON = string(data)
+		}
+		
+		// Execute upsert
+		_, err = stmt.Exec(
+			key, hllData, attr.Count, attr.EstimatedCardinality,
+			valueSamplesJSON, signalTypesJSON, attr.Scope,
+			attr.FirstSeen, attr.LastSeen,
+		)
+		if err != nil {
+			continue
+		}
+		
+		// Clear dirty flag
+		s.attrDirty.Delete(key)
+	}
+	
+	// Commit transaction
+	tx.Commit()
 }
 
 // GetAttribute retrieves attribute metadata by key.
+// Checks in-memory cache first, then falls back to database.
 func (s *Store) GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error) {
+	// Check cache first
+	if attrInterface, ok := s.attrCache.Load(key); ok {
+		attr := attrInterface.(*models.AttributeMetadata)
+		// Return a copy to avoid external modifications
+		return &models.AttributeMetadata{
+			Key:                  attr.Key,
+			Count:                attr.Count,
+			EstimatedCardinality: attr.EstimatedCardinality,
+			ValueSamples:         append([]string{}, attr.ValueSamples...),
+			SignalTypes:          append([]string{}, attr.SignalTypes...),
+			Scope:                attr.Scope,
+			FirstSeen:            attr.FirstSeen,
+			LastSeen:             attr.LastSeen,
+		}, nil
+	}
+	
+	// Not in cache, load from database
 	var hllData []byte
 	var count int64
 	var estimatedCard int64
