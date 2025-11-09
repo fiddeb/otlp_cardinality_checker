@@ -2,21 +2,24 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"log/slog"
+	"os"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage/clickhouse"
 	"github.com/fidde/otlp_cardinality_checker/internal/storage/memory"
-	"github.com/fidde/otlp_cardinality_checker/internal/storage/sqlite"
 )
 
 // Config holds storage configuration.
 type Config struct {
-	// Backend selects the storage backend: "memory" or "sqlite"
+	// Backend selects the storage backend: "memory" or "clickhouse"
 	Backend string
 
-	// SQLite-specific config
-	SQLiteDBPath string
+	// ClickHouse-specific config
+	ClickHouseAddr string
 
 	// Autotemplate config (shared)
 	UseAutoTemplate bool
@@ -30,8 +33,8 @@ func DefaultConfig() Config {
 	cfg.SimThreshold = 0.7
 
 	return Config{
-		Backend:         "sqlite",
-		SQLiteDBPath:    "data/otlp_metadata.db",
+		Backend:         "clickhouse",
+		ClickHouseAddr:  "localhost:9000",
 		UseAutoTemplate: false,
 		AutoTemplateCfg: cfg,
 	}
@@ -44,19 +47,23 @@ func NewStorage(cfg Config) (Storage, error) {
 		log.Printf("Using in-memory storage (autotemplate: %v)", cfg.UseAutoTemplate)
 		return memory.NewWithAutoTemplate(cfg.UseAutoTemplate), nil
 
-	case "sqlite":
-		log.Printf("Using SQLite storage: %s (autotemplate: %v)", cfg.SQLiteDBPath, cfg.UseAutoTemplate)
-		sqliteCfg := sqlite.DefaultConfig(cfg.SQLiteDBPath)
-		sqliteCfg.UseAutoTemplate = cfg.UseAutoTemplate
-		sqliteCfg.AutoTemplateCfg = cfg.AutoTemplateCfg
-
-		store, err := sqlite.New(sqliteCfg)
+	case "clickhouse":
+		log.Printf("Using ClickHouse storage: %s (autotemplate: %v)", cfg.ClickHouseAddr, cfg.UseAutoTemplate)
+		
+		chCfg := clickhouse.DefaultConfig()
+		chCfg.Addr = cfg.ClickHouseAddr
+		
+		logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
+		
+		store, err := clickhouse.NewStore(context.Background(), chCfg, logger)
 		if err != nil {
-			return nil, fmt.Errorf("creating SQLite store: %w", err)
+			return nil, fmt.Errorf("creating ClickHouse store: %w", err)
 		}
 		return store, nil
 
 	default:
-		return nil, fmt.Errorf("unknown storage backend: %s (supported: memory, sqlite)", cfg.Backend)
+		return nil, fmt.Errorf("unknown storage backend: %s (supported: memory, clickhouse)", cfg.Backend)
 	}
 }
