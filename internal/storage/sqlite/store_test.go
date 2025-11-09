@@ -52,7 +52,7 @@ func TestStoreMetric(t *testing.T) {
 
 	metric := &models.MetricMetadata{
 		Name: "http_requests_total",
-		Type: "counter",
+		Data: &models.SumMetric{DataPointCount: 1, IsMonotonic: true, AggregationTemporality: models.AggregationTemporalityCumulative},
 		Unit: "1",
 		LabelKeys: map[string]*models.KeyMetadata{
 			"method": {
@@ -92,8 +92,8 @@ func TestStoreMetric(t *testing.T) {
 	if retrieved.Name != metric.Name {
 		t.Errorf("expected name %s, got %s", metric.Name, retrieved.Name)
 	}
-	if retrieved.Type != metric.Type {
-		t.Errorf("expected type %s, got %s", metric.Type, retrieved.Type)
+	if retrieved.Data.GetType() != metric.Data.GetType() {
+		t.Errorf("expected type %s, got %s", metric.Data.GetType(), retrieved.Data.GetType())
 	}
 	if retrieved.SampleCount != metric.SampleCount {
 		t.Errorf("expected sample_count %d, got %d", metric.SampleCount, retrieved.SampleCount)
@@ -128,7 +128,7 @@ func TestStoreMetricUpdate(t *testing.T) {
 	// Store initial metric
 	metric1 := &models.MetricMetadata{
 		Name: "cpu_usage",
-		Type: "gauge",
+		Data: &models.GaugeMetric{DataPointCount: 1},
 		LabelKeys: map[string]*models.KeyMetadata{
 			"host": {
 				EstimatedCardinality: 1,
@@ -150,7 +150,7 @@ func TestStoreMetricUpdate(t *testing.T) {
 	// Store update with new label key and different service
 	metric2 := &models.MetricMetadata{
 		Name: "cpu_usage",
-		Type: "gauge",
+		Data: &models.GaugeMetric{DataPointCount: 1},
 		LabelKeys: map[string]*models.KeyMetadata{
 			"host": {
 				EstimatedCardinality: 2,
@@ -210,7 +210,8 @@ func TestStoreSpan(t *testing.T) {
 
 	span := &models.SpanMetadata{
 		Name: "GET /api/users",
-		Kind: "server",
+		Kind:        2,
+		KindName:    "Server",
 		AttributeKeys: map[string]*models.KeyMetadata{
 			"http.method": {
 				EstimatedCardinality: 1,
@@ -253,7 +254,7 @@ func TestStoreSpan(t *testing.T) {
 		t.Errorf("expected name %s, got %s", span.Name, retrieved.Name)
 	}
 	if retrieved.Kind != span.Kind {
-		t.Errorf("expected kind %s, got %s", span.Kind, retrieved.Kind)
+		t.Errorf("expected kind %d, got %d", span.Kind, retrieved.Kind)
 	}
 	if retrieved.SampleCount != span.SampleCount {
 		t.Errorf("expected sample_count %d, got %d", span.SampleCount, retrieved.SampleCount)
@@ -335,13 +336,13 @@ func TestListServices(t *testing.T) {
 	// Store metrics with different services
 	metric1 := &models.MetricMetadata{
 		Name:        "metric1",
-		Type:        "gauge",
+		Data:        &models.GaugeMetric{DataPointCount: 1},
 		SampleCount: 10,
 		Services:    map[string]int64{"service-a": 10},
 	}
 	metric2 := &models.MetricMetadata{
 		Name:        "metric2",
-		Type:        "counter",
+		Data:        &models.SumMetric{DataPointCount: 1, IsMonotonic: true, AggregationTemporality: models.AggregationTemporalityCumulative},
 		SampleCount: 20,
 		Services:    map[string]int64{"service-b": 20},
 	}
@@ -349,7 +350,8 @@ func TestListServices(t *testing.T) {
 	// Store span with another service
 	span := &models.SpanMetadata{
 		Name:        "span1",
-		Kind:        "server",
+		Kind:        2,
+		KindName:    "Server",
 		SampleCount: 30,
 		Services:    map[string]int64{"service-c": 30},
 	}
@@ -407,13 +409,14 @@ func TestGetServiceOverview(t *testing.T) {
 	// Store data for specific service
 	metric := &models.MetricMetadata{
 		Name:        "test_metric",
-		Type:        "gauge",
+		Data:        &models.GaugeMetric{DataPointCount: 1},
 		SampleCount: 10,
 		Services:    map[string]int64{serviceName: 10},
 	}
 	span := &models.SpanMetadata{
 		Name:        "test_span",
-		Kind:        "server",
+		Kind:        2,
+		KindName:    "Server",
 		SampleCount: 20,
 		Services:    map[string]int64{serviceName: 20},
 	}
@@ -473,7 +476,7 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 			for j := 0; j < opsPerWriter; j++ {
 				metric := &models.MetricMetadata{
 					Name:        fmt.Sprintf("metric_%d_%d", writerID, j),
-					Type:        "gauge",
+					Data:        &models.GaugeMetric{DataPointCount: 1},
 					SampleCount: int64(j + 1),
 					Services: map[string]int64{
 						fmt.Sprintf("service-%d", writerID): int64(j + 1),
@@ -549,7 +552,7 @@ func TestClear(t *testing.T) {
 	// Store some data
 	metric := &models.MetricMetadata{
 		Name:        "test_metric",
-		Type:        "gauge",
+		Data:        &models.GaugeMetric{DataPointCount: 1},
 		SampleCount: 10,
 		Services:    map[string]int64{"service-a": 10},
 	}
