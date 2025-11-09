@@ -129,7 +129,7 @@ fi
 # Check ClickHouse directly
 echo ""
 echo "Verifying data in ClickHouse..."
-CLICKHOUSE_DATA=$(clickhouse-client --query "SELECT metric_name, label_keys, sample_count FROM metrics FINAL WHERE metric_name = 'http_requests_total' FORMAT JSONCompact")
+CLICKHOUSE_DATA=$(clickhouse-client --query "SELECT name, label_keys, sample_count FROM metrics FINAL WHERE name = 'http_requests_total' FORMAT JSONCompact")
 
 if echo "$CLICKHOUSE_DATA" | grep -q "http_requests_total"; then
     echo "✓ Data verified in ClickHouse"
