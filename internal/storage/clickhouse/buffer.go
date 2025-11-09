@@ -105,6 +105,7 @@ type BatchBuffer struct {
 
 	flushTimer *time.Timer
 	stopCh     chan struct{}
+	closeOnce  sync.Once
 	wg         sync.WaitGroup
 	logger     *slog.Logger
 }
@@ -353,32 +354,39 @@ func (b *BatchBuffer) flushAttributesLocked() error {
 
 // Close gracefully shuts down the buffer, flushing remaining data
 func (b *BatchBuffer) Close(ctx context.Context) error {
-	// Stop flush loop
-	close(b.stopCh)
+	var finalErr error
+	
+	// Use sync.Once to ensure we only close once
+	b.closeOnce.Do(func() {
+		// Stop flush loop
+		close(b.stopCh)
 
-	// Create shutdown context with timeout
-	shutdownCtx, cancel := context.WithTimeout(ctx, b.shutdownWait)
-	defer cancel()
+		// Create shutdown context with timeout
+		shutdownCtx, cancel := context.WithTimeout(ctx, b.shutdownWait)
+		defer cancel()
 
-	// Wait for flush loop to stop
-	done := make(chan struct{})
-	go func() {
-		b.wg.Wait()
-		close(done)
-	}()
+		// Wait for flush loop to stop
+		done := make(chan struct{})
+		go func() {
+			b.wg.Wait()
+			close(done)
+		}()
 
-	select {
-	case <-done:
-		// Flush loop stopped
-	case <-shutdownCtx.Done():
-		b.logger.Warn("flush loop did not stop within timeout")
-	}
+		select {
+		case <-done:
+			// Flush loop stopped
+		case <-shutdownCtx.Done():
+			b.logger.Warn("flush loop did not stop within timeout")
+		}
 
-	// Final flush
-	b.mu.Lock()
-	defer b.mu.Unlock()
+		// Final flush
+		b.mu.Lock()
+		defer b.mu.Unlock()
 
-	return b.flushAllLocked()
+		finalErr = b.flushAllLocked()
+	})
+
+	return finalErr
 }
 
 // Insert methods with retry logic
