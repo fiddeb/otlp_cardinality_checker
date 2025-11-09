@@ -36,7 +36,7 @@ func BenchmarkMetricWrites(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		metric := &models.MetricMetadata{
 			Name: fmt.Sprintf("metric_%d", i%1000), // 1000 unique metrics
-			Type: "gauge",
+			Data: &models.GaugeMetric{DataPointCount: 1},
 			LabelKeys: map[string]*models.KeyMetadata{
 				"host": {
 					EstimatedCardinality: 10,
@@ -87,8 +87,9 @@ func BenchmarkSpanWrites(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		span := &models.SpanMetadata{
-			Name: fmt.Sprintf("GET /api/resource/%d", i%500), // 500 unique spans
-			Kind: "server",
+			Name:     fmt.Sprintf("GET /api/resource/%d", i%500), // 500 unique spans
+			Kind:     2,
+			KindName: "Server",
 			AttributeKeys: map[string]*models.KeyMetadata{
 				"http.method": {
 					EstimatedCardinality: 5,
@@ -189,7 +190,7 @@ func BenchmarkMixedWorkload(b *testing.B) {
 		case 0: // Metric
 			metric := &models.MetricMetadata{
 				Name:        fmt.Sprintf("metric_%d", i%1000),
-				Type:        "gauge",
+				Data:        &models.GaugeMetric{DataPointCount: 1},
 				SampleCount: 1,
 				Services:    map[string]int64{fmt.Sprintf("svc-%d", i%10): 1},
 			}
@@ -200,7 +201,8 @@ func BenchmarkMixedWorkload(b *testing.B) {
 		case 1: // Span
 			span := &models.SpanMetadata{
 				Name:        fmt.Sprintf("span_%d", i%500),
-				Kind:        "server",
+				Kind:        2,
+				KindName:    "Server",
 				SampleCount: 1,
 				Services:    map[string]int64{fmt.Sprintf("svc-%d", i%10): 1},
 			}
@@ -261,7 +263,7 @@ func BenchmarkConcurrentWrites(b *testing.B) {
 					for i := 0; i < opsPerWorker; i++ {
 						metric := &models.MetricMetadata{
 							Name:        fmt.Sprintf("metric_%d_%d", workerID, i%100),
-							Type:        "gauge",
+							Data:        &models.GaugeMetric{DataPointCount: 1},
 							SampleCount: 1,
 							Services:    map[string]int64{fmt.Sprintf("svc-%d", workerID): 1},
 						}
@@ -306,7 +308,7 @@ func BenchmarkReadWhileWriting(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		metric := &models.MetricMetadata{
 			Name:        fmt.Sprintf("metric_%d", i),
-			Type:        "gauge",
+			Data:        &models.GaugeMetric{DataPointCount: 1},
 			SampleCount: 1,
 			Services:    map[string]int64{"test-service": 1},
 		}
@@ -331,7 +333,7 @@ func BenchmarkReadWhileWriting(b *testing.B) {
 			case <-ticker.C:
 				metric := &models.MetricMetadata{
 					Name:        fmt.Sprintf("metric_%d", i%1000),
-					Type:        "gauge",
+					Data:        &models.GaugeMetric{DataPointCount: 1},
 					SampleCount: 1,
 					Services:    map[string]int64{"test-service": 1},
 				}
@@ -386,7 +388,7 @@ func BenchmarkBatchSizeImpact(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				metric := &models.MetricMetadata{
 					Name:        fmt.Sprintf("metric_%d", i%1000),
-					Type:        "gauge",
+					Data:        &models.GaugeMetric{DataPointCount: 1},
 					SampleCount: 1,
 					Services:    map[string]int64{"test-service": 1},
 				}
@@ -449,7 +451,7 @@ func BenchmarkHighThroughput(b *testing.B) {
 
 				metric := &models.MetricMetadata{
 					Name:        fmt.Sprintf("metric_%d_%d", workerID, i%1000),
-					Type:        "gauge",
+					Data:        &models.GaugeMetric{DataPointCount: 1},
 					SampleCount: 1,
 					Services:    map[string]int64{fmt.Sprintf("svc-%d", workerID): 1},
 				}
