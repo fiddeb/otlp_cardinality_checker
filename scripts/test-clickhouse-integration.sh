@@ -47,11 +47,12 @@ trap cleanup EXIT
 # Test health endpoint
 echo ""
 echo "Testing health endpoint..."
-HEALTH=$(curl -s http://localhost:8080/health)
+HEALTH=$(curl -s http://localhost:8080/api/v1/health)
 if echo "$HEALTH" | grep -q "ok"; then
     echo "✓ Health check passed"
 else
     echo "❌ Health check failed"
+    echo "Response: $HEALTH"
     exit 1
 fi
 
