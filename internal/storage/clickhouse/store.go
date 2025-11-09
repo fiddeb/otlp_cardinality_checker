@@ -844,18 +844,329 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 	return logs, rows.Err()
 }
 
-// Advanced query operations - stubs for now
+// Advanced query operations
 
 func (s *Store) GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error) {
-	return &models.PatternExplorerResponse{}, nil
+	// Query patterns with service aggregation
+	query := `
+		SELECT 
+			pattern_template,
+			any(example_body) as example_body,
+			sum(sample_count) as total_count,
+			groupArray((severity, sample_count)) as severity_breakdown,
+			uniq(arrayJoin(services)) as service_count,
+			groupArrayDistinct(arrayJoin(services)) as services
+		FROM logs FINAL
+		WHERE sample_count >= ?
+		GROUP BY pattern_template
+		HAVING uniq(arrayJoin(services)) >= ?
+		ORDER BY total_count DESC
+		LIMIT 100
+	`
+	
+	rows, err := s.conn.Query(ctx, query, minCount, minServices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var patterns []models.PatternGroup
+	
+	for rows.Next() {
+		var (
+			template      string
+			exampleBody   string
+			totalCount    uint64
+			severityData  [][]interface{} // Array of [severity, count] tuples
+			serviceCount  uint64
+			services      []string
+		)
+		
+		err := rows.Scan(&template, &exampleBody, &totalCount, &severityData, &serviceCount, &services)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Convert severity data to map
+		severityBreakdown := make(map[string]int64)
+		for _, tuple := range severityData {
+			if len(tuple) == 2 {
+				severity, ok1 := tuple[0].(string)
+				count, ok2 := tuple[1].(uint64)
+				if ok1 && ok2 {
+					severityBreakdown[severity] = int64(count)
+				}
+			}
+		}
+		
+		// Query per-service details for this pattern
+		serviceInfos, err := s.getPatternServiceDetails(ctx, template, services)
+		if err != nil {
+			return nil, err
+		}
+		
+		patterns = append(patterns, models.PatternGroup{
+			Template:          template,
+			ExampleBody:       exampleBody,
+			TotalCount:        int64(totalCount),
+			SeverityBreakdown: severityBreakdown,
+			Services:          serviceInfos,
+		})
+	}
+	
+	return &models.PatternExplorerResponse{
+		Patterns: patterns,
+		Total:    len(patterns),
+	}, rows.Err()
+}
+
+func (s *Store) getPatternServiceDetails(ctx context.Context, template string, serviceNames []string) ([]models.ServicePatternInfo, error) {
+	if len(serviceNames) == 0 {
+		return nil, nil
+	}
+	
+	// Query per-service data for this template
+	query := `
+		SELECT 
+			arrayJoin(services) as service_name,
+			sum(sample_count) as sample_count,
+			groupArrayDistinct(severity) as severities,
+			groupArrayDistinct(arrayJoin(resource_keys)) as resource_keys,
+			groupArrayDistinct(arrayJoin(attribute_keys)) as attribute_keys
+		FROM logs FINAL
+		WHERE pattern_template = ? AND has(services, service_name)
+		GROUP BY service_name
+		ORDER BY sample_count DESC
+	`
+	
+	rows, err := s.conn.Query(ctx, query, template)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var serviceInfos []models.ServicePatternInfo
+	
+	for rows.Next() {
+		var (
+			serviceName   string
+			sampleCount   uint64
+			severities    []string
+			resourceKeys  []string
+			attributeKeys []string
+		)
+		
+		err := rows.Scan(&serviceName, &sampleCount, &severities, &resourceKeys, &attributeKeys)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Convert keys to KeyInfo (cardinality requires separate query or estimation)
+		resKeyInfos := make([]models.KeyInfo, len(resourceKeys))
+		for i, key := range resourceKeys {
+			resKeyInfos[i] = models.KeyInfo{Name: key, Cardinality: 0}
+		}
+		
+		attrKeyInfos := make([]models.KeyInfo, len(attributeKeys))
+		for i, key := range attributeKeys {
+			attrKeyInfos[i] = models.KeyInfo{Name: key, Cardinality: 0}
+		}
+		
+		serviceInfos = append(serviceInfos, models.ServicePatternInfo{
+			ServiceName:   serviceName,
+			SampleCount:   int64(sampleCount),
+			Severities:    severities,
+			ResourceKeys:  resKeyInfos,
+			AttributeKeys: attrKeyInfos,
+		})
+	}
+	
+	return serviceInfos, rows.Err()
 }
 
 func (s *Store) GetHighCardinalityKeys(ctx context.Context, threshold int, limit int) (*models.CrossSignalCardinalityResponse, error) {
-	return &models.CrossSignalCardinalityResponse{}, nil
+	// Query attribute_values table for high-cardinality keys using uniqExact
+	query := `
+		SELECT 
+			signal_type,
+			key_name,
+			key_scope,
+			uniqExact(value) as cardinality,
+			sum(observation_count) as key_count,
+			groupArray(5)(value) as value_samples,
+			groupArrayDistinct(signal_name) as signal_names
+		FROM attribute_values FINAL
+		GROUP BY signal_type, key_name, key_scope
+		HAVING cardinality >= ?
+		ORDER BY cardinality DESC
+		LIMIT ?
+	`
+	
+	rows, err := s.conn.Query(ctx, query, threshold, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var keys []models.SignalKey
+	
+	for rows.Next() {
+		var (
+			signalType   string
+			keyName      string
+			keyScope     string
+			cardinality  uint64
+			keyCount     uint64
+			valueSamples []string
+			signalNames  []string
+		)
+		
+		err := rows.Scan(&signalType, &keyName, &keyScope, &cardinality, &keyCount, &valueSamples, &signalNames)
+		if err != nil {
+			return nil, err
+		}
+		
+		// For each key, create entries for signal names it appears in
+		// (or just one entry with first signal name for simplicity)
+		signalName := ""
+		if len(signalNames) > 0 {
+			signalName = signalNames[0]
+		}
+		
+		keys = append(keys, models.SignalKey{
+			SignalType:           signalType,
+			SignalName:           signalName,
+			KeyScope:             keyScope,
+			KeyName:              keyName,
+			EstimatedCardinality: int(cardinality),
+			KeyCount:             int64(keyCount),
+			ValueSamples:         valueSamples,
+		})
+	}
+	
+	return &models.CrossSignalCardinalityResponse{
+		HighCardinalityKeys: keys,
+		Total:               len(keys),
+		Threshold:           threshold,
+	}, rows.Err()
 }
 
 func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit int) (*models.MetadataComplexityResponse, error) {
-	return &models.MetadataComplexityResponse{}, nil
+	// Query metrics for complexity analysis
+	metricsQuery := `
+		SELECT 
+			'metric' as signal_type,
+			metric_name as signal_name,
+			length(label_keys) + length(resource_keys) as total_keys,
+			length(label_keys) as attribute_key_count,
+			length(resource_keys) as resource_key_count,
+			0 as event_key_count,
+			0 as link_key_count
+		FROM metrics FINAL
+		WHERE total_keys >= ?
+		ORDER BY total_keys DESC
+		LIMIT ?
+	`
+	
+	// Query spans for complexity analysis
+	spansQuery := `
+		SELECT 
+			'span' as signal_type,
+			span_name as signal_name,
+			length(attribute_keys) + length(resource_keys) + length(event_keys) + length(link_keys) as total_keys,
+			length(attribute_keys) as attribute_key_count,
+			length(resource_keys) as resource_key_count,
+			length(event_keys) as event_key_count,
+			length(link_keys) as link_key_count
+		FROM spans FINAL
+		WHERE total_keys >= ?
+		ORDER BY total_keys DESC
+		LIMIT ?
+	`
+	
+	// Query logs for complexity analysis
+	logsQuery := `
+		SELECT 
+			'log' as signal_type,
+			severity as signal_name,
+			length(attribute_keys) + length(resource_keys) as total_keys,
+			length(attribute_keys) as attribute_key_count,
+			length(resource_keys) as resource_key_count,
+			0 as event_key_count,
+			0 as link_key_count
+		FROM logs FINAL
+		WHERE total_keys >= ?
+		ORDER BY total_keys DESC
+		LIMIT ?
+	`
+	
+	var signals []models.SignalComplexity
+	
+	// Execute queries for each signal type
+	for _, query := range []string{metricsQuery, spansQuery, logsQuery} {
+		rows, err := s.conn.Query(ctx, query, threshold, limit)
+		if err != nil {
+			return nil, err
+		}
+		
+		for rows.Next() {
+			var (
+				signalType        string
+				signalName        string
+				totalKeys         uint32
+				attributeKeyCount uint32
+				resourceKeyCount  uint32
+				eventKeyCount     uint32
+				linkKeyCount      uint32
+			)
+			
+			err := rows.Scan(&signalType, &signalName, &totalKeys, &attributeKeyCount, &resourceKeyCount, &eventKeyCount, &linkKeyCount)
+			if err != nil {
+				rows.Close()
+				return nil, err
+			}
+			
+			// Query attribute_values for cardinality metrics
+			cardQuery := `
+				SELECT 
+					max(uniqExact(value)) as max_cardinality,
+					countIf(uniqExact(value) > 100) as high_cardinality_count
+				FROM attribute_values FINAL
+				WHERE signal_type = ? AND signal_name = ?
+				GROUP BY signal_type, signal_name
+			`
+			
+			var maxCardinality uint64
+			var highCardinalityCount uint64
+			err = s.conn.QueryRow(ctx, cardQuery, signalType, signalName).Scan(&maxCardinality, &highCardinalityCount)
+			if err != nil && err != sql.ErrNoRows {
+				rows.Close()
+				return nil, err
+			}
+			
+			complexityScore := int(totalKeys) * int(maxCardinality)
+			
+			signals = append(signals, models.SignalComplexity{
+				SignalType:           signalType,
+				SignalName:           signalName,
+				TotalKeys:            int(totalKeys),
+				AttributeKeyCount:    int(attributeKeyCount),
+				ResourceKeyCount:     int(resourceKeyCount),
+				EventKeyCount:        int(eventKeyCount),
+				LinkKeyCount:         int(linkKeyCount),
+				MaxCardinality:       int(maxCardinality),
+				HighCardinalityCount: int(highCardinalityCount),
+				ComplexityScore:      complexityScore,
+			})
+		}
+		rows.Close()
+	}
+	
+	return &models.MetadataComplexityResponse{
+		Signals:   signals,
+		Total:     len(signals),
+		Threshold: threshold,
+	}, nil
 }
 
 // Attribute operations
@@ -1022,10 +1333,116 @@ func (s *Store) ListServices(ctx context.Context) ([]string, error) {
 }
 
 func (s *Store) GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error) {
-	// TODO: Implement service overview
-	return &models.ServiceOverview{
+	overview := &models.ServiceOverview{
 		ServiceName: serviceName,
-	}, nil
+	}
+	
+	// Get metrics for this service
+	metricsQuery := `
+		SELECT metric_name
+		FROM metrics FINAL
+		WHERE has(services, ?)
+		GROUP BY metric_name
+		LIMIT 100
+	`
+	
+	rows, err := s.conn.Query(ctx, metricsQuery, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	
+	var metricNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		metricNames = append(metricNames, name)
+	}
+	rows.Close()
+	
+	overview.MetricCount = len(metricNames)
+	
+	// Fetch full metric metadata
+	for _, name := range metricNames {
+		metric, err := s.GetMetric(ctx, name)
+		if err == nil {
+			overview.Metrics = append(overview.Metrics, metric)
+		}
+	}
+	
+	// Get spans for this service
+	spansQuery := `
+		SELECT span_name
+		FROM spans FINAL
+		WHERE has(services, ?)
+		GROUP BY span_name
+		LIMIT 100
+	`
+	
+	rows, err = s.conn.Query(ctx, spansQuery, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	
+	var spanNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		spanNames = append(spanNames, name)
+	}
+	rows.Close()
+	
+	overview.SpanCount = len(spanNames)
+	
+	// Fetch full span metadata
+	for _, name := range spanNames {
+		span, err := s.GetSpan(ctx, name)
+		if err == nil {
+			overview.Spans = append(overview.Spans, span)
+		}
+	}
+	
+	// Get logs for this service
+	logsQuery := `
+		SELECT severity
+		FROM logs FINAL
+		WHERE has(services, ?)
+		GROUP BY severity
+		LIMIT 100
+	`
+	
+	rows, err = s.conn.Query(ctx, logsQuery, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	
+	var severities []string
+	for rows.Next() {
+		var severity string
+		if err := rows.Scan(&severity); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		severities = append(severities, severity)
+	}
+	rows.Close()
+	
+	overview.LogCount = len(severities)
+	
+	// Fetch full log metadata
+	for _, severity := range severities {
+		log, err := s.GetLog(ctx, severity)
+		if err == nil {
+			overview.Logs = append(overview.Logs, log)
+		}
+	}
+	
+	return overview, nil
 }
 
 // Configuration
