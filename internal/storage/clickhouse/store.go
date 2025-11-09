@@ -406,28 +406,442 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 }
 
 func (s *Store) GetSpan(ctx context.Context, name string) (*models.SpanMetadata, error) {
-	// TODO: Implement full span retrieval
-	return nil, models.ErrNotFound
+	query := `
+		SELECT 
+			name, kind, kind_name, attribute_keys, resource_keys,
+			event_names, has_links, status_codes,
+			dropped_attrs_total, dropped_attrs_max,
+			dropped_events_total, dropped_events_max,
+			dropped_links_total, dropped_links_max,
+			sample_count, services
+		FROM spans FINAL
+		WHERE name = ?
+		LIMIT 1
+	`
+	
+	row := s.conn.QueryRow(ctx, query, name)
+	
+	var (
+		spanName          string
+		kind              uint8
+		kindName          string
+		attributeKeys     []string
+		resourceKeys      []string
+		eventNames        []string
+		hasLinks          uint8
+		statusCodes       []string
+		droppedAttrsTotal uint64
+		droppedAttrsMax   uint32
+		droppedEventsTotal uint64
+		droppedEventsMax   uint32
+		droppedLinksTotal  uint64
+		droppedLinksMax    uint32
+		sampleCount        uint64
+		services           []string
+	)
+	
+	err := row.Scan(
+		&spanName, &kind, &kindName, &attributeKeys, &resourceKeys,
+		&eventNames, &hasLinks, &statusCodes,
+		&droppedAttrsTotal, &droppedAttrsMax,
+		&droppedEventsTotal, &droppedEventsMax,
+		&droppedLinksTotal, &droppedLinksMax,
+		&sampleCount, &services,
+	)
+	
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, models.ErrNotFound
+		}
+		return nil, err
+	}
+	
+	span := &models.SpanMetadata{
+		Name:          spanName,
+		Kind:          int32(kind),
+		KindName:      kindName,
+		AttributeKeys: make(map[string]*models.KeyMetadata),
+		ResourceKeys:  make(map[string]*models.KeyMetadata),
+		EventNames:    eventNames,
+		StatusCodes:   statusCodes,
+		SampleCount:   int64(sampleCount),
+		Services:      make(map[string]int64),
+	}
+	
+	for _, key := range attributeKeys {
+		span.AttributeKeys[key] = &models.KeyMetadata{Count: 0}
+	}
+	
+	for _, key := range resourceKeys {
+		span.ResourceKeys[key] = &models.KeyMetadata{Count: 0}
+	}
+	
+	for _, svc := range services {
+		span.Services[svc] = 0
+	}
+	
+	if droppedAttrsTotal > 0 {
+		span.DroppedAttributesStats = &models.DroppedCountStats{
+			TotalDropped: uint32(droppedAttrsTotal),
+			MaxDropped:   droppedAttrsMax,
+		}
+	}
+	
+	if droppedEventsTotal > 0 {
+		span.DroppedEventsStats = &models.DroppedCountStats{
+			TotalDropped: uint32(droppedEventsTotal),
+			MaxDropped:   droppedEventsMax,
+		}
+	}
+	
+	if droppedLinksTotal > 0 {
+		span.DroppedLinksStats = &models.DroppedCountStats{
+			TotalDropped: uint32(droppedLinksTotal),
+			MaxDropped:   droppedLinksMax,
+		}
+	}
+	
+	return span, nil
 }
 
 func (s *Store) ListSpans(ctx context.Context, serviceName string) ([]*models.SpanMetadata, error) {
-	// TODO: Implement span listing
-	return []*models.SpanMetadata{}, nil
+	query := `
+		SELECT 
+			name, kind, kind_name, attribute_keys, resource_keys,
+			event_names, has_links, status_codes,
+			dropped_attrs_total, dropped_attrs_max,
+			dropped_events_total, dropped_events_max,
+			dropped_links_total, dropped_links_max,
+			sample_count, services
+		FROM spans FINAL
+	`
+	
+	args := []interface{}{}
+	if serviceName != "" {
+		query += " WHERE service_name = ?"
+		args = append(args, serviceName)
+	}
+	
+	query += " ORDER BY name"
+	
+	rows, err := s.conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var spans []*models.SpanMetadata
+	
+	for rows.Next() {
+		var (
+			spanName          string
+			kind              uint8
+			kindName          string
+			attributeKeys     []string
+			resourceKeys      []string
+			eventNames        []string
+			hasLinks          uint8
+			statusCodes       []string
+			droppedAttrsTotal uint64
+			droppedAttrsMax   uint32
+			droppedEventsTotal uint64
+			droppedEventsMax   uint32
+			droppedLinksTotal  uint64
+			droppedLinksMax    uint32
+			sampleCount        uint64
+			services           []string
+		)
+		
+		err := rows.Scan(
+			&spanName, &kind, &kindName, &attributeKeys, &resourceKeys,
+			&eventNames, &hasLinks, &statusCodes,
+			&droppedAttrsTotal, &droppedAttrsMax,
+			&droppedEventsTotal, &droppedEventsMax,
+			&droppedLinksTotal, &droppedLinksMax,
+			&sampleCount, &services,
+		)
+		if err != nil {
+			return nil, err
+		}
+		
+		span := &models.SpanMetadata{
+			Name:          spanName,
+			Kind:          int32(kind),
+			KindName:      kindName,
+			AttributeKeys: make(map[string]*models.KeyMetadata),
+			ResourceKeys:  make(map[string]*models.KeyMetadata),
+			EventNames:    eventNames,
+			StatusCodes:   statusCodes,
+			SampleCount:   int64(sampleCount),
+			Services:      make(map[string]int64),
+		}
+		
+		for _, key := range attributeKeys {
+			span.AttributeKeys[key] = &models.KeyMetadata{Count: 0}
+		}
+		
+		for _, key := range resourceKeys {
+			span.ResourceKeys[key] = &models.KeyMetadata{Count: 0}
+		}
+		
+		for _, svc := range services {
+			span.Services[svc] = 0
+		}
+		
+		if droppedAttrsTotal > 0 {
+			span.DroppedAttributesStats = &models.DroppedCountStats{
+				TotalDropped: uint32(droppedAttrsTotal),
+				MaxDropped:   droppedAttrsMax,
+			}
+		}
+		
+		if droppedEventsTotal > 0 {
+			span.DroppedEventsStats = &models.DroppedCountStats{
+				TotalDropped: uint32(droppedEventsTotal),
+				MaxDropped:   droppedEventsMax,
+			}
+		}
+		
+		if droppedLinksTotal > 0 {
+			span.DroppedLinksStats = &models.DroppedCountStats{
+				TotalDropped: uint32(droppedLinksTotal),
+				MaxDropped:   droppedLinksMax,
+			}
+		}
+		
+		spans = append(spans, span)
+	}
+	
+	return spans, rows.Err()
 }
 
-// Log operations - basic implementations
+// Log operations
 
 func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
-	// TODO: Implement log storage
-	return nil
+	now := time.Now()
+	
+	attributeKeys := make([]string, 0, len(log.AttributeKeys))
+	for k := range log.AttributeKeys {
+		attributeKeys = append(attributeKeys, k)
+	}
+	
+	resourceKeys := make([]string, 0, len(log.ResourceKeys))
+	for k := range log.ResourceKeys {
+		resourceKeys = append(resourceKeys, k)
+	}
+	
+	services := make([]string, 0, len(log.Services))
+	for svc := range log.Services {
+		services = append(services, svc)
+	}
+	
+	// Extract first body template as example (if any)
+	exampleBody := ""
+	if len(log.BodyTemplates) > 0 {
+		exampleBody = log.BodyTemplates[0].Example
+	}
+	
+	hasTraceContext := uint8(0)
+	if log.HasTraceContext {
+		hasTraceContext = 1
+	}
+	
+	hasSpanContext := uint8(0)
+	if log.HasSpanContext {
+		hasSpanContext = 1
+	}
+	
+	// Use severity text as pattern_template for now
+	// In production, this would use the Drain algorithm output
+	patternTemplate := log.Severity
+	
+	row := LogRow{
+		PatternTemplate: patternTemplate,
+		Severity:        log.Severity,
+		SeverityNumber:  uint8(log.SeverityNumber),
+		ServiceName:     s.extractPrimaryService(log.Services),
+		AttributeKeys:   attributeKeys,
+		ResourceKeys:    resourceKeys,
+		ExampleBody:     exampleBody,
+		HasTraceContext: hasTraceContext,
+		HasSpanContext:  hasSpanContext,
+		SampleCount:     uint64(log.SampleCount),
+		FirstSeen:       now,
+		LastSeen:        now,
+		Services:        services,
+		ServiceCount:    uint32(len(services)),
+	}
+	
+	if log.DroppedAttributesStats != nil {
+		row.DroppedAttrsTotal = uint64(log.DroppedAttributesStats.TotalDropped)
+		row.DroppedAttrsMax = log.DroppedAttributesStats.MaxDropped
+	}
+	
+	return s.buffer.AddLog(row)
 }
 
 func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMetadata, error) {
-	return nil, models.ErrNotFound
+	query := `
+		SELECT 
+			pattern_template, severity, severity_number, attribute_keys, resource_keys,
+			example_body, has_trace_context, has_span_context,
+			dropped_attrs_total, dropped_attrs_max,
+			sample_count, services
+		FROM logs FINAL
+		WHERE severity = ?
+		LIMIT 1
+	`
+	
+	row := s.conn.QueryRow(ctx, query, severityText)
+	
+	var (
+		patternTemplate   string
+		severity          string
+		severityNumber    uint8
+		attributeKeys     []string
+		resourceKeys      []string
+		exampleBody       string
+		hasTraceContext   uint8
+		hasSpanContext    uint8
+		droppedAttrsTotal uint64
+		droppedAttrsMax   uint32
+		sampleCount       uint64
+		services          []string
+	)
+	
+	err := row.Scan(
+		&patternTemplate, &severity, &severityNumber, &attributeKeys, &resourceKeys,
+		&exampleBody, &hasTraceContext, &hasSpanContext,
+		&droppedAttrsTotal, &droppedAttrsMax,
+		&sampleCount, &services,
+	)
+	
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, models.ErrNotFound
+		}
+		return nil, err
+	}
+	
+	logMeta := &models.LogMetadata{
+		Severity:         severity,
+		SeverityNumber:   int32(severityNumber),
+		AttributeKeys:    make(map[string]*models.KeyMetadata),
+		ResourceKeys:     make(map[string]*models.KeyMetadata),
+		HasTraceContext:  hasTraceContext == 1,
+		HasSpanContext:   hasSpanContext == 1,
+		SampleCount:      int64(sampleCount),
+		Services:         make(map[string]int64),
+	}
+	
+	for _, key := range attributeKeys {
+		logMeta.AttributeKeys[key] = &models.KeyMetadata{Count: 0}
+	}
+	
+	for _, key := range resourceKeys {
+		logMeta.ResourceKeys[key] = &models.KeyMetadata{Count: 0}
+	}
+	
+	for _, svc := range services {
+		logMeta.Services[svc] = 0
+	}
+	
+	if droppedAttrsTotal > 0 {
+		logMeta.DroppedAttributesStats = &models.DroppedAttributesStats{
+			TotalDropped: uint32(droppedAttrsTotal),
+			MaxDropped:   droppedAttrsMax,
+		}
+	}
+	
+	return logMeta, nil
 }
 
 func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.LogMetadata, error) {
-	return []*models.LogMetadata{}, nil
+	query := `
+		SELECT 
+			pattern_template, severity, severity_number, attribute_keys, resource_keys,
+			example_body, has_trace_context, has_span_context,
+			dropped_attrs_total, dropped_attrs_max,
+			sample_count, services
+		FROM logs FINAL
+	`
+	
+	args := []interface{}{}
+	if serviceName != "" {
+		query += " WHERE service_name = ?"
+		args = append(args, serviceName)
+	}
+	
+	query += " ORDER BY severity, pattern_template"
+	
+	rows, err := s.conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var logs []*models.LogMetadata
+	
+	for rows.Next() {
+		var (
+			patternTemplate   string
+			severity          string
+			severityNumber    uint8
+			attributeKeys     []string
+			resourceKeys      []string
+			exampleBody       string
+			hasTraceContext   uint8
+			hasSpanContext    uint8
+			droppedAttrsTotal uint64
+			droppedAttrsMax   uint32
+			sampleCount       uint64
+			services          []string
+		)
+		
+		err := rows.Scan(
+			&patternTemplate, &severity, &severityNumber, &attributeKeys, &resourceKeys,
+			&exampleBody, &hasTraceContext, &hasSpanContext,
+			&droppedAttrsTotal, &droppedAttrsMax,
+			&sampleCount, &services,
+		)
+		if err != nil {
+			return nil, err
+		}
+		
+		logMeta := &models.LogMetadata{
+			Severity:         severity,
+			SeverityNumber:   int32(severityNumber),
+			AttributeKeys:    make(map[string]*models.KeyMetadata),
+			ResourceKeys:     make(map[string]*models.KeyMetadata),
+			HasTraceContext:  hasTraceContext == 1,
+			HasSpanContext:   hasSpanContext == 1,
+			SampleCount:      int64(sampleCount),
+			Services:         make(map[string]int64),
+		}
+		
+		for _, key := range attributeKeys {
+			logMeta.AttributeKeys[key] = &models.KeyMetadata{Count: 0}
+		}
+		
+		for _, key := range resourceKeys {
+			logMeta.ResourceKeys[key] = &models.KeyMetadata{Count: 0}
+		}
+		
+		for _, svc := range services {
+			logMeta.Services[svc] = 0
+		}
+		
+		if droppedAttrsTotal > 0 {
+			logMeta.DroppedAttributesStats = &models.DroppedAttributesStats{
+				TotalDropped: uint32(droppedAttrsTotal),
+				MaxDropped:   droppedAttrsMax,
+			}
+		}
+		
+		logs = append(logs, logMeta)
+	}
+	
+	return logs, rows.Err()
 }
 
 // Advanced query operations - stubs for now
@@ -463,13 +877,125 @@ func (s *Store) StoreAttributeValue(ctx context.Context, key, value, signalType,
 }
 
 func (s *Store) GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error) {
-	// TODO: Implement with uniqExact cardinality
-	return nil, models.ErrNotFound
+	query := `
+		SELECT
+			key,
+			uniqExact(value) AS cardinality,
+			groupArray(5)(value) AS samples,
+			sum(observation_count) AS total_observations,
+			min(first_seen) AS first_seen,
+			max(last_seen) AS last_seen
+		FROM attribute_values
+		WHERE key = ?
+		GROUP BY key
+	`
+	
+	row := s.conn.QueryRow(ctx, query, key)
+	
+	var (
+		keyName      string
+		cardinality  uint64
+		samples      []string
+		observations uint64
+		firstSeen    time.Time
+		lastSeen     time.Time
+	)
+	
+	err := row.Scan(&keyName, &cardinality, &samples, &observations, &firstSeen, &lastSeen)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, models.ErrNotFound
+		}
+		return nil, err
+	}
+	
+	attr := &models.AttributeMetadata{
+		Key:                  keyName,
+		EstimatedCardinality: int64(cardinality),
+		ValueSamples:         samples,
+		Count:                int64(observations),
+		FirstSeen:            firstSeen,
+		LastSeen:             lastSeen,
+	}
+	
+	return attr, nil
 }
 
 func (s *Store) ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, error) {
-	// TODO: Implement attribute listing
-	return []*models.AttributeMetadata{}, nil
+	query := `
+		SELECT
+			key,
+			uniqExact(value) AS cardinality,
+			groupArray(5)(value) AS samples,
+			sum(observation_count) AS total_observations,
+			min(first_seen) AS first_seen,
+			max(last_seen) AS last_seen
+		FROM attribute_values
+	`
+	
+	var conditions []string
+	var args []interface{}
+	
+	if filter != nil {
+		if filter.SignalType != "" {
+			conditions = append(conditions, "signal_type = ?")
+			args = append(args, filter.SignalType)
+		}
+		if filter.Scope != "" {
+			conditions = append(conditions, "scope = ?")
+			args = append(args, filter.Scope)
+		}
+	}
+	
+	if len(conditions) > 0 {
+		query += " WHERE " + conditions[0]
+		for i := 1; i < len(conditions); i++ {
+			query += " AND " + conditions[i]
+		}
+	}
+	
+	query += " GROUP BY key ORDER BY cardinality DESC"
+	
+	if filter != nil && filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
+	}
+	
+	rows, err := s.conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var attributes []*models.AttributeMetadata
+	
+	for rows.Next() {
+		var (
+			keyName      string
+			cardinality  uint64
+			samples      []string
+			observations uint64
+			firstSeen    time.Time
+			lastSeen     time.Time
+		)
+		
+		err := rows.Scan(&keyName, &cardinality, &samples, &observations, &firstSeen, &lastSeen)
+		if err != nil {
+			return nil, err
+		}
+		
+		attr := &models.AttributeMetadata{
+			Key:                  keyName,
+			EstimatedCardinality: int64(cardinality),
+			ValueSamples:         samples,
+			Count:                int64(observations),
+			FirstSeen:            firstSeen,
+			LastSeen:             lastSeen,
+		}
+		
+		attributes = append(attributes, attr)
+	}
+	
+	return attributes, rows.Err()
 }
 
 // Service operations
