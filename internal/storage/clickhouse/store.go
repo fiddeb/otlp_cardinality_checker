@@ -40,8 +40,14 @@ func NewStore(ctx context.Context, config *ConnectionConfig, logger *slog.Logger
 		return nil, fmt.Errorf("initializing schema: %w", err)
 	}
 
-	// Create batch buffer
+	// Create batch buffer with config values
 	buffer := NewBatchBuffer(conn, logger)
+	if config.BatchSize > 0 {
+		buffer.SetBatchSize(config.BatchSize)
+	}
+	if config.FlushInterval > 0 {
+		buffer.SetFlushInterval(config.FlushInterval)
+	}
 
 	store := &Store{
 		conn:         conn,
