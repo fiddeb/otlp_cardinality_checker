@@ -20,29 +20,33 @@ const (
 
 // ConnectionConfig holds ClickHouse connection parameters
 type ConnectionConfig struct {
-	Addr         string
-	Database     string
-	Username     string
-	Password     string
-	MaxOpenConns int
-	MaxIdleConns int
-	DialTimeout  time.Duration
-	MaxRetries   int
-	TLS          *tls.Config
+	Addr          string
+	Database      string
+	Username      string
+	Password      string
+	MaxOpenConns  int
+	MaxIdleConns  int
+	DialTimeout   time.Duration
+	MaxRetries    int
+	TLS           *tls.Config
+	BatchSize     int           // Number of rows to buffer before flushing (default: 5000)
+	FlushInterval time.Duration // Max time between flushes (default: 2s)
 }
 
 // DefaultConfig returns a connection config with sensible defaults
 func DefaultConfig() *ConnectionConfig {
 	return &ConnectionConfig{
-		Addr:         "localhost:9000",
-		Database:     "default",
-		Username:     "default",
-		Password:     "",
-		MaxOpenConns: defaultMaxOpenConns,
-		MaxIdleConns: defaultMaxIdleConns,
-		DialTimeout:  defaultDialTimeout,
-		MaxRetries:   defaultMaxRetries,
-		TLS:          nil, // No TLS for local development
+		Addr:          "localhost:9000",
+		Database:      "default",
+		Username:      "default",
+		Password:      "",
+		MaxOpenConns:  defaultMaxOpenConns,
+		MaxIdleConns:  defaultMaxIdleConns,
+		DialTimeout:   defaultDialTimeout,
+		MaxRetries:    defaultMaxRetries,
+		TLS:           nil, // No TLS for local development
+		BatchSize:     0,   // Use default from buffer.go
+		FlushInterval: 0,   // Use default from buffer.go
 	}
 }
 

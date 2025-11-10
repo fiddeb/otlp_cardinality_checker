@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	defaultBatchSize     = 1000
-	defaultFlushInterval = 5 * time.Second
+	defaultBatchSize     = 5000 // Increased from 1000 for better throughput
+	defaultFlushInterval = 2 * time.Second // Reduced from 5s for lower latency
 	defaultShutdownWait  = 10 * time.Second
 	maxRetries           = 3
 )
@@ -132,6 +132,32 @@ func NewBatchBuffer(conn driver.Conn, logger *slog.Logger) *BatchBuffer {
 	go b.flushLoop()
 
 	return b
+}
+
+// SetBatchSize updates the batch size (must be called before buffer is used)
+func (b *BatchBuffer) SetBatchSize(size int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.batchSize = size
+	b.logger.Info("batch buffer size updated", "batch_size", size)
+}
+
+// SetFlushInterval updates the flush interval (must be called before buffer is used)
+func (b *BatchBuffer) SetFlushInterval(interval time.Duration) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.flushInterval = interval
+	
+	// Reset timer with new interval
+	if !b.flushTimer.Stop() {
+		select {
+		case <-b.flushTimer.C:
+		default:
+		}
+	}
+	b.flushTimer.Reset(interval)
+	
+	b.logger.Info("batch buffer flush interval updated", "flush_interval", interval)
 }
 
 // AddMetric adds a metric row to the buffer
