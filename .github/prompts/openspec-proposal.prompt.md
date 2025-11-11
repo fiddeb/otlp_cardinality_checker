@@ -16,7 +16,10 @@ $ARGUMENTS
 2. Choose a unique verb-led `change-id` and scaffold `proposal.md`, `tasks.md`, and `design.md` (when needed) under `openspec/changes/<id>/`.
 3. Map the change into concrete capabilities or requirements, breaking multi-scope efforts into distinct spec deltas with clear relationships and sequencing.
 4. Capture architectural reasoning in `design.md` when the solution spans multiple systems, introduces new patterns, or demands trade-off discussion before committing to specs.
-5. Draft spec deltas in `changes/<id>/specs/<capability>/spec.md` (one folder per capability) using `## ADDED|MODIFIED|REMOVED Requirements` with at least one `#### Scenario:` per requirement and cross-reference related capabilities when relevant.
+5. Draft spec deltas in `changes/<id>/specs/<capability>/spec.md` (one folder per capability) using `## ADDED|MODIFIED|REMOVED Requirements` with:
+   - Each requirement MUST include RFC 2119 keywords (SHALL, MUST, SHOULD) in the Description or Requirements section
+   - At least one `#### Scenario:` per requirement using GIVEN/WHEN/THEN format
+   - Cross-reference related capabilities when relevant
 6. Draft `tasks.md` as an ordered list of small, verifiable work items that deliver user-visible progress, include validation (tests, tooling), and highlight dependencies or parallelizable work.
 7. Validate with `openspec validate <id> --strict` and resolve every issue before sharing the proposal.
 
