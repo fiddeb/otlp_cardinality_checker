@@ -1109,6 +1109,35 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 	
 	var signals []models.SignalComplexity
 	
+	// Build cardinality map: signal_type -> key -> cardinality
+	cardinalityMap := make(map[string]map[string]int)
+	cardQuery := `
+		SELECT 
+			signal_type,
+			key,
+			uniqExact(value) as cardinality
+		FROM attribute_values FINAL
+		GROUP BY signal_type, key
+	`
+	cardRows, err := s.conn.Query(ctx, cardQuery)
+	if err != nil {
+		return nil, fmt.Errorf("querying cardinality: %w", err)
+	}
+	
+	for cardRows.Next() {
+		var signalType, key string
+		var cardinality uint64
+		if err := cardRows.Scan(&signalType, &key, &cardinality); err != nil {
+			cardRows.Close()
+			return nil, err
+		}
+		if cardinalityMap[signalType] == nil {
+			cardinalityMap[signalType] = make(map[string]int)
+		}
+		cardinalityMap[signalType][key] = int(cardinality)
+	}
+	cardRows.Close()
+	
 	// Execute queries for each signal type
 	for _, query := range []string{metricsQuery, spansQuery, logsQuery} {
 		rows, err := s.conn.Query(ctx, query, threshold, limit)
@@ -1133,10 +1162,22 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 				return nil, err
 			}
 			
-			// For ClickHouse: Use totalKeys as complexity score
-			// Note: Cardinality tracking is per-attribute in attribute_values table, not per-signal
-			// We simplify by using key count as the primary complexity indicator
-			complexityScore := int(totalKeys)
+			// Calculate max cardinality and high cardinality count from all keys for this signal type
+			maxCard := 0
+			highCardCount := 0
+			if keyCards, ok := cardinalityMap[signalType]; ok {
+				for _, card := range keyCards {
+					if card > maxCard {
+						maxCard = card
+					}
+					if card > 100 {
+						highCardCount++
+					}
+				}
+			}
+			
+			// Complexity score combines key count and max cardinality
+			complexityScore := int(totalKeys) * (1 + maxCard/100)
 			
 			signals = append(signals, models.SignalComplexity{
 				SignalType:           signalType,
@@ -1146,8 +1187,8 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 				ResourceKeyCount:     int(resourceKeyCount),
 				EventKeyCount:        int(eventKeyCount),
 				LinkKeyCount:         int(linkKeyCount),
-				MaxCardinality:       0, // Not available at signal level in ClickHouse
-				HighCardinalityCount: 0, // Not available at signal level in ClickHouse
+				MaxCardinality:       maxCard,
+				HighCardinalityCount: highCardCount,
 				ComplexityScore:      complexityScore,
 			})
 		}
