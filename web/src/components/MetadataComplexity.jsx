@@ -13,9 +13,12 @@ function MetadataComplexity({ onViewDetails }) {
     setLoading(true)
     setError(null)
 
+    /* Error handling: Catch network errors and API failures */
     fetch(`/api/v1/cardinality/complexity?threshold=${threshold}&limit=${limit}`)
       .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        if (!r.ok) {
+          throw new Error(`API error: ${r.status} ${r.statusText}`)
+        }
         return r.json()
       })
       .then(result => {
@@ -23,7 +26,8 @@ function MetadataComplexity({ onViewDetails }) {
         setLoading(false)
       })
       .catch(err => {
-        setError(err.message)
+        console.error('Failed to load complexity data:', err)
+        setError(`Failed to load complexity data: ${err.message}`)
         setLoading(false)
       })
   }, [threshold, limit])

@@ -14,14 +14,21 @@ function Details({ type, name, onBack }) {
                      `/api/v1/logs/${encodeURIComponent(name)}`  // fallback
 
     console.log('Fetching from endpoint:', endpoint)
+    /* Error handling: Catch network errors and API failures */
     fetch(endpoint)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) {
+          throw new Error(`API error: ${r.status} ${r.statusText}`)
+        }
+        return r.json()
+      })
       .then(data => {
         setData(data)
         setLoading(false)
       })
       .catch(err => {
-        setError(err.message)
+        console.error('Failed to load details:', err)
+        setError(`Failed to load details: ${err.message}`)
         setLoading(false)
       })
   }, [type, name])
@@ -185,7 +192,8 @@ function Details({ type, name, onBack }) {
                   </span>
                 </td>
                 <td>{metadata.percentage.toFixed(1)}%</td>
-                <td className="samples">{metadata.value_samples.slice(0, 5).join(', ')}</td>
+                {/* Null safety: ClickHouse backend may return null/undefined value_samples */}
+                <td className="samples">{(metadata.value_samples || []).slice(0, 5).join(', ')}</td>
               </tr>
             ))}
           </tbody>
@@ -210,7 +218,8 @@ function Details({ type, name, onBack }) {
                     {metadata.estimated_cardinality}
                   </span>
                 </td>
-                <td className="samples">{metadata.value_samples.slice(0, 5).join(', ')}</td>
+                {/* Null safety: ClickHouse backend may return null/undefined value_samples */}
+                <td className="samples">{(metadata.value_samples || []).slice(0, 5).join(', ')}</td>
               </tr>
             ))}
           </tbody>

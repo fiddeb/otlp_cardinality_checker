@@ -13,15 +13,43 @@ function LogsView({ onViewServiceDetails }) {
   const itemsPerPage = 100
 
   useEffect(() => {
-    fetch('/api/v1/logs/by-service?limit=1000')
-      .then(r => r.json())
+    /* ClickHouse backend: Use /api/v1/logs and group by service in frontend */
+    /* Error handling: Catch network errors and API failures */
+    fetch('/api/v1/logs?limit=10000')
+      .then(r => {
+        if (!r.ok) {
+          throw new Error(`API error: ${r.status} ${r.statusText}`)
+        }
+        return r.json()
+      })
       .then(result => {
-        const servicesData = result.data || []
+        const logsData = result.data || []
+        // Group logs by service_name
+        const serviceMap = {}
+        logsData.forEach(log => {
+          const serviceNames = Object.keys(log.services || {})
+          serviceNames.forEach(serviceName => {
+            if (!serviceMap[serviceName]) {
+              serviceMap[serviceName] = {
+                service_name: serviceName,
+                sample_count: 0,
+                severities: {}
+              }
+            }
+            serviceMap[serviceName].sample_count += log.sample_count
+            if (!serviceMap[serviceName].severities[log.severity]) {
+              serviceMap[serviceName].severities[log.severity] = 0
+            }
+            serviceMap[serviceName].severities[log.severity] += log.sample_count
+          })
+        })
+        const servicesData = Object.values(serviceMap)
         setServices(servicesData)
         setLoading(false)
       })
       .catch(err => {
-        setError(err.message)
+        console.error('Failed to load logs:', err)
+        setError(`Failed to load logs: ${err.message}`)
         setLoading(false)
       })
   }, [])

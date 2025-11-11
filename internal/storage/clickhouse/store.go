@@ -1062,12 +1062,12 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 	metricsQuery := `
 		SELECT 
 			'metric' as signal_type,
-			metric_name as signal_name,
+			name as signal_name,
 			length(label_keys) + length(resource_keys) as total_keys,
 			length(label_keys) as attribute_key_count,
 			length(resource_keys) as resource_key_count,
-			0 as event_key_count,
-			0 as link_key_count
+			CAST(0 AS UInt64) as event_key_count,
+			CAST(0 AS UInt64) as link_key_count
 		FROM metrics FINAL
 		WHERE total_keys >= ?
 		ORDER BY total_keys DESC
@@ -1075,15 +1075,16 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 	`
 	
 	// Query spans for complexity analysis
+	// Note: Spans don't have separate event_keys/link_keys columns, use event_names length and has_links flag
 	spansQuery := `
 		SELECT 
 			'span' as signal_type,
-			span_name as signal_name,
-			length(attribute_keys) + length(resource_keys) + length(event_keys) + length(link_keys) as total_keys,
+			name as signal_name,
+			length(attribute_keys) + length(resource_keys) + length(event_names) + has_links as total_keys,
 			length(attribute_keys) as attribute_key_count,
 			length(resource_keys) as resource_key_count,
-			length(event_keys) as event_key_count,
-			length(link_keys) as link_key_count
+			length(event_names) as event_key_count,
+			CAST(has_links AS UInt64) as link_key_count
 		FROM spans FINAL
 		WHERE total_keys >= ?
 		ORDER BY total_keys DESC
@@ -1098,8 +1099,8 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 			length(attribute_keys) + length(resource_keys) as total_keys,
 			length(attribute_keys) as attribute_key_count,
 			length(resource_keys) as resource_key_count,
-			0 as event_key_count,
-			0 as link_key_count
+			CAST(0 AS UInt64) as event_key_count,
+			CAST(0 AS UInt64) as link_key_count
 		FROM logs FINAL
 		WHERE total_keys >= ?
 		ORDER BY total_keys DESC
@@ -1119,11 +1120,11 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 			var (
 				signalType        string
 				signalName        string
-				totalKeys         uint32
-				attributeKeyCount uint32
-				resourceKeyCount  uint32
-				eventKeyCount     uint32
-				linkKeyCount      uint32
+				totalKeys         uint64
+				attributeKeyCount uint64
+				resourceKeyCount  uint64
+				eventKeyCount     uint64  // length() returns UInt64
+				linkKeyCount      uint64  // Cast has_links to UInt64 for consistency
 			)
 			
 			err := rows.Scan(&signalType, &signalName, &totalKeys, &attributeKeyCount, &resourceKeyCount, &eventKeyCount, &linkKeyCount)
@@ -1132,25 +1133,10 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 				return nil, err
 			}
 			
-			// Query attribute_values for cardinality metrics
-			cardQuery := `
-				SELECT 
-					max(uniqExact(value)) as max_cardinality,
-					countIf(uniqExact(value) > 100) as high_cardinality_count
-				FROM attribute_values FINAL
-				WHERE signal_type = ? AND signal_name = ?
-				GROUP BY signal_type, signal_name
-			`
-			
-			var maxCardinality uint64
-			var highCardinalityCount uint64
-			err = s.conn.QueryRow(ctx, cardQuery, signalType, signalName).Scan(&maxCardinality, &highCardinalityCount)
-			if err != nil && err != sql.ErrNoRows {
-				rows.Close()
-				return nil, err
-			}
-			
-			complexityScore := int(totalKeys) * int(maxCardinality)
+			// For ClickHouse: Use totalKeys as complexity score
+			// Note: Cardinality tracking is per-attribute in attribute_values table, not per-signal
+			// We simplify by using key count as the primary complexity indicator
+			complexityScore := int(totalKeys)
 			
 			signals = append(signals, models.SignalComplexity{
 				SignalType:           signalType,
@@ -1160,8 +1146,8 @@ func (s *Store) GetMetadataComplexity(ctx context.Context, threshold int, limit 
 				ResourceKeyCount:     int(resourceKeyCount),
 				EventKeyCount:        int(eventKeyCount),
 				LinkKeyCount:         int(linkKeyCount),
-				MaxCardinality:       int(maxCardinality),
-				HighCardinalityCount: int(highCardinalityCount),
+				MaxCardinality:       0, // Not available at signal level in ClickHouse
+				HighCardinalityCount: 0, // Not available at signal level in ClickHouse
 				ComplexityScore:      complexityScore,
 			})
 		}
