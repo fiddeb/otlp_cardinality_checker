@@ -1,4 +1,13 @@
 import { useState, useEffect } from 'react'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function Dashboard({ onViewService }) {
   const [stats, setStats] = useState(null)
@@ -86,65 +95,93 @@ function Dashboard({ onViewService }) {
 
   return (
     <>
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-value">{stats?.metrics || 0}</div>
-          <div className="stat-label">Metrics</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{stats?.spans || 0}</div>
-          <div className="stat-label">Spans</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{(stats?.logs || 0).toLocaleString()}</div>
-          <div className="stat-label">Total Logs</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{services?.length || 0}</div>
-          <div className="stat-label">Services</div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Metrics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.metrics || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Spans
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.spans || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Logs
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{(stats?.logs || 0).toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Services
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{services?.length || 0}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="card">
-        <h2>Top 10 Services by Sample Volume</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Service</th>
-              <th>Total Samples</th>
-              <th>Metrics</th>
-              <th>Spans</th>
-              <th>Logs</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(serviceStats)
-              .sort((a, b) => b[1].total - a[1].total)
-              .slice(0, 10)
-              .map(([service, stats]) => (
-                <tr key={service}>
-                  <td>
-                    <span 
-                      className="detail-link"
-                      onClick={() => onViewService(service)}
-                    >
-                      {service}
-                    </span>
-                  </td>
-                  <td><strong>{stats.total.toLocaleString()}</strong></td>
-                  <td>{stats.metrics.toLocaleString()}</td>
-                  <td>{stats.spans.toLocaleString()}</td>
-                  <td>{stats.logs.toLocaleString()}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-        {Object.keys(serviceStats).length === 0 && (
-          <p style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-            No service data available
-          </p>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Top 10 Services by Sample Volume</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Service</TableHead>
+                <TableHead>Total Samples</TableHead>
+                <TableHead>Metrics</TableHead>
+                <TableHead>Spans</TableHead>
+                <TableHead>Logs</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.entries(serviceStats)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 10)
+                .map(([service, stats]) => (
+                  <TableRow key={service} className="cursor-pointer">
+                    <TableCell>
+                      <span 
+                        className="text-primary hover:underline cursor-pointer"
+                        onClick={() => onViewService(service)}
+                      >
+                        {service}
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-medium">{stats.total.toLocaleString()}</TableCell>
+                    <TableCell>{stats.metrics.toLocaleString()}</TableCell>
+                    <TableCell>{stats.spans.toLocaleString()}</TableCell>
+                    <TableCell>{stats.logs.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+          {Object.keys(serviceStats).length === 0 && (
+            <p className="text-center py-5 text-muted-foreground">
+              No service data available
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </>
   )
 }
