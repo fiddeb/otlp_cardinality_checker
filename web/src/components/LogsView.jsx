@@ -159,7 +159,7 @@ function LogsView({ onViewServiceDetails }) {
                     </thead>
                     <tbody>
                       {severities
-                        .sort((a, b) => b.sample_count - a.sample_count)
+                        .sort((a, b) => String(a.severity).localeCompare(String(b.severity)))
                         .map((svc, i) => (
                           <tr key={i}>
                             <td>
