@@ -2,15 +2,40 @@
 
 **Change ID:** `migrate-shadcn-ui`
 
-**Status:** In Progress - Phase 2 Complete, Phase 3 Partial
+**Status:** On Hold - Tailwind CSS compilation issue blocking progress
 
 ## Progress Summary
 
 ✅ **Phase 1: Foundation Setup** - COMPLETE (100%)
 ✅ **Phase 2: Layout Migration** - COMPLETE (100%)  
-🚧 **Phase 3: Component Migration** - PARTIAL (25%)
+🚧 **Phase 3: Component Migration** - PARTIAL (60%) - **BLOCKED**
 ⏸️ **Phase 4: Interactive Components** - NOT STARTED
 ⏸️ **Phase 5: Polish & Accessibility** - NOT STARTED
+
+## Current Blocker
+
+**Issue:** Tailwind CSS classes not applying to shadcn components despite correct configuration.
+
+**Symptoms:**
+- Card components render with no styling (no borders, padding, background)
+- Tailwind utility classes like `bg-card`, `text-muted-foreground`, `border` not generating CSS
+- Build succeeds without errors (22.4KB CSS generated)
+- Dev server runs without errors
+- All imports resolve correctly
+
+**Configuration verified:**
+- ✅ tailwind.config.js has correct color mappings
+- ✅ theme.css has CSS variables defined
+- ✅ index.css imports theme.css and Tailwind directives
+- ✅ vite.config.js has @tailwindcss/vite plugin
+- ✅ Card components use correct Tailwind classes
+
+**Next steps to investigate:**
+1. Check if Tailwind v4 has breaking changes with CSS variable syntax
+2. Verify content path in tailwind.config.js matches all JSX files
+3. Try downgrading to Tailwind v3
+4. Check browser DevTools computed styles for Card elements
+5. Verify CSS file actually loads in browser (Network tab)
 
 ## Overview
 
@@ -104,19 +129,40 @@ This task list implements the gradual migration strategy outlined in `proposal.m
 - Migrated service table to shadcn `Table` component
 - Updated styling to use Tailwind classes
 
-### 3.2 Migrate Tables to shadcn Table Component ⏸️
+### 3.2 Migrate Tables to shadcn Table Component ✅
+
+**Status:** COMPLETE
+- ✅ Dashboard table migrated
+- ✅ MetricsView table migrated
+- ✅ TracesView table migrated
+- ⏸️ LogsView, AttributesView tables pending
+
+**Commits:**
+- `feat(web): migrate MetricsView and TracesView to shadcn components`
+
+### 3.3 Migrate MemoryView ✅
+
+**Status:** COMPLETE
+**Commit:** `feat(web): migrate MemoryView to shadcn Card components`
+
+**Changes:**
+- Replaced `.card` and `.memory-grid` with shadcn Card components
+- Used Tailwind grid utilities for responsive layout
+- Added CardDescription for real-time update info
+
+### 3.4 Migrate Badges ⏸️
 
 **Status:** PARTIAL
-- ✅ Dashboard table migrated
-- ⏸️ MetricsView, TracesView, LogsView, AttributesView tables pending
+- ✅ MetricsView badges migrated (using variant system)
+- ✅ TracesView badges migrated  
+- ⏸️ Other views pending
 
-### 3.3 Migrate Badges ⏸️
+### 3.5 Migrate Search and Filter Inputs ✅
 
-**Status:** NOT STARTED
-
-### 3.4 Migrate Search and Filter Inputs ⏸️
-
-**Status:** NOT STARTED
+**Status:** COMPLETE (for migrated views)
+- ✅ MetricsView filters using shadcn Input and Select
+- ✅ TracesView filters using shadcn Input and Select
+- ⏸️ LogsView, AttributesView filters pending
 
 ---
 
@@ -153,6 +199,36 @@ All tasks in this phase are pending.
 7. `feat(web): add sidebar component and lucide-react icons`
 8. `feat(web): integrate sidebar layout into App`
 9. `feat(web): migrate Dashboard to shadcn Card and Table components`
+10. `refactor(web): clean up CSS conflicts for shadcn migration`
+11. `feat(web): migrate MetricsView and TracesView to shadcn components`
+12. `feat(web): migrate MemoryView to shadcn Card components`
+13. `fix(web): remove @layer base from theme.css for Tailwind v4 compatibility`
+
+## Known Issues
+
+### Tailwind CSS Not Applying (Critical)
+**Status:** Unresolved - blocking all further migration  
+**Affected:** All migrated components (Dashboard, MetricsView, TracesView, MemoryView)  
+**Impact:** Components render without styling - no borders, backgrounds, or spacing
+
+**What Works:**
+- Build process completes successfully
+- No JavaScript errors in console
+- Component structure is correct
+- All imports resolve
+
+**What Doesn't Work:**
+- Tailwind utility classes don't generate CSS
+- CSS variables from theme.css may not be loading
+- shadcn component styles (bg-card, text-muted-foreground) have no effect
+
+**Attempted Solutions:**
+1. ✅ Removed `@layer base` wrapper from theme.css
+2. ✅ Verified tailwind.config.js color mappings
+3. ✅ Checked vite.config.js Tailwind plugin
+4. ❌ Hard refresh browser
+5. ❌ Restart dev server
+6. ❌ Clear Vite cache
 
 ---
 2. Update `web/vite.config.js` to include Tailwind plugin:
