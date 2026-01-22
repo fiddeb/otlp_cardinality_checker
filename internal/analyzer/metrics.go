@@ -169,6 +169,10 @@ func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, gauge *metricspb
 
 		attrs := extractAttributes(dp.Attributes)
 		
+		// Track unique series combination
+		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		metadata.AddSeriesFingerprint(fingerprint)
+		
 		// Feed attributes to catalog
 		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
 		
@@ -201,6 +205,10 @@ func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, sum *metricspb.Sum
 		}
 
 		attrs := extractAttributes(dp.Attributes)
+		
+		// Track unique series combination
+		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		metadata.AddSeriesFingerprint(fingerprint)
 		
 		// Feed attributes to catalog
 		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
@@ -235,6 +243,10 @@ func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, histogram *m
 
 		attrs := extractAttributes(dp.Attributes)
 		
+		// Track unique series combination
+		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		metadata.AddSeriesFingerprint(fingerprint)
+		
 		// Feed attributes to catalog
 		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
 		
@@ -268,6 +280,10 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, h
 
 		attrs := extractAttributes(dp.Attributes)
 		
+		// Track unique series combination
+		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		metadata.AddSeriesFingerprint(fingerprint)
+		
 		// Feed attributes to catalog
 		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
 		
@@ -300,6 +316,10 @@ func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, summary *metri
 		}
 
 		attrs := extractAttributes(dp.Attributes)
+		
+		// Track unique series combination
+		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		metadata.AddSeriesFingerprint(fingerprint)
 		
 		// Feed attributes to catalog
 		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
