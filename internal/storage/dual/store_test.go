@@ -273,8 +273,8 @@ func (f *failingStore) GetAttribute(ctx context.Context, key string) (*models.At
 	return nil, models.ErrNotFound
 }
 
-func (f *failingStore) ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, int, error) {
-	return nil, 0, nil
+func (f *failingStore) ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, error) {
+	return nil, nil
 }
 
 func (f *failingStore) GetHighCardinalityKeys(ctx context.Context, threshold int, limit int) (*models.CrossSignalCardinalityResponse, error) {
@@ -285,6 +285,6 @@ func (f *failingStore) GetLogPatterns(ctx context.Context, minCount int64, minSe
 	return nil, nil
 }
 
-func (f *failingStore) GetMetadataComplexity(ctx context.Context, threshold int) (*models.MetadataComplexityResponse, error) {
+func (f *failingStore) GetMetadataComplexity(ctx context.Context, threshold int, limit int) (*models.MetadataComplexityResponse, error) {
 	return nil, nil
 }
