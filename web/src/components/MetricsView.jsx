@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
 
 function MetricsView({ onViewDetails }) {
   const [metrics, setMetrics] = useState([])
@@ -160,226 +166,239 @@ function MetricsView({ onViewDetails }) {
   }, {})
 
   return (
-    <div className="card">
-      <h2>Metrics Analysis</h2>
-      
-      <div className="filter-group">
-        <input 
-          type="text"
-          placeholder="Search metrics..."
-          value={filter.search}
-          onChange={(e) => setFilter({...filter, search: e.target.value})}
-          style={{ width: '200px' }}
-        />
-
-        <select 
-          value={filter.type} 
-          onChange={(e) => setFilter({...filter, type: e.target.value})}
-        >
-          {metricTypes.map(type => (
-            <option key={type} value={type}>
-              {type === 'all' ? 'All Types' : `Type: ${type}`}
-            </option>
-          ))}
-        </select>
-
-        <div className="threshold-input">
-          <label>Min Samples:</label>
-          <input 
-            type="number" 
-            value={filter.minSamples} 
-            onChange={(e) => setFilter({...filter, minSamples: Number(e.target.value)})}
-            min="0"
+    <Card>
+      <CardHeader>
+        <CardTitle>Metrics Analysis</CardTitle>
+        <CardDescription>
+          Showing {startIndex + 1}-{Math.min(endIndex, filteredMetrics.length)} of {filteredMetrics.length} metrics
+          {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Filters */}
+        <div className="flex flex-wrap gap-4">
+          <Input 
+            type="text"
+            placeholder="Search metrics..."
+            value={filter.search}
+            onChange={(e) => setFilter({...filter, search: e.target.value})}
+            className="w-64"
           />
+
+          <Select 
+            value={filter.type} 
+            onValueChange={(value) => setFilter({...filter, type: value})}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {metricTypes.map(type => (
+                <SelectItem key={type} value={type}>
+                  {type === 'all' ? 'All Types' : `Type: ${type}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Min Samples:</label>
+            <Input 
+              type="number" 
+              value={filter.minSamples} 
+              onChange={(e) => setFilter({...filter, minSamples: Number(e.target.value)})}
+              min="0"
+              className="w-24"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Min Cardinality:</label>
+            <Input 
+              type="number" 
+              value={filter.minCardinality} 
+              onChange={(e) => setFilter({...filter, minCardinality: Number(e.target.value)})}
+              min="0"
+              className="w-24"
+            />
+          </div>
         </div>
 
-        <div className="threshold-input">
-          <label>Min Cardinality:</label>
-          <input 
-            type="number" 
-            value={filter.minCardinality} 
-            onChange={(e) => setFilter({...filter, minCardinality: Number(e.target.value)})}
-            min="0"
-          />
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Metrics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{filteredMetrics.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Samples</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalSamples.toLocaleString()}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Metric Types</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{Object.keys(typeBreakdown).length}</div>
+            </CardContent>
+          </Card>
         </div>
-      </div>
 
-      <p className="template-count-text" style={{ marginTop: '10px' }}>
-        Showing {startIndex + 1}-{Math.min(endIndex, filteredMetrics.length)} of {filteredMetrics.length} metrics
-        {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
-      </p>
+        {/* Type Distribution */}
+        <div>
+          <h3 className="text-lg font-semibold mb-3">Type Distribution</h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(typeBreakdown)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, count]) => (
+                <Badge 
+                  key={type}
+                  variant="secondary"
+                  className="px-3 py-1"
+                  style={{
+                    backgroundColor: getTypeColor(type),
+                    color: 'white'
+                  }}
+                >
+                  {type}: {count}
+                </Badge>
+              ))}
+          </div>
+        </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginTop: '20px' }}>
-        <div className="stat-card">
-          <div className="stat-label">Total Metrics</div>
-          <div className="stat-value">{filteredMetrics.length}</div>
+        {/* Metrics Table */}
+        <div>
+          <h3 className="text-lg font-semibold mb-3">Metrics Breakdown</h3>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead onClick={() => handleSort('name')} className="cursor-pointer select-none">
+                    Metric Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('type')} className="cursor-pointer select-none">
+                    Type {sortField === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('sample_count')} className="cursor-pointer select-none">
+                    Samples {sortField === 'sample_count' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('labels')} className="cursor-pointer select-none">
+                    Labels {sortField === 'labels' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('resources')} className="cursor-pointer select-none">
+                    Resources {sortField === 'resources' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('cardinality')} className="cursor-pointer select-none">
+                    Max Cardinality {sortField === 'cardinality' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('complexity')} className="cursor-pointer select-none">
+                    Complexity {sortField === 'complexity' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('services')} className="cursor-pointer select-none">
+                    Services {sortField === 'services' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {getSortedMetrics(currentMetrics).map((metric, i) => {
+                  const maxCard = getMaxCardinality(metric)
+                  const labelCount = metric.label_keys ? Object.keys(metric.label_keys).length : 0
+                  const resourceCount = metric.resource_keys ? Object.keys(metric.resource_keys).length : 0
+                  const serviceCount = metric.services ? Object.keys(metric.services).length : 0
+                  
+                  // Calculate complexity: total_keys × max_cardinality
+                  let bucketCount = 0
+                  if (metric.type === 'Histogram' && metric.data && metric.data.explicit_bounds) {
+                    bucketCount = metric.data.explicit_bounds.length + 1
+                  } else if (metric.type === 'ExponentialHistogram' && metric.data && metric.data.scales) {
+                    bucketCount = metric.data.scales.length * 10
+                  }
+                  
+                  const totalKeys = labelCount + resourceCount + bucketCount
+                  const complexity = totalKeys * maxCard
+                  
+                  return (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <button 
+                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                          onClick={() => onViewDetails('metrics', metric.name)}
+                        >
+                          {metric.name}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="secondary"
+                          style={{ 
+                            backgroundColor: getTypeColor(metric.type),
+                            color: 'white'
+                          }}
+                        >
+                          {metric.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{metric.sample_count.toLocaleString()}</TableCell>
+                      <TableCell>{labelCount}</TableCell>
+                      <TableCell>{resourceCount}</TableCell>
+                      <TableCell>
+                        {maxCard > 0 ? (
+                          <Badge variant={maxCard > 200 ? 'destructive' : maxCard > 50 ? 'default' : 'secondary'}>
+                            {maxCard}
+                          </Badge>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell>{complexity > 0 ? complexity.toLocaleString() : '-'}</TableCell>
+                      <TableCell>{serviceCount}</TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Total Samples</div>
-          <div className="stat-value">{totalSamples.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Metric Types</div>
-          <div className="stat-value">{Object.keys(typeBreakdown).length}</div>
-        </div>
-      </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Type Distribution</h3>
-      
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
-        {Object.entries(typeBreakdown)
-          .sort((a, b) => b[1] - a[1])
-          .map(([type, count]) => (
-            <div 
-              key={type}
-              style={{
-                padding: '8px 16px',
-                background: getTypeColor(type),
-                color: 'white',
-                borderRadius: '4px',
-                fontSize: '0.9em',
-                fontWeight: '500'
-              }}
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4">
+            <Button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              variant="outline"
             >
-              {type}: {count}
-            </div>
-          ))}
-      </div>
+              Previous
+            </Button>
+            
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            
+            <Button 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              variant="outline"
+            >
+              Next
+            </Button>
+          </div>
+        )}
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Metrics Breakdown</h3>
-      
-      <table>
-        <thead>
-          <tr>
-            <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
-              Metric Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('type')} style={{ cursor: 'pointer' }}>
-              Type {sortField === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('sample_count')} style={{ cursor: 'pointer' }}>
-              Samples {sortField === 'sample_count' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('labels')} style={{ cursor: 'pointer' }}>
-              Labels {sortField === 'labels' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('resources')} style={{ cursor: 'pointer' }}>
-              Resources {sortField === 'resources' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('cardinality')} style={{ cursor: 'pointer' }}>
-              Max Cardinality {sortField === 'cardinality' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('complexity')} style={{ cursor: 'pointer' }}>
-              Complexity {sortField === 'complexity' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('services')} style={{ cursor: 'pointer' }}>
-              Services {sortField === 'services' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {getSortedMetrics(currentMetrics)
-            .map((metric, i) => {
-              const maxCard = getMaxCardinality(metric)
-              const labelCount = metric.label_keys ? Object.keys(metric.label_keys).length : 0
-              const resourceCount = metric.resource_keys ? Object.keys(metric.resource_keys).length : 0
-              const serviceCount = metric.services ? Object.keys(metric.services).length : 0
-              
-              // Calculate complexity: total_keys × max_cardinality
-              let bucketCount = 0
-              if (metric.type === 'Histogram' && metric.data && metric.data.explicit_bounds) {
-                bucketCount = metric.data.explicit_bounds.length + 1
-              } else if (metric.type === 'ExponentialHistogram' && metric.data && metric.data.scales) {
-                bucketCount = metric.data.scales.length * 10
-              }
-              
-              const totalKeys = labelCount + resourceCount + bucketCount
-              const complexity = totalKeys * maxCard
-              
-              return (
-                <tr key={i}>
-                  <td>
-                    <span 
-                      className="detail-link"
-                      onClick={() => onViewDetails('metrics', metric.name)}
-                    >
-                      {metric.name}
-                    </span>
-                  </td>
-                  <td>
-                    <span 
-                      className="key-badge"
-                      style={{ 
-                        background: getTypeColor(metric.type),
-                        color: 'white'
-                      }}
-                    >
-                      {metric.type}
-                    </span>
-                  </td>
-                  <td>{metric.sample_count.toLocaleString()}</td>
-                  <td>{labelCount}</td>
-                  <td>{resourceCount}</td>
-                  <td>
-                    {maxCard > 0 ? (
-                      <span className={`badge ${getCardinalityBadge(maxCard)}`}>
-                        {maxCard}
-                      </span>
-                    ) : '-'}
-                  </td>
-                  <td>{complexity > 0 ? complexity.toLocaleString() : '-'}</td>
-                  <td>{serviceCount}</td>
-                </tr>
-              )
-            })}
-        </tbody>
-      </table>
-
-      {totalPages > 1 && (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          gap: '10px',
-          marginTop: '20px',
-          padding: '20px'
-        }}>
-          <button 
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            style={{
-              padding: '8px 16px',
-              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-              opacity: currentPage === 1 ? 0.5 : 1
-            }}
-          >
-            Previous
-          </button>
-          
-          <span className="template-count-text">
-            Page {currentPage} of {totalPages}
-          </span>
-          
-          <button 
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            style={{
-              padding: '8px 16px',
-              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-              opacity: currentPage === totalPages ? 0.5 : 1
-            }}
-          >
-            Next
-          </button>
-        </div>
-      )}
-
-      {filteredMetrics.length === 0 && (
-        <p className="template-count-text" style={{ textAlign: 'center', padding: '20px' }}>
-          No metrics match the current filters
-        </p>
-      )}
-    </div>
+        {/* Empty State */}
+        {filteredMetrics.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            No metrics match the current filters
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
