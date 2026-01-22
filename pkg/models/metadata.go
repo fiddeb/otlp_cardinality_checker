@@ -23,17 +23,17 @@ var ErrNotFound = errors.New("not found")
 type MetricMetadata struct {
 	// Name is the metric name (required)
 	Name string `json:"name"`
-	
+
 	// Description provides context about what the metric measures
 	Description string `json:"description,omitempty"`
-	
+
 	// Unit specifies the unit of measurement (e.g., "By", "ms", "1")
 	Unit string `json:"unit,omitempty"`
-	
+
 	// Data contains the type-specific metric data (Gauge, Sum, Histogram, etc.)
 	// This replaces the old "Type" string field with a proper typed interface
 	Data MetricData `json:"data"`
-	
+
 	// Metadata contains additional key-value metadata (optional, rarely used)
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -53,6 +53,15 @@ type MetricMetadata struct {
 	// Services maps service names to the number of samples from that service
 	Services map[string]int64 `json:"services"`
 
+	// seriesHLL tracks unique combinations of label values to count active series
+	// This uses HyperLogLog to efficiently estimate the number of unique time series
+	// without storing all combinations in memory
+	seriesHLL *hyperloglog.HyperLogLog `json:"-"`
+
+	// ActiveSeries is the estimated number of unique time series (label combinations)
+	// Updated from seriesHLL count
+	ActiveSeries int64 `json:"active_series"`
+
 	mu sync.RWMutex `json:"-"`
 }
 
@@ -62,12 +71,12 @@ type SpanMetadata struct {
 	// Name is the span name (required)
 	// Corresponds to Span.name
 	Name string `json:"name"`
-	
+
 	// Kind is the span kind enum value
 	// Corresponds to Span.kind (SpanKind enum)
 	// Values: UNSPECIFIED=0, INTERNAL=1, SERVER=2, CLIENT=3, PRODUCER=4, CONSUMER=5
 	Kind int32 `json:"kind"`
-	
+
 	// KindName is the human-readable span kind name for convenience
 	KindName string `json:"kind_name,omitempty"`
 
@@ -89,27 +98,27 @@ type SpanMetadata struct {
 
 	// ResourceKeys maps resource attribute key names to their metadata
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
-	
+
 	// HasTraceState indicates if any spans had trace_state set
 	// Corresponds to Span.trace_state
 	HasTraceState bool `json:"has_trace_state"`
-	
+
 	// HasParentSpanId indicates if any spans had parent_span_id set (not root spans)
 	// Corresponds to Span.parent_span_id
 	HasParentSpanId bool `json:"has_parent_span_id"`
-	
+
 	// StatusCodes tracks which status codes have been observed
 	// Corresponds to Span.Status.code enum (UNSET=0, OK=1, ERROR=2)
 	StatusCodes []string `json:"status_codes,omitempty"`
-	
+
 	// DroppedAttributesStats tracks statistics about dropped attributes
 	// Corresponds to Span.dropped_attributes_count
 	DroppedAttributesStats *DroppedCountStats `json:"dropped_attributes_stats,omitempty"`
-	
+
 	// DroppedEventsStats tracks statistics about dropped events
 	// Corresponds to Span.dropped_events_count
 	DroppedEventsStats *DroppedCountStats `json:"dropped_events_stats,omitempty"`
-	
+
 	// DroppedLinksStats tracks statistics about dropped links
 	// Corresponds to Span.dropped_links_count
 	DroppedLinksStats *DroppedCountStats `json:"dropped_links_stats,omitempty"`
@@ -132,7 +141,7 @@ type LogMetadata struct {
 	// Severity is the severity text (INFO, WARN, ERROR, etc.)
 	// Corresponds to LogRecord.severity_text
 	Severity string `json:"severity"`
-	
+
 	// SeverityNumber is the numerical severity value (1-24)
 	// Corresponds to LogRecord.severity_number enum
 	SeverityNumber int32 `json:"severity_number,omitempty"`
@@ -143,21 +152,21 @@ type LogMetadata struct {
 
 	// ResourceKeys maps resource attribute key names to their metadata
 	ResourceKeys map[string]*KeyMetadata `json:"resource_keys"`
-	
+
 	// BodyTemplates contains extracted templates from log body text
 	// This is our custom feature for analyzing LogRecord.body patterns
 	BodyTemplates []*BodyTemplate `json:"body_templates,omitempty"`
-	
+
 	// EventNames tracks unique event_name values observed
 	// Corresponds to LogRecord.event_name
 	EventNames []string `json:"event_names,omitempty"`
-	
+
 	// HasTraceContext indicates if any log records had trace_id set
 	HasTraceContext bool `json:"has_trace_context"`
-	
+
 	// HasSpanContext indicates if any log records had span_id set
 	HasSpanContext bool `json:"has_span_context"`
-	
+
 	// DroppedAttributesCount tracks statistics about dropped attributes
 	DroppedAttributesStats *DroppedAttributesStats `json:"dropped_attributes_stats,omitempty"`
 
@@ -177,10 +186,10 @@ type LogMetadata struct {
 type DroppedAttributesStats struct {
 	// TotalDropped is the sum of all dropped_attributes_count values
 	TotalDropped uint32 `json:"total_dropped"`
-	
+
 	// RecordsWithDropped is the count of log records that had dropped attributes
 	RecordsWithDropped int64 `json:"records_with_dropped"`
-	
+
 	// MaxDropped is the maximum dropped_attributes_count seen in a single record
 	MaxDropped uint32 `json:"max_dropped"`
 }
@@ -190,10 +199,10 @@ type DroppedAttributesStats struct {
 type DroppedCountStats struct {
 	// TotalDropped is the sum of all dropped counts
 	TotalDropped uint32 `json:"total_dropped"`
-	
+
 	// ItemsWithDropped is the count of items (spans) that had dropped data
 	ItemsWithDropped int64 `json:"items_with_dropped"`
-	
+
 	// MaxDropped is the maximum dropped count seen in a single item
 	MaxDropped uint32 `json:"max_dropped"`
 }
@@ -236,7 +245,7 @@ type KeyMetadata struct {
 func (k *KeyMetadata) MarshalHLL() ([]byte, error) {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
-	
+
 	if k.hll == nil {
 		return nil, nil
 	}
@@ -247,16 +256,16 @@ func (k *KeyMetadata) MarshalHLL() ([]byte, error) {
 func (k *KeyMetadata) UnmarshalHLL(data []byte) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	
+
 	if len(data) == 0 {
 		return nil
 	}
-	
+
 	hll, err := hyperloglog.FromBytes(data)
 	if err != nil {
 		return err
 	}
-	
+
 	k.hll = hll
 	k.EstimatedCardinality = int64(hll.Count())
 	return nil
@@ -279,6 +288,8 @@ func NewMetricMetadata(name string, data MetricData) *MetricMetadata {
 		ResourceKeys: make(map[string]*KeyMetadata),
 		Services:     make(map[string]int64),
 		Metadata:     make(map[string]string),
+		seriesHLL:    hyperloglog.New(14), // Precision 14 = ~16KB memory, 0.81% error
+		ActiveSeries: 0,
 	}
 }
 
@@ -409,11 +420,11 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 		if existing, exists := m.LabelKeys[key]; exists {
 			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
-			
+
 			// Merge HLL sketches for accurate cardinality
 			existing.hll.Merge(otherKeyMeta.hll)
 			existing.EstimatedCardinality = int64(existing.hll.Count())
-			
+
 			// Merge value samples (keep first N unique)
 			for _, sample := range otherKeyMeta.ValueSamples {
 				if len(existing.ValueSamples) >= existing.MaxSamples {
@@ -442,11 +453,11 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 		if existing, exists := m.ResourceKeys[key]; exists {
 			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
-			
+
 			// Merge HLL sketches for accurate cardinality
 			existing.hll.Merge(otherKeyMeta.hll)
 			existing.EstimatedCardinality = int64(existing.hll.Count())
-			
+
 			// Merge value samples (keep first N unique)
 			for _, sample := range otherKeyMeta.ValueSamples {
 				if len(existing.ValueSamples) >= existing.MaxSamples {
@@ -473,6 +484,15 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	// Merge services
 	for service, count := range other.Services {
 		m.Services[service] += count
+	}
+
+	// Merge active series HLL sketch
+	if other.seriesHLL != nil {
+		if m.seriesHLL == nil {
+			m.seriesHLL = hyperloglog.New(14)
+		}
+		m.seriesHLL.Merge(other.seriesHLL)
+		m.ActiveSeries = int64(m.seriesHLL.Count())
 	}
 
 	// Update percentages
@@ -536,6 +556,42 @@ func (m *MetricMetadata) GetHighCardinalityLabels(threshold int64) []string {
 	}
 	sort.Strings(highCard)
 	return highCard
+}
+
+// AddSeriesFingerprint adds a unique series fingerprint to the HLL tracker.
+// The fingerprint should be a hash of all label key-value pairs for a data point.
+func (m *MetricMetadata) AddSeriesFingerprint(fingerprint string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.seriesHLL == nil {
+		m.seriesHLL = hyperloglog.New(14)
+	}
+	
+	m.seriesHLL.Add(fingerprint)
+	m.ActiveSeries = int64(m.seriesHLL.Count())
+}
+
+// GetActiveSeries returns the current count of active series (unique label combinations).
+func (m *MetricMetadata) GetActiveSeries() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.seriesHLL == nil {
+		return 1 // No series tracker = constant metric
+	}
+	
+	count := int64(m.seriesHLL.Count())
+	if count == 0 {
+		return 1 // No series seen yet = treat as constant
+	}
+	return count
+}
+
+// CalculateActiveSeries returns the estimated number of active time series.
+// This uses the HLL-based series tracker for accurate counting of unique combinations.
+func (m *MetricMetadata) CalculateActiveSeries() int64 {
+	return m.GetActiveSeries()
 }
 
 // ServiceOverview contains a summary of all telemetry for a service.
