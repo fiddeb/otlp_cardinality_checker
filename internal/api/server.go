@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,11 @@ type Server struct {
 	store  storage.Storage
 	router *chi.Mux
 	server *http.Server
+}
+
+// dbProvider interface for storage backends that provide direct SQL database access.
+type dbProvider interface {
+	DB() *sql.DB
 }
 
 // PaginationParams contains pagination parameters from query string.
@@ -376,14 +382,271 @@ func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 // listLogsByService returns log data grouped by service_name instead of severity.
 // This provides better performance when dealing with high-cardinality severities like UNSET.
 func (s *Server) listLogsByService(w http.ResponseWriter, r *http.Request) {
-	// TODO: Reimplement with ClickHouse storage or remove
-	s.respondError(w, http.StatusNotImplemented, "operation not yet implemented for ClickHouse storage")
+	ctx := r.Context()
+	params := parsePaginationParams(r)
+
+	// Try to get database handle (works with SQLite store)
+	var db *sql.DB
+	if dbProv, ok := s.store.(dbProvider); ok {
+		db = dbProv.DB()
+	}
+	
+	// If no SQL database available (memory backend), fallback to ListLogs
+	if db == nil {
+		logs, err := s.store.ListLogs(ctx, "")
+		if err != nil {
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		
+		// Transform logs to service-based view
+		type ServiceLogData struct {
+			ServiceName string `json:"service_name"`
+			Severity    string `json:"severity"`
+			SampleCount int64  `json:"sample_count"`
+		}
+		
+		var data []ServiceLogData
+		for _, log := range logs {
+			for serviceName, count := range log.Services {
+				data = append(data, ServiceLogData{
+					ServiceName: serviceName,
+					Severity:    log.Severity,
+					SampleCount: count,
+				})
+			}
+		}
+		
+		// Apply pagination
+		_, response := paginateSlice(data, params)
+		s.respondJSON(w, http.StatusOK, response)
+		return
+	}
+
+	// Query log_services table directly (SQLite path)
+	query := `
+		SELECT service_name, severity, sample_count
+		FROM log_services
+		ORDER BY service_name ASC, severity ASC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := db.QueryContext(ctx, query, params.Limit, params.Offset)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	type ServiceLogData struct {
+		ServiceName string `json:"service_name"`
+		Severity    string `json:"severity"`
+		SampleCount int64  `json:"sample_count"`
+	}
+
+	var data []ServiceLogData
+	for rows.Next() {
+		var d ServiceLogData
+		if err := rows.Scan(&d.ServiceName, &d.Severity, &d.SampleCount); err != nil {
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		data = append(data, d)
+	}
+
+	// Get total count
+	var total int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM log_services").Scan(&total)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := PaginatedResponse{
+		Data:    data,
+		Total:   total,
+		Limit:   params.Limit,
+		Offset:  params.Offset,
+		HasMore: params.Offset+len(data) < total,
+	}
+
+	s.respondJSON(w, http.StatusOK, response)
 }
 
 // getLogByServiceAndSeverity returns log data for a specific service and severity combination
 func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Request) {
-	// TODO: Reimplement with ClickHouse storage or remove
-	s.respondError(w, http.StatusNotImplemented, "operation not yet implemented for ClickHouse storage")
+	ctx := r.Context()
+	service := chi.URLParam(r, "service")
+	severity := chi.URLParam(r, "severity")
+
+	// URL decode parameters
+	decodedService, err := url.QueryUnescape(service)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid service encoding")
+		return
+	}
+	decodedSeverity, err := url.QueryUnescape(severity)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid severity encoding")
+		return
+	}
+
+	// Get database handle (works with SQLite store)
+	var db *sql.DB
+	if dbProv, ok := s.store.(dbProvider); ok {
+		db = dbProv.DB()
+	}
+	
+	// If no SQL database available (memory backend), fallback to GetLog
+	if db == nil {
+		log, err := s.store.GetLog(ctx, decodedSeverity)
+		if err != nil {
+			if errors.Is(err, models.ErrNotFound) {
+				s.respondError(w, http.StatusNotFound, "log severity not found")
+				return
+			}
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		
+		// Check if service exists in this severity
+		sampleCount, exists := log.Services[decodedService]
+		if !exists {
+			s.respondError(w, http.StatusNotFound, "no data found for this service and severity")
+			return
+		}
+		
+		// Build response from log data
+		type LogServiceData struct {
+			Severity      string                         `json:"severity"`
+			ServiceName   string                         `json:"service_name"`
+			SampleCount   int64                          `json:"sample_count"`
+			BodyTemplates []*models.BodyTemplate         `json:"body_templates,omitempty"`
+			AttributeKeys map[string]*models.KeyMetadata `json:"attribute_keys,omitempty"`
+			ResourceKeys  map[string]*models.KeyMetadata `json:"resource_keys,omitempty"`
+		}
+		
+		data := LogServiceData{
+			Severity:      decodedSeverity,
+			ServiceName:   decodedService,
+			SampleCount:   sampleCount,
+			BodyTemplates: log.BodyTemplates,
+			AttributeKeys: log.AttributeKeys,
+			ResourceKeys:  log.ResourceKeys,
+		}
+		
+		s.respondJSON(w, http.StatusOK, data)
+		return
+	}
+
+	// Query for this specific service+severity combination (SQLite path)
+	type LogServiceData struct {
+		Severity      string                       `json:"severity"`
+		ServiceName   string                       `json:"service_name"`
+		SampleCount   int64                        `json:"sample_count"`
+		BodyTemplates []models.BodyTemplate        `json:"body_templates,omitempty"`
+		AttributeKeys map[string]models.KeyMetadata `json:"attribute_keys,omitempty"`
+		ResourceKeys  map[string]models.KeyMetadata `json:"resource_keys,omitempty"`
+	}
+
+	var data LogServiceData
+	data.Severity = decodedSeverity
+	data.ServiceName = decodedService
+
+	// Get sample count
+	err = db.QueryRowContext(ctx, `
+		SELECT sample_count
+		FROM log_services
+		WHERE service_name = ? AND severity = ?
+	`, decodedService, decodedSeverity).Scan(&data.SampleCount)
+
+	if err == sql.ErrNoRows {
+		s.respondError(w, http.StatusNotFound, "no data found for this service and severity")
+		return
+	}
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Get body templates for this service+severity
+	templateRows, err := db.QueryContext(ctx, `
+		SELECT template, example, count, percentage
+		FROM log_body_templates
+		WHERE service_name = ? AND severity = ?
+		ORDER BY count DESC
+		LIMIT 100
+	`, decodedService, decodedSeverity)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer templateRows.Close()
+
+	for templateRows.Next() {
+		var tmpl models.BodyTemplate
+		if err := templateRows.Scan(&tmpl.Template, &tmpl.Example, &tmpl.Count, &tmpl.Percentage); err != nil {
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		data.BodyTemplates = append(data.BodyTemplates, tmpl)
+	}
+
+	// Get attribute keys for this service+severity
+	data.AttributeKeys = make(map[string]models.KeyMetadata)
+	attrRows, err := db.QueryContext(ctx, `
+		SELECT key_name, key_count, estimated_cardinality
+		FROM log_service_keys
+		WHERE service_name = ? AND severity = ? AND key_scope = 'attribute'
+	`, decodedService, decodedSeverity)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer attrRows.Close()
+
+	for attrRows.Next() {
+		var keyName string
+		var keyCount int64
+		var estCard int64
+		if err := attrRows.Scan(&keyName, &keyCount, &estCard); err != nil {
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		data.AttributeKeys[keyName] = models.KeyMetadata{
+			Count:                keyCount,
+			EstimatedCardinality: estCard,
+		}
+	}
+
+	// Get resource keys for this service+severity
+	data.ResourceKeys = make(map[string]models.KeyMetadata)
+	resRows, err := db.QueryContext(ctx, `
+		SELECT key_name, key_count, estimated_cardinality
+		FROM log_service_keys
+		WHERE service_name = ? AND severity = ? AND key_scope = 'resource'
+	`, decodedService, decodedSeverity)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer resRows.Close()
+
+	for resRows.Next() {
+		var keyName string
+		var keyCount int64
+		var estCard int64
+		if err := resRows.Scan(&keyName, &keyCount, &estCard); err != nil {
+			s.respondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		data.ResourceKeys[keyName] = models.KeyMetadata{
+			Count:                keyCount,
+			EstimatedCardinality: estCard,
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, data)
 }
 
 // getLogPatterns returns advanced pattern analysis view grouped by service.
