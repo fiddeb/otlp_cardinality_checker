@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import { SidebarProvider } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/layout/app-sidebar'
+import { AppHeader } from '@/components/layout/app-header'
 import Dashboard from './components/Dashboard'
 import MetadataComplexity from './components/MetadataComplexity'
 import MetricsView from './components/MetricsView'
@@ -23,26 +26,6 @@ function App() {
   const [selectedLogService, setSelectedLogService] = useState(null)
   const [selectedLogPattern, setSelectedLogPattern] = useState(null)
   const [navigationHistory, setNavigationHistory] = useState([])
-  const [isClearing, setIsClearing] = useState(false)
-  const [darkMode, setDarkMode] = useState(() => {
-    // Check localStorage or system preference
-    const saved = localStorage.getItem('darkMode')
-    if (saved !== null) {
-      return saved === 'true'
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
-
-  useEffect(() => {
-    // Apply dark mode class to body
-    if (darkMode) {
-      document.body.classList.add('dark-mode')
-    } else {
-      document.body.classList.remove('dark-mode')
-    }
-    // Save preference
-    localStorage.setItem('darkMode', darkMode)
-  }, [darkMode])
 
   useEffect(() => {
     // Handle browser back/forward button
@@ -62,36 +45,6 @@ function App() {
       window.removeEventListener('popstate', handlePopState)
     }
   }, [navigationHistory]) // Re-attach when history changes
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode)
-  }
-
-  const handleClearData = async () => {
-    if (!confirm('Are you sure you want to clear ALL data? This cannot be undone!')) {
-      return
-    }
-
-    setIsClearing(true)
-    try {
-      const response = await fetch('/api/v1/admin/clear', {
-        method: 'POST',
-      })
-
-      if (response.ok) {
-        alert('All data cleared successfully!')
-        // Refresh the current view
-        window.location.reload()
-      } else {
-        const data = await response.json()
-        alert(`Failed to clear data: ${data.error || 'Unknown error'}`)
-      }
-    } catch (error) {
-      alert(`Failed to clear data: ${error.message}`)
-    } finally {
-      setIsClearing(false)
-    }
-  }
 
   const pushNavigation = (tab, state = {}) => {
     // Save current state to history before navigating
@@ -170,208 +123,97 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <header>
-        <div className="header-content">
-          <h1>OTLP Cardinality Checker</h1>
-          <p className="subtitle">Analyze metadata structure from OpenTelemetry signals</p>
-        </div>
-        <div className="header-actions">
-          <button 
-            className="clear-button" 
-            onClick={handleClearData}
-            disabled={isClearing}
-            title="Clear all data from database"
-          >
-            {isClearing ? '🔄' : '🗑️'} Clear Data
-          </button>
-          <button 
-            className="dark-mode-toggle" 
-            onClick={toggleDarkMode}
-            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {darkMode ? '☀️' : '🌙'}
-          </button>
-        </div>
-      </header>
+    <SidebarProvider>
+      <div className="flex min-h-screen">
+        <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <main className="flex-1">
+          <AppHeader />
+          <div className="container mx-auto p-6">
+            {activeTab === 'dashboard' && !selectedService && (
+              <Dashboard onViewService={handleViewService} />
+            )}
 
-      {!selectedItem && !selectedService && !selectedTemplate && (
-        <div className="tabs">
-          <button 
-            className={`tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('dashboard')
-              setNavigationHistory([]) // Clear history when clicking tabs
-            }}
-          >
-            Dashboard
-          </button>
-          <button 
-            className={`tab ${activeTab === 'metadata-complexity' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('metadata-complexity')
-              setNavigationHistory([])
-            }}
-          >
-            Metadata Complexity
-          </button>
-          <button 
-            className={`tab ${activeTab === 'metrics-overview' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('metrics-overview')
-              setNavigationHistory([])
-            }}
-          >
-            Metrics Overview
-          </button>
-          <button 
-            className={`tab ${activeTab === 'active-series' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('active-series')
-              setNavigationHistory([])
-            }}
-          >
-            Active Series
-          </button>
-          <button 
-            className={`tab ${activeTab === 'metrics' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('metrics')
-              setNavigationHistory([])
-            }}
-          >
-            Metrics Details
-          </button>
-          <button 
-            className={`tab ${activeTab === 'traces' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('traces')
-              setNavigationHistory([])
-            }}
-          >
-            Traces
-          </button>
-          <button 
-            className={`tab ${activeTab === 'logs' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('logs')
-              setNavigationHistory([])
-            }}
-          >
-            Logs
-          </button>
-          <button 
-            className={`tab ${activeTab === 'attributes' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('attributes')
-              setNavigationHistory([])
-            }}
-          >
-            Attributes
-          </button>
-          <button 
-            className={`tab ${activeTab === 'noisy-neighbors' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('noisy-neighbors')
-              setNavigationHistory([])
-            }}
-          >
-            Noisy Neighbors
-          </button>
-          <button 
-            className={`tab ${activeTab === 'memory' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('memory')
-              setNavigationHistory([])
-            }}
-          >
-            Memory
-          </button>
-        </div>
-      )}
+            {activeTab === 'metadata-complexity' && (
+              <MetadataComplexity onViewDetails={handleViewDetails} />
+            )}
 
-      {activeTab === 'dashboard' && !selectedService && (
-        <Dashboard onViewService={handleViewService} />
-      )}
+            {activeTab === 'metrics-overview' && (
+              <MetricsOverview onViewMetric={(name) => handleViewDetails('metrics', name)} />
+            )}
 
-      {activeTab === 'metadata-complexity' && (
-        <MetadataComplexity onViewDetails={handleViewDetails} />
-      )}
+            {activeTab === 'active-series' && (
+              <ActiveSeries />
+            )}
 
-      {activeTab === 'metrics-overview' && (
-        <MetricsOverview onViewMetric={(name) => handleViewDetails('metrics', name)} />
-      )}
+            {activeTab === 'metrics' && !selectedItem && (
+              <MetricsView onViewDetails={handleViewDetails} />
+            )}
 
-      {activeTab === 'active-series' && (
-        <ActiveSeries />
-      )}
+            {activeTab === 'traces' && (
+              <TracesView onViewDetails={handleViewDetails} />
+            )}
 
-      {activeTab === 'metrics' && !selectedItem && (
-        <MetricsView onViewDetails={handleViewDetails} />
-      )}
+            {activeTab === 'logs' && (
+              <LogsView onViewServiceDetails={handleViewLogService} />
+            )}
 
-      {activeTab === 'traces' && (
-        <TracesView onViewDetails={handleViewDetails} />
-      )}
+            {activeTab === 'attributes' && (
+              <AttributesView />
+            )}
 
-      {activeTab === 'logs' && (
-        <LogsView onViewServiceDetails={handleViewLogService} />
-      )}
+            {activeTab === 'noisy-neighbors' && (
+              <NoisyNeighbors />
+            )}
 
-      {activeTab === 'attributes' && (
-        <AttributesView />
-      )}
+            {activeTab === 'memory' && (
+              <MemoryView />
+            )}
 
-      {activeTab === 'noisy-neighbors' && (
-        <NoisyNeighbors />
-      )}
+            {activeTab === 'template-details' && selectedTemplate && (
+              <TemplateDetails 
+                severity={selectedTemplate.severity}
+                template={selectedTemplate.template}
+                onBack={handleBack}
+              />
+            )}
 
-      {activeTab === 'memory' && (
-        <MemoryView />
-      )}
+            {activeTab === 'log-service-details' && selectedLogService && (
+              <LogServiceDetails 
+                serviceName={selectedLogService.serviceName}
+                severity={selectedLogService.severity}
+                onBack={handleBack}
+                onViewPattern={handleViewLogPattern}
+              />
+            )}
 
-      {activeTab === 'template-details' && selectedTemplate && (
-        <TemplateDetails 
-          severity={selectedTemplate.severity}
-          template={selectedTemplate.template}
-          onBack={handleBack}
-        />
-      )}
+            {activeTab === 'log-pattern-details' && selectedLogPattern && (
+              <LogPatternDetails 
+                serviceName={selectedLogPattern.serviceName}
+                severity={selectedLogPattern.severity}
+                template={selectedLogPattern.template}
+                onBack={handleBackToServiceDetails}
+              />
+            )}
 
-      {activeTab === 'log-service-details' && selectedLogService && (
-        <LogServiceDetails 
-          serviceName={selectedLogService.serviceName}
-          severity={selectedLogService.severity}
-          onBack={handleBack}
-          onViewPattern={handleViewLogPattern}
-        />
-      )}
+            {activeTab === 'service' && selectedService && (
+              <ServiceExplorer 
+                serviceName={selectedService} 
+                onBack={handleBack}
+                onViewDetails={handleViewDetails}
+              />
+            )}
 
-      {activeTab === 'log-pattern-details' && selectedLogPattern && (
-        <LogPatternDetails 
-          serviceName={selectedLogPattern.serviceName}
-          severity={selectedLogPattern.severity}
-          template={selectedLogPattern.template}
-          onBack={handleBackToServiceDetails}
-        />
-      )}
-
-      {activeTab === 'service' && selectedService && (
-        <ServiceExplorer 
-          serviceName={selectedService} 
-          onBack={handleBack}
-          onViewDetails={handleViewDetails}
-        />
-      )}
-
-      {activeTab === 'details' && selectedItem && (
-        <Details 
-          type={selectedItem.type} 
-          name={selectedItem.name}
-          onBack={handleBack}
-        />
-      )}
-    </div>
+            {activeTab === 'details' && selectedItem && (
+              <Details 
+                type={selectedItem.type} 
+                name={selectedItem.name}
+                onBack={handleBack}
+              />
+            )}
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
   )
 }
 

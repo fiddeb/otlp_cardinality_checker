@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
+      '@/hooks': path.resolve(import.meta.dirname, './src/hooks'),
     },
   },
   server: {
