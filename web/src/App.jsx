@@ -13,6 +13,7 @@ import TemplateDetails from './components/TemplateDetails'
 import LogServiceDetails from './components/LogServiceDetails'
 import LogPatternDetails from './components/LogPatternDetails'
 import AttributesView from './components/AttributesView'
+import ActiveSeries from './components/ActiveSeries'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -224,6 +225,15 @@ function App() {
             Metrics Overview
           </button>
           <button 
+            className={`tab ${activeTab === 'active-series' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('active-series')
+              setNavigationHistory([])
+            }}
+          >
+            Active Series
+          </button>
+          <button 
             className={`tab ${activeTab === 'metrics' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('metrics')
@@ -290,6 +300,10 @@ function App() {
 
       {activeTab === 'metrics-overview' && (
         <MetricsOverview onViewMetric={(name) => handleViewDetails('metrics', name)} />
+      )}
+
+      {activeTab === 'active-series' && (
+        <ActiveSeries />
       )}
 
       {activeTab === 'metrics' && !selectedItem && (
