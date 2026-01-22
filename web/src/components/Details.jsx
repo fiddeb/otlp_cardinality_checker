@@ -5,6 +5,7 @@ function Details({ type, name, onBack }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showTemplates, setShowTemplates] = useState(true)
+  const [showSeriesExplanation, setShowSeriesExplanation] = useState(false)
 
   useEffect(() => {
     console.log('Details useEffect - type:', type, 'name:', name)
@@ -47,6 +48,122 @@ function Details({ type, name, onBack }) {
         {type === 'metrics' && <p>Type: {data.type}</p>}
         {type === 'spans' && <p>Kind: {data.kind}</p>}
         <p>Samples: {data.sample_count}</p>
+
+        {/* Active Series (only for metrics) */}
+        {type === 'metrics' && data.active_series !== undefined && (
+          <>
+            <div style={{ 
+              marginTop: '16px',
+              padding: '12px',
+              backgroundColor: 'var(--bg-secondary)',
+              borderRadius: '6px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '4px'
+              }}>
+                <strong>📈 Active Series:</strong>
+                <span style={{ 
+                  fontSize: '1.2em',
+                  fontWeight: 'bold',
+                  color: data.active_series > 1000 ? 'var(--danger)' : 
+                         data.active_series > 100 ? 'var(--warning)' : 
+                         'var(--success)'
+                }}>
+                  {data.active_series.toLocaleString()}
+                </span>
+              </div>
+              <div style={{ 
+                fontSize: '0.9em',
+                color: 'var(--text-secondary)',
+                marginTop: '4px'
+              }}>
+                <button 
+                  onClick={() => setShowSeriesExplanation(!showSeriesExplanation)}
+                  style={{
+                    marginLeft: '8px',
+                    padding: '2px 8px',
+                    fontSize: '0.85em',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    cursor: 'pointer',
+                    color: 'var(--link-color)'
+                  }}
+                >
+                  {showSeriesExplanation ? 'Hide' : 'How is this calculated?'}
+                </button>
+              </div>
+
+              {showSeriesExplanation && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '12px',
+                  backgroundColor: 'var(--bg-primary)',
+                  borderRadius: '4px',
+                  fontSize: '0.85em',
+                  lineHeight: '1.6'
+                }}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong>Vad är en aktiv serie?</strong>
+                  </div>
+                  <div style={{ marginBottom: '8px' }}>
+                    En aktiv serie är en unik kombination av alla label-värden för denna metric.
+                    Systemet spårar faktiska kombinationer som observerats, inte teoretiska möjligheter.
+                  </div>
+                  <div style={{ 
+                    fontFamily: 'monospace',
+                    padding: '8px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                    borderRadius: '4px',
+                    marginBottom: '8px'
+                  }}>
+                    {Object.keys(data.label_keys).length > 0 ? (
+                      <>
+                        <div><strong>Observerade labels:</strong></div>
+                        {Object.entries(data.label_keys)
+                          .slice(0, 5)
+                          .map(([key, meta]) => (
+                            <div key={key}>
+                              • {key}: {meta.estimated_cardinality} unika värden
+                            </div>
+                          ))}
+                        {Object.keys(data.label_keys).length > 5 && (
+                          <div>... och {Object.keys(data.label_keys).length - 5} fler labels</div>
+                        )}
+                        <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
+                          <strong>{data.active_series.toLocaleString()}</strong> unika kombinationer observerade
+                        </div>
+                      </>
+                    ) : (
+                      <div>Inga labels → 1 konstant serie</div>
+                    )}
+                  </div>
+                  <div>
+                    <strong>Exempel:</strong> Om metric har labels method=GET,status=200 och method=POST,status=404 
+                    = 2 unika kombinationer = 2 aktiva serier.
+                  </div>
+                </div>
+              )}
+
+              {data.active_series > 1000 && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px',
+                  backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                  borderRadius: '4px',
+                  fontSize: '0.85em',
+                  color: 'var(--danger)'
+                }}>
+                  ⚠️ High cardinality detected! This metric generates many unique series which may impact storage and query performance.
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Histogram Bucket Distribution (only for histogram metrics) */}
         {type === 'metrics' && data.type === 'Histogram' && data.data && data.data.explicit_bounds && (
