@@ -57,7 +57,7 @@ temp/
 web/dist/
 web/node_modules/
 web/.vite/
-
+web/node_modules/.vite
 bin
 bin/
 
