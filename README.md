@@ -67,23 +67,20 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 
 ## Features
 
-**Current (Phase 1 & 2 - Complete):**
-- ✅ **OTLP HTTP Endpoint** - Receives data from OpenTelemetry Collector (port 4318)
-- ✅ **OTLP gRPC Endpoint** - Full gRPC support (port 4317)
-- ✅ **Source Agnostic** - Works with any Collector receiver (Kafka, Redis, Prometheus, etc.)
-- ✅ **Metadata Extraction** - Analyzes metrics, traces, and logs
-- ✅ **Automatic Log Template Extraction** - Drain algorithm for pattern detection (20-30k+ EPS)
-- ✅ **Cardinality Tracking** - Unique value count estimation using HyperLogLog algorithm
-- ✅ **Global Attribute Catalog** - Track all attribute keys across ALL signals (metrics/spans/logs)
-- ✅ **Span Name Pattern Analysis** - Detect high-cardinality span naming with pattern extraction
-- ✅ **In-Memory Storage** - Fast, handles 500,000+ metrics, ephemeral by design
-- ✅ **REST API** - Query metadata with pagination, filtering, and sorting
-- ✅ **Web UI** - Visual exploration with interactive dashboards and filtering
-- ✅ **Service-Level Filtering** - View telemetry by service.name
-- ✅ **Docker & Kubernetes** - Production-ready deployment manifests
+- OTLP HTTP (4318) and gRPC (4317) endpoints
+- Works with any OTel Collector receiver (Kafka, Redis, Prometheus, etc.)
+- Analyzes metrics, traces, and logs metadata
+- Log template extraction using Drain algorithm (53k-1.6M events/sec)
+- Span name pattern detection for high-cardinality naming
+- Cardinality estimation with HyperLogLog
+- Global attribute catalog across all signals
+- In-memory storage (ephemeral by design)
+- REST API with pagination and filtering
+- Web UI for exploration
+- Docker and Kubernetes deployment
 
-**Planned (Phase 3):**
-- **Alerting** - Notify on cardinality thresholds  
+**Planned:**
+- Alerting on cardinality thresholds  
 
 ## Quick Start
 
@@ -316,7 +313,7 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 
 ## Project Status
 
-� **Status**: Phase 1 Complete - Production Ready
+**Phase 1 & 2 complete. Phase 3 in progress.**
 
 ### Phase 1: MVP ✅ **COMPLETE**
 - [x] OTLP HTTP receiver implementation (port 4318)
@@ -327,19 +324,13 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 - [x] Load testing (validated with 50,000 metrics)
 - [x] Comprehensive documentation
 
-**Performance validated:**
-- ✅ Handles 50,000 metrics using 421 MB memory (~8.4 KB per metric)
-- ✅ Throughput: 450 req/s, 4,455 datapoints/s sustained
-- ✅ Latency: P95 45ms under load, median 1.45ms
-- ✅ Success rate: 99.95%
-- ✅ See [docs/SCALABILITY.md](docs/SCALABILITY.md) for details
+**Performance:**
+- 50,000 metrics in 421 MB memory (~8.4 KB per metric)
+- 450 req/s, 4,455 datapoints/s sustained
+- P95 latency 45ms under load
+- See [docs/SCALABILITY.md](docs/SCALABILITY.md) for details
 
-### Phase 2: Production Hardening (Planned)
-- Handles 10,000 metrics comfortably (~150MB memory)
-- Sub-millisecond metadata updates
-- <10ms API responses for 100 items
-
-### Phase 2: Production Hardening ✅ **COMPLETE**
+### Phase 2: Production Hardening ✅
 - [x] OTLP gRPC receiver (port 4317)
 - [x] Automatic log template extraction with Drain algorithm
 - [x] Pattern pre-masking (timestamps, UUIDs, IPs, URLs, etc.)
@@ -424,47 +415,32 @@ git push origin feature/your-feature
 # Create PR
 ```
 
-## Alternatives Considered
+## Alternatives
 
-| Tool | Pros | Cons |
-|------|------|------|
-| **Prometheus Cardinality Explorer** | Established, metrics-focused | Only metrics, requires Prometheus |
-| **Full Observability Backend** | Complete solution | Overkill, expensive to run |
-| **Custom Collector Processor** | Integrates with existing pipeline | Hard to query historical data |
+| Tool | When to use instead |
+|------|--------------------|
+| Prometheus Cardinality Explorer | If you only care about metrics and already run Prometheus |
+| Full observability backend | If you need long-term storage and querying |
+| Custom Collector processor | If you want inline processing without a separate tool |
 
-We chose a standalone tool for simplicity and focus on metadata analysis.
+This tool is useful when you want a quick, standalone analysis of your telemetry metadata without committing to a full backend.
 
 ## FAQ
 
-**Q: Does this replace my observability backend?**  
-A: No, this is a development/analysis tool, not a production backend.
+**Does this replace my observability backend?**  
+No. This is a diagnostic tool for understanding your telemetry structure, not for storing or querying production data.
 
-**Q: Will this work with my existing OTLP setup?**  
-A: Yes! It's a standard OTLP receiver. Just point your exporter to it.
+**How much memory does it use?**  
+About 8-9 KB per metric. 10k metrics ≈ 85 MB, 50k metrics ≈ 425 MB.
 
-**Q: What about cardinality estimation?**  
-A: MVP focuses on metadata keys only. Cardinality estimation (HyperLogLog) is planned for Phase 3.
+**What about persistence?**  
+Data lives in memory and is lost on restart. This is intentional - restart and re-analyze as needed.
 
-**Q: Is this production-ready?**  
-A: Yes! Phase 1 is complete and tested with 50,000 metrics using 421 MB memory. See [docs/SCALABILITY.md](docs/SCALABILITY.md) for performance details.
+**What is span name pattern analysis?**  
+Groups similar span names into patterns. `GET /users/123` and `GET /users/456` become `GET <URL>`. See the "Trace Patterns" tab or `/api/v1/span-patterns`.
 
-**Q: How much memory does it use?**  
-A: Approximately 8-9 KB per metric. For 10,000 metrics: ~85 MB, for 50,000 metrics: ~425 MB.
-
-**Q: Can I run multiple replicas in Kubernetes?**  
-A: Each replica has independent in-memory storage. Data is not shared between replicas by design.
-
-**Q: What is span name pattern analysis?**  
-A: The Trace Patterns feature groups similar span names into patterns. For example, `GET /api/v1/users/123` and `GET /api/v1/users/456` become `GET <URL>`. This helps identify high-cardinality span naming issues. Access it via the "Trace Patterns" tab in the UI or `/api/v1/span-patterns` API.
-
-**Q: What is automatic log template extraction?**  
-A: When enabled with `USE_AUTOTEMPLATE=true`, the tool uses the Drain algorithm to automatically group similar log messages into patterns. For example, "User 123 logged in" and "User 456 logged in" become one template: "User <NUM> logged in". This helps identify log cardinality issues without manual configuration.
-
-**Q: How fast is the Drain template extraction?**  
-A: Performance ranges from 53k to 1.6M events per second depending on concurrency, exceeding the 20-30k EPS target by 2-80x. See [docs/research/log-templating/STATUS.md](docs/research/log-templating/STATUS.md) for benchmarks.
-
-**Q: Can I adjust how specific the templates are?**  
-A: Yes, the similarity threshold is configurable (default 0.7). Higher values create more specific templates, lower values create more generic ones.
+**What is log template extraction?**  
+The Drain algorithm groups similar log messages. "User 123 logged in" and "User 456 logged in" become "User <NUM> logged in". Runs at 53k-1.6M events/sec.
 
 ## Deployment
 
