@@ -8,13 +8,17 @@ https://github.com/fiddeb/otlp_cardinality_checker
 
 Log Template Extraction
 
-The automatic log template extraction feature uses the Drain algorithm
-as described in:
+The automatic log template extraction feature implements the Drain algorithm
+as described in the following academic paper:
 
   "Drain: An Online Log Parsing Approach with Fixed Depth Tree"
   Pinjia He, Jieming Zhu, Zibin Zheng, and Michael R. Lyu
   IEEE International Conference on Web Services (ICWS), 2017
   https://jiemingzhu.github.io/pub/pjhe_icws2017.pdf
+
+This is an independent implementation based on the published algorithm.
+For reference, the logpai/Drain3 implementation is available under MIT License:
+  https://github.com/logpai/Drain3
 
 ---
 
@@ -37,3 +41,16 @@ described in:
   "HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm"
   Philippe Flajolet, Éric Fusy, Olivier Gandouet, and Frédéric Meunier
   Conference on Analysis of Algorithms (AofA), 2007
+  https://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf
+
+---
+
+Development Process
+
+This project uses OpenSpec for change management and specification-driven
+development. Proposals, designs, and task tracking are maintained in the
+openspec/ directory.
+
+Portions of this codebase were developed with AI coding assistants
+(GitHub Copilot, Claude). All AI-generated code has been reviewed,
+tested, and approved by the project maintainers.
