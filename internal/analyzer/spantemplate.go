@@ -1,3 +1,21 @@
+// Package analyzer provides analysis of OTLP telemetry data.
+//
+// This file implements span name pattern extraction, which identifies dynamic
+// values (IDs, UUIDs, timestamps, etc.) in span names and replaces them with
+// placeholders. This helps identify instrumentation patterns and detect
+// high-cardinality span naming issues.
+//
+// Pattern matching uses regex patterns from config.CompiledPattern, applied
+// in this order (first match wins):
+//  1. Timestamps: 2024/01/22 -> <TIMESTAMP>
+//  2. UUIDs: 550e8400-e29b-41d4-... -> <UUID>
+//  3. Emails: user@example.com -> <EMAIL>
+//  4. URLs/Paths: /api/users/123 -> <URL>
+//  5. Durations: 500ms, 1.5s -> <DURATION>
+//  6. Sizes: 100MB, 1.5GB -> <SIZE>
+//  7. IPs: 192.168.1.1 -> <IP>
+//  8. Hex strings: deadbeef1234 -> <HEX>
+//  9. Numbers: 123, 456.78 -> <NUM>
 package analyzer
 
 import (

@@ -25,13 +25,13 @@
 - [x] 4.1 Unit tests for `SpanNameAnalyzer` pattern extraction (HTTP paths, gRPC methods, generic patterns)
 - [x] 4.2 Test cases: `GET /users/{id}`, `POST /orders/{id}/items`, `grpc.Service/Method`, `my-operation-123`
 - [x] 4.3 Integration test with full `TracesAnalyzer` to verify patterns appear in metadata
-- [ ] 4.4 Verify JSON serialization in API responses
+- [x] 4.4 Verify JSON serialization in API responses
 
 ## 5. Documentation
 
-- [ ] 5.1 Add example to API.md showing span pattern output
-- [ ] 5.2 Update USAGE.md with span pattern analysis examples
-- [ ] 5.3 Add inline code comments explaining pattern matching logic
+- [x] 5.1 Add example to API.md showing span pattern output
+- [x] 5.2 Update USAGE.md with span pattern analysis examples
+- [x] 5.3 Add inline code comments explaining pattern matching logic
 
 ## Dependencies
 

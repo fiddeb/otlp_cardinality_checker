@@ -410,6 +410,68 @@ cache_lookup: 4800 samples
 
 ---
 
+### 🔍 Analyze Span Name Patterns
+
+**Question:** What patterns exist in span names? Are there dynamic values like IDs or timestamps?
+
+```bash
+curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+  jq '.name_patterns[] | {
+    template,
+    count,
+    percentage: "\(.percentage)%",
+    examples: .examples[0:2]
+  }'
+```
+
+**Output:**
+```json
+{
+  "template": "HTTP GET <URL>",
+  "count": 4500,
+  "percentage": "90%",
+  "examples": ["HTTP GET /api/users/123", "HTTP GET /api/users/456"]
+}
+{
+  "template": "HTTP GET /api/users",
+  "count": 500,
+  "percentage": "10%",
+  "examples": ["HTTP GET /api/users"]
+}
+```
+
+**Interpretation:** 90% of spans have dynamic URL paths (user IDs in the path). Consider using `http.route` attribute instead of embedding IDs in span names.
+
+---
+
+### ⚠️ Identify High Cardinality Span Names
+
+**Question:** Which spans have dynamic values in their names causing cardinality issues?
+
+```bash
+curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
+  jq '.data[] | select(.name_patterns != null and (.name_patterns | length) > 1) | {
+    name,
+    pattern_count: (.name_patterns | length),
+    top_pattern: .name_patterns[0].template,
+    examples: .name_patterns[0].examples
+  }'
+```
+
+**Output:**
+```json
+{
+  "name": "process-batch-123",
+  "pattern_count": 5,
+  "top_pattern": "process-batch-<NUM>",
+  "examples": ["process-batch-1", "process-batch-42", "process-batch-999"]
+}
+```
+
+**Interpretation:** ⚠️ Span names contain batch IDs. This creates many unique span names which fragments your trace analysis.
+
+---
+
 ## 📝 Working with Logs
 
 ### 📋 List All Log Severities
