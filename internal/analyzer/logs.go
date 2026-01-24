@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
-	"github.com/fidde/otlp_cardinality_checker/internal/config"
+	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
+	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 )
@@ -21,7 +21,7 @@ type LogsAnalyzer struct {
 	bodyAnalyzers    map[string]LogBodyAnalyzerInterface // One analyzer per severity level
 	useAutoTemplate  bool                                // Whether to use autotemplate
 	autoTemplateCfg  autotemplate.Config                 // Config for autotemplate
-	patterns         []config.CompiledPattern            // Pre-masking patterns
+	patterns         []patterns.CompiledPattern          // Pre-masking patterns
 	catalog          AttributeCatalog                    // Attribute catalog for global tracking
 }
 
@@ -39,12 +39,12 @@ func NewLogsAnalyzerWithAutoTemplate(cfg autotemplate.Config) *LogsAnalyzer {
 }
 
 // NewLogsAnalyzerWithAutoTemplateAndPatterns creates a logs analyzer with patterns.
-func NewLogsAnalyzerWithAutoTemplateAndPatterns(cfg autotemplate.Config, patterns []config.CompiledPattern) *LogsAnalyzer {
+func NewLogsAnalyzerWithAutoTemplateAndPatterns(cfg autotemplate.Config, pats []patterns.CompiledPattern) *LogsAnalyzer {
 	return &LogsAnalyzer{
 		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
 		useAutoTemplate: true,
 		autoTemplateCfg: cfg,
-		patterns:        patterns,
+		patterns:        pats,
 	}
 }
 
@@ -58,12 +58,12 @@ func NewLogsAnalyzerWithCatalog(catalog AttributeCatalog) *LogsAnalyzer {
 }
 
 // NewLogsAnalyzerWithAutoTemplateAndCatalog creates a logs analyzer with autotemplate and catalog.
-func NewLogsAnalyzerWithAutoTemplateAndCatalog(cfg autotemplate.Config, patterns []config.CompiledPattern, catalog AttributeCatalog) *LogsAnalyzer {
+func NewLogsAnalyzerWithAutoTemplateAndCatalog(cfg autotemplate.Config, pats []patterns.CompiledPattern, catalog AttributeCatalog) *LogsAnalyzer {
 	return &LogsAnalyzer{
 		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
 		useAutoTemplate: true,
 		autoTemplateCfg: cfg,
-		patterns:        patterns,
+		patterns:        pats,
 		catalog:         catalog,
 	}
 }
