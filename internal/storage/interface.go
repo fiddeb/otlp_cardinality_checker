@@ -28,6 +28,9 @@ type Storage interface {
 	
 	// Pattern explorer - advanced log pattern analysis
 	GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error)
+	
+	// Span pattern analysis - aggregate span names into patterns
+	GetSpanPatterns(ctx context.Context) (*models.SpanPatternResponse, error)
 
 	// Cross-signal cardinality analysis
 	GetHighCardinalityKeys(ctx context.Context, threshold int, limit int) (*models.CrossSignalCardinalityResponse, error)
