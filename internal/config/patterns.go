@@ -80,6 +80,37 @@ func DefaultPatterns() []CompiledPattern {
 			Placeholder: "<EMAIL>",
 			Description: "Email addresses",
 		},
+		// SQL patterns - normalize queries while preserving verb + table
+		{
+			Name:        "sql_select",
+			Regex:       regexp.MustCompile(`(db/query:\s*SELECT\s+(?:.*?\s+)?FROM\s+\w+)(?:\s+.+)?$`),
+			Placeholder: "$1 <WHERE>",
+			Description: "SQL SELECT queries - keep table, mask WHERE",
+		},
+		{
+			Name:        "sql_delete",
+			Regex:       regexp.MustCompile(`(db/query:\s*DELETE\s+FROM\s+\w+)(?:\s+.+)?$`),
+			Placeholder: "$1 <WHERE>",
+			Description: "SQL DELETE queries - keep table, mask WHERE",
+		},
+		{
+			Name:        "sql_update",
+			Regex:       regexp.MustCompile(`(db/query:\s*UPDATE\s+\w+)\s+SET\s+.+$`),
+			Placeholder: "$1 <SET>",
+			Description: "SQL UPDATE queries - keep table, mask SET/WHERE",
+		},
+		{
+			Name:        "sql_insert",
+			Regex:       regexp.MustCompile(`(db/query:\s*INSERT\s+INTO\s+\w+)(?:\s+.+)?$`),
+			Placeholder: "$1 <VALUES>",
+			Description: "SQL INSERT queries - keep table, mask VALUES",
+		},
+		{
+			Name:        "service_method",
+			Regex:       regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9_-]*)/([a-zA-Z][a-zA-Z0-9]+)$`),
+			Placeholder: "$1/<METHOD>",
+			Description: "gRPC or internal service/method style spans",
+		},
 		{
 			Name:        "url",
 			Regex:       regexp.MustCompile(`https?://[^\s]+|\s(/[a-zA-Z0-9/_.-]+)`),

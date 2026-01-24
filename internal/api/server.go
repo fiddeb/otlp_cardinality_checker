@@ -137,6 +137,7 @@ func NewServer(addr string, store storage.Storage) *Server {
 		// Spans endpoints
 		r.Get("/spans", s.listSpans)
 		r.Get("/spans/{name}", s.getSpan)
+		r.Get("/span-patterns", s.getSpanPatterns)
 
 		// Logs endpoints
 		r.Get("/logs", s.listLogs)
@@ -350,6 +351,20 @@ func (s *Server) getSpan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.respondJSON(w, http.StatusOK, span)
+}
+
+// getSpanPatterns returns aggregated span name patterns.
+// GET /api/v1/span-patterns
+func (s *Server) getSpanPatterns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	patterns, err := s.store.GetSpanPatterns(ctx)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, patterns)
 }
 
 // listLogs returns all log metadata, optionally filtered by service.
