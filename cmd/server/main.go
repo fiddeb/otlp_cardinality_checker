@@ -22,26 +22,19 @@ func main() {
 	log.Println("Starting OTLP Cardinality Checker...")
 
 	// Configure storage from environment
-	storageBackend := getEnv("STORAGE_BACKEND", "clickhouse")
-	clickhouseAddr := getEnv("CLICKHOUSE_ADDR", "localhost:9000")
 	useAutoTemplate := getEnvBool("USE_AUTOTEMPLATE", true)
 
 	storageCfg := storage.DefaultConfig()
-	storageCfg.Backend = storageBackend
-	storageCfg.ClickHouseAddr = clickhouseAddr
 	storageCfg.UseAutoTemplate = useAutoTemplate
 
 	if useAutoTemplate {
-		log.Println("⚡ Autotemplate mode enabled (Drain-style extraction)")
+		log.Println("Autotemplate mode enabled (Drain-style extraction)")
 	} else {
 		log.Println("Using regex-based template extraction")
 	}
 
-	// Create storage
-	store, err := storage.NewStorage(storageCfg)
-	if err != nil {
-		log.Fatalf("Failed to create storage: %v", err)
-	}
+	// Create storage (always in-memory)
+	store := storage.NewStorage(storageCfg)
 	defer func() {
 		if err := store.Close(); err != nil {
 			log.Printf("Error closing storage: %v", err)

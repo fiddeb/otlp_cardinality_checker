@@ -28,8 +28,7 @@ Sources (Kafka/Redis/Prometheus) → OpenTelemetry Collector → This Tool (OTLP
 - **OTLP Protocol**: `go.opentelemetry.io/proto/otlp` v1.8.0
 - **gRPC**: `google.golang.org/grpc` v1.76.0
 - **Protobuf**: `google.golang.org/protobuf` v1.36.10
-- **ClickHouse**: `github.com/ClickHouse/clickhouse-go/v2` v2.40.3 (columnar database)
-- **Cardinality Estimation**: HyperLogLog algorithm (custom implementation) + ClickHouse `uniqExact()`
+- **Cardinality Estimation**: HyperLogLog algorithm (custom implementation, ~0.81% error)
 - **Log Templating**: Drain algorithm for pattern extraction (20-30k+ EPS)
 
 ### Frontend (React + Vite)
@@ -40,10 +39,9 @@ Sources (Kafka/Redis/Prometheus) → OpenTelemetry Collector → This Tool (OTLP
 - **Styling**: Vanilla CSS with index.css
 
 ### Storage
-- **Primary**: ClickHouse (default, production-grade columnar database)
-- **Alternative**: In-memory storage (fast, 500k+ metrics, no persistence)
-- **Storage Modes**: `clickhouse` (default) or `memory`
-- **Batch Writes**: Automatic buffering with configurable batch size and flush interval
+- **Type**: In-memory only (ephemeral by design)
+- **Capacity**: 500k+ metrics with <256MB memory footprint
+- **Design**: Diagnostic tool, restart and re-analyze as needed
 
 ### Deployment
 - **Container**: Docker (Dockerfile in root)
@@ -88,7 +86,7 @@ OTLP Endpoint Layer → Analyzer Layer → Storage Layer → API Layer
 
 1. **OTLP Endpoints** (`internal/receiver/`): Simple HTTP/gRPC servers accepting OTLP protobuf
 2. **Analyzer** (`internal/analyzer/`): Extracts metadata keys from telemetry signals
-3. **Storage** (`internal/storage/`): ClickHouse primary (with batch buffering), optional in-memory mode
+3. **Storage** (`internal/storage/`): In-memory storage with HyperLogLog cardinality estimation
 4. **API** (`internal/api/`): REST endpoints for querying metadata
 
 **Concurrency Model:**
@@ -358,14 +356,12 @@ All endpoints support query parameters for filtering, sorting, and pagination wh
 
 ### Performance
 - Target: 30k-50k signals/second ingestion rate
-- ClickHouse optimized for high-throughput batch writes and analytical queries
-- In-memory mode available for 500k+ metrics without persistence
-- Memory target: <256MB under normal load (memory mode)
+- In-memory storage handles 500k+ metrics with sub-millisecond updates
+- Memory target: <256MB under normal load
 
 ### Memory Efficiency
 - Store only metadata keys, never values (except samples: max 10 per attribute)
 - Use HyperLogLog for cardinality estimation (~16KB per attribute, 0.81% error)
-- ClickHouse `uniqExact()` for precise cardinality when needed
 - Timestamps: FirstSeen and LastSeen per metadata object
 
 ### Data Safety
@@ -423,15 +419,6 @@ service:
 
 ## Known Issues and Future Improvements
 
-### Batch Write Performance
-**Implemented**: ClickHouse batch buffer with automatic flushing
-- Configurable batch size (default: 1000 rows)
-- Configurable flush interval (default: 5 seconds)
-- Reduces write operations significantly compared to synchronous writes
-- ClickHouse columnar storage optimized for analytical queries
-
-**Performance**: 10x write throughput compared to previous SQLite implementation
-
 ### Log Pattern False Positives
 **Issue**: Drain algorithm may occasionally group dissimilar logs if they share token structure
 
@@ -459,25 +446,16 @@ make build
 go build -o bin/occ ./cmd/server
 ```
 
-### Running with ClickHouse (Default)
+### Running the Server
 ```bash
-# Run with ClickHouse (default backend)
+# Run (uses in-memory storage by default)
 ./bin/occ
-
-# Custom ClickHouse address
-CLICKHOUSE_ADDR=clickhouse:9000 ./bin/occ
 
 # Server listens on:
 # - OTLP gRPC: :4317
 # - OTLP HTTP: :4318
 # - REST API: :8080
 # - pprof: :6060
-```
-
-### Running with In-Memory Storage
-```bash
-# Memory-only mode (no persistence)
-STORAGE_BACKEND=memory ./bin/occ
 ```
 
 ### Running with Drain Log Templating
