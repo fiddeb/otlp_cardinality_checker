@@ -75,6 +75,7 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 - ✅ **Automatic Log Template Extraction** - Drain algorithm for pattern detection (20-30k+ EPS)
 - ✅ **Cardinality Tracking** - Unique value count estimation using HyperLogLog algorithm
 - ✅ **Global Attribute Catalog** - Track all attribute keys across ALL signals (metrics/spans/logs)
+- ✅ **Span Name Pattern Analysis** - Detect high-cardinality span naming with pattern extraction
 - ✅ **In-Memory Storage** - Fast, handles 500,000+ metrics, ephemeral by design
 - ✅ **REST API** - Query metadata with pagination, filtering, and sorting
 - ✅ **Web UI** - Visual exploration with interactive dashboards and filtering
@@ -82,8 +83,7 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 - ✅ **Docker & Kubernetes** - Production-ready deployment manifests
 
 **Planned (Phase 3):**
-- **Alerting** - Notify on cardinality thresholds
-- **Performance Optimization** - Batch writes for SQLite attribute catalog  
+- **Alerting** - Notify on cardinality thresholds  
 
 ## Quick Start
 
@@ -160,6 +160,9 @@ curl http://localhost:8080/api/v1/spans
 
 # Get log templates by severity (with autotemplate enabled)
 curl http://localhost:8080/api/v1/logs/INFO
+
+# Get span patterns (aggregated pattern analysis)
+curl http://localhost:8080/api/v1/span-patterns
 
 # Get summary
 curl http://localhost:8080/api/v1/summary
@@ -295,14 +298,6 @@ curl http://localhost:8080/api/v1/logs/ERROR | jq '{severity, sample_count, body
 ```
 
 See [docs/research/log-templating/](docs/research/log-templating/) for algorithm details and performance benchmarks.
-  format: "json"
-```
-
-Run with config:
-
-```bash
-./bin/occ --config config.yaml
-```
 
 ## Documentation
 
@@ -351,12 +346,11 @@ Run with config:
 - [x] Configurable similarity threshold for template specificity
 - [x] Comprehensive pattern validation tests
 - [x] Performance benchmarks (53k-1.6M EPS)
-- [ ] PostgreSQL persistence for historical tracking (deferred)
-- [ ] Configuration file support (YAML) (deferred)
+- [ ] Configuration file support (YAML)
 - [ ] Helm charts for easier Kubernetes deployment
 
 ### Phase 3: Enhanced Features (Future)
-- [ ] Web UI for visualization
+- [x] Web UI for visualization
 - [ ] Alerting on cardinality thresholds
 - [ ] CI/CD integrations
 - [ ] Time-series cardinality trends
@@ -383,8 +377,7 @@ Run with config:
 │                 │                      │
 │  ┌──────────────▼──────────────────┐  │
 │  │  Storage Layer                  │  │
-│  │  ├─ In-Memory Store             │  │
-│  │  └─ PostgreSQL (Optional)       │  │
+│  │  └─ In-Memory Store             │  │
 │  └──────────────┬──────────────────┘  │
 │                 │                      │
 │  ┌──────────────▼──────────────────┐  │
@@ -397,9 +390,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design.
 
 ## Technology Stack
 
-- **Language**: Go 1.21+
+- **Language**: Go 1.24+
 - **OTLP**: OpenTelemetry Collector SDK
-- **Storage**: In-memory (primary), PostgreSQL (optional)
+- **Storage**: In-memory only (ephemeral by design)
 - **API**: net/http with chi router
 - **Testing**: Go testing, testify
 
@@ -459,7 +452,10 @@ A: Yes! Phase 1 is complete and tested with 50,000 metrics using 421 MB memory. 
 A: Approximately 8-9 KB per metric. For 10,000 metrics: ~85 MB, for 50,000 metrics: ~425 MB.
 
 **Q: Can I run multiple replicas in Kubernetes?**  
-A: Each replica has independent in-memory storage. For shared state, you would need to implement distributed storage (future enhancement).
+A: Each replica has independent in-memory storage. Data is not shared between replicas by design.
+
+**Q: What is span name pattern analysis?**  
+A: The Trace Patterns feature groups similar span names into patterns. For example, `GET /api/v1/users/123` and `GET /api/v1/users/456` become `GET <URL>`. This helps identify high-cardinality span naming issues. Access it via the "Trace Patterns" tab in the UI or `/api/v1/span-patterns` API.
 
 **Q: What is automatic log template extraction?**  
 A: When enabled with `USE_AUTOTEMPLATE=true`, the tool uses the Drain algorithm to automatically group similar log messages into patterns. For example, "User 123 logged in" and "User 456 logged in" become one template: "User <NUM> logged in". This helps identify log cardinality issues without manual configuration.
