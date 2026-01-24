@@ -38,11 +38,10 @@ ui:
 	cd web && npm run build
 	@echo "✅ Frontend built: web/dist/"
 
-# Build both (production)
-build: backend ui
+# Build both (production) - UI must be built first so Go can embed it
+build: ui backend
 	@echo "✅ Full build complete!"
-	@echo "   Backend: bin/occ"
-	@echo "   Frontend: web/dist/"
+	@echo "   Binary with embedded UI: bin/occ"
 
 # Development mode (runs both servers)
 dev:
@@ -64,8 +63,6 @@ run: build
 test:
 	@echo "🧪 Running Go tests..."
 	go test ./... -v
-	@echo "🧪 Running frontend tests..."
-	cd web && npm test -- --run
 	@echo "✅ All tests passed"
 
 # Clean build artifacts

@@ -7,15 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/storage"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
+	"github.com/fidde/otlp_cardinality_checker/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -163,23 +163,39 @@ func NewServer(addr string, store storage.Storage) *Server {
 		r.Post("/admin/clear", s.clearAllData)
 	})
 
-	// Serve static files from web/dist
-	workDir, _ := os.Getwd()
-	filesDir := http.Dir(filepath.Join(workDir, "web", "dist"))
-	fileServer := http.FileServer(filesDir)
-	
-	// Serve static files, with SPA fallback to index.html
-	s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		// Try to serve the file
-		path := filepath.Join(workDir, "web", "dist", r.URL.Path)
-		if _, err := os.Stat(path); err == nil {
-			fileServer.ServeHTTP(w, r)
-			return
-		}
+	// Serve embedded static files with SPA fallback
+	staticFS, err := web.NewStaticFileSystem()
+	if err != nil {
+		log.Printf("Warning: Could not load embedded UI: %v", err)
+	} else {
+		// Serve static files from embedded filesystem
+		fileServer := http.FileServer(staticFS)
 		
-		// If file doesn't exist, serve index.html for SPA routing
-		http.ServeFile(w, r, filepath.Join(workDir, "web", "dist", "index.html"))
-	})
+		s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			// Check if file exists in embedded FS
+			if staticFS.Exists("", r.URL.Path) {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+			
+			// SPA fallback: serve index.html for routes not matching static files
+			f, err := staticFS.Open("/index.html")
+			if err != nil {
+				http.Error(w, "UI not available", http.StatusNotFound)
+				return
+			}
+			defer f.Close()
+			
+			// Get file info for http.ServeContent
+			stat, err := f.Stat()
+			if err != nil {
+				http.Error(w, "UI not available", http.StatusInternalServerError)
+				return
+			}
+			
+			http.ServeContent(w, r, "index.html", stat.ModTime(), f.(interface{ Seek(int64, int) (int64, error) }).(http.File))
+		})
+	}
 
 	s.server = &http.Server{
 		Addr:    addr,
