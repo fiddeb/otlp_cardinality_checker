@@ -12,14 +12,17 @@
 
 ## What is this?
 
-OTLP Cardinality Checker is a tool that helps you understand the **metadata structure** of your OpenTelemetry telemetry before it explodes your observability costs. It acts as an **OTLP endpoint destination** that receives data from an OpenTelemetry Collector and analyzes incoming metrics, traces, and logs to identify:
+OTLP Cardinality Checker is a tool that helps you understand the **metadata structure** of your OpenTelemetry telemetry before it explodes your observability costs. It acts as an **OTLP endpoint** that receives telemetry data over HTTP or gRPC and analyzes incoming metrics, traces, and logs to identify:
 
-- Which metric names and label keys are being used
-- Which span names and attribute keys exist in traces
-- Which attribute keys appear in logs
+- Which metric names and attribute keys are being used
+- Which span names and attribute keys exist in traces  
+- Which log attribute keys appear
+- Resource attributes across all signals
 - Potential cardinality issues in your instrumentation
 
 **Key principle**: We only track metadata keys, never actual values, to avoid creating cardinality problems in the tool itself.
+
+You can send data directly from applications using the OpenTelemetry SDK, or route data through an OpenTelemetry Collector for more complex scenarios.
 
 ## Problem Statement
 
@@ -36,33 +39,39 @@ Most teams discover cardinality issues **after** they hit production and the bil
 OTLP Cardinality Checker gives you visibility into your telemetry metadata structure:
 
 ```
-┌─────────────────────────────────┐
-│ Data Sources                    │
-│ (Kafka/Redis/Prometheus/etc.)   │
-└──────────┬──────────────────────┘
+┌──────────────────────────────────┐
+│  Applications with OTel SDK      │
+│  (Direct OTLP export)            │
+└──────────┬───────────────────────┘
+           │ OTLP
            │
            ↓
-┌──────────────────────────────────┐
-│  OpenTelemetry Collector         │
-│  • Receivers (various)           │
-│  • Processors                    │
-│  • OTLP HTTP Exporter            │
-└──────────┬───────────────────────┘
-           │ OTLP/HTTP
-           ↓
-┌──────────────────────────────────┐
-│  OTLP Cardinality Checker        │
-│  • OTLP gRPC Endpoint (4317)     │
-│  • OTLP HTTP Endpoint (4318)     │
-│  • Metadata Extraction           │
-│  • Cardinality Analysis          │
-└──────────┬───────────────────────┘
-           │
-           ↓
-┌──────────────────────────────────┐
-│  REST API (8080)                 │
-│  Query & Explore Metadata        │
-└──────────────────────────────────┘
+      ┌────────────────────────┐
+      │                        │
+      │  OTLP Cardinality      │◄──────────┐
+      │  Checker               │           │
+      │                        │           │ OTLP
+      │  • gRPC (4317)         │           │
+      │  • HTTP (4318)         │           │
+      │  • Metadata Analysis   │           │
+      │  • Cardinality Est.    │           │
+      │                        │           │
+      └────────┬───────────────┘           │
+               │                           │
+               │                ┌──────────┴──────────────┐
+               │                │  OpenTelemetry          │
+               │                │  Collector (optional)   │
+               │                │                         │
+               │                │  For complex routing,   │
+               │                │  processing, or         │
+               │                │  multiple sources       │
+               │                └─────────▲───────────────┘
+               │                          │
+               ↓                          │
+      ┌────────────────────┐    ┌─────────────────────────┐
+      │  REST API (8080)   │    │  Data Sources           │
+      │  Web UI            │    │  (Kafka/Redis/Prom...)  │
+      └────────────────────┘    └─────────────────────────┘
 ```
 
 ## Features
@@ -76,11 +85,8 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 - Global attribute catalog across all signals
 - In-memory storage (ephemeral by design)
 - REST API with pagination and filtering
-- Web UI for exploration
+- Embedded React Web UI (built into the binary)
 - Docker and Kubernetes deployment
-
-**Planned:**
-- Alerting on cardinality thresholds  
 
 ## Quick Start
 
@@ -129,6 +135,27 @@ The tool will start listening on:
 - **gRPC**: `localhost:4317` (OTLP gRPC endpoint)
 - **HTTP**: `localhost:4318` (OTLP HTTP endpoint)
 - **API**: `localhost:8080` (REST API)
+- **Web UI**: `http://localhost:8080` (Embedded React interface)
+
+### Web UI
+
+Open your browser at `http://localhost:8080` to access the embedded React UI. The UI is built into the binary and provides:
+
+- **Dashboard** - Service overview with telemetry summary
+- **Metadata Complexity** - Identify metrics/spans/logs with high-cardinality attributes
+- **Metrics Overview** - Aggregated view of all metrics with type and unit breakdowns
+- **Active Series** - Real-time cardinality tracking with HyperLogLog estimation
+- **Metrics Details** - Filterable table of all metrics with attribute analysis
+- **Traces** - Span name analysis with attribute keys and sample counts
+- **Trace Patterns** - Aggregated span name patterns (e.g., `GET <URL>`)
+- **Logs** - Log template extraction by severity level with Drain algorithm
+- **Attributes** - Global attribute catalog across all signals
+- **Noisy Neighbors** - Identify services generating excessive telemetry volume
+- **Memory** - Runtime memory usage statistics
+- **Service Explorer** - Deep dive into all telemetry for a specific service
+- **Dark Mode** - Toggle between light and dark themes
+
+The UI is statically compiled into the binary, so no external files are needed.
 
 ### Using with OpenTelemetry SDK
 
@@ -169,18 +196,50 @@ Example response:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "name": "http_server_duration",
-    "type": "Histogram",
-    "unit": "ms",
-    "label_keys": ["method", "status_code", "route"],
-    "resource_keys": ["service.name", "service.version"],
-    "sample_count": 15420
-  },
-  "metadata": {
-    "timestamp": "2024-01-15T10:30:00Z"
-  }
+  "data": [
+    {
+      "name": "http_server_duration",
+      "type": "Histogram",
+      "unit": "ms",
+      "attribute_keys": {
+        "method": {
+          "count": 15420,
+          "estimated_cardinality": 7,
+          "percentage": 100.0
+        },
+        "status_code": {
+          "count": 15420,
+          "estimated_cardinality": 10,
+          "percentage": 100.0
+        },
+        "route": {
+          "count": 15420,
+          "estimated_cardinality": 25,
+          "percentage": 100.0
+        }
+      },
+      "resource_keys": {
+        "service.name": {
+          "count": 15420,
+          "estimated_cardinality": 1,
+          "percentage": 100.0
+        },
+        "service.version": {
+          "count": 15420,
+          "estimated_cardinality": 1,
+          "percentage": 100.0
+        }
+      },
+      "sample_count": 15420,
+      "services": {
+        "my-service": 15420
+      }
+    }
+  ],
+  "total": 1,
+  "limit": 100,
+  "offset": 0,
+  "has_more": false
 }
 ```
 
@@ -202,7 +261,7 @@ curl 'http://localhost:8080/api/v1/metrics' | jq '.' > metadata-report.json
 
 # Check for high cardinality (example)
 curl -s 'http://localhost:8080/api/v1/metrics' | \
-  jq -r '.data[] | select(.label_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
+  jq -r '.data[] | select(.attribute_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
 ```
 
 ### 2. Cost Analysis
@@ -218,7 +277,7 @@ curl -s 'http://localhost:8080/api/v1/metrics' | jq '.' > metrics.json
 
 # Or use jq to create CSV format
 curl -s 'http://localhost:8080/api/v1/metrics' | \
-  jq -r '.data[] | [.name, .type, (.label_keys | length), .sample_count] | @csv' > metrics.csv
+  jq -r '.data[] | [.name, .type, (.attribute_keys | length), .sample_count] | @csv' > metrics.csv
 
 # Analyze in Excel/SQL
 ```
@@ -231,8 +290,8 @@ Identify over-instrumented services:
 # Filter by service
 curl "http://localhost:8080/api/v1/metrics?service=payment-service"
 
-# Check for unusual label keys
-# Example: user_id in labels = BAD (high cardinality)
+# Check for unusual attribute keys
+# Example: user_id in attributes = BAD (high cardinality)
 ```
 
 ## Configuration
@@ -298,7 +357,7 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 
 ## Documentation
 
-- **[docs/USAGE.md](docs/USAGE.md)** - 📘 **Start here!** Practical usage guide with examples
+- **[docs/USAGE.md](docs/USAGE.md)** - **Start here!** Practical usage guide with examples
 - **[docs/API.md](docs/API.md)** - Complete REST API documentation with pagination examples
 - **[docs/SCALABILITY.md](docs/SCALABILITY.md)** - Performance optimizations and scalability limits
 - **[docs/research/log-templating/](docs/research/log-templating/)** - Automatic log template extraction with Drain algorithm
@@ -315,7 +374,7 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 
 **Phase 1 & 2 complete. Phase 3 in progress.**
 
-### Phase 1: MVP ✅ **COMPLETE**
+### Phase 1: MVP **COMPLETE**
 - [x] OTLP HTTP receiver implementation (port 4318)
 - [x] Metadata extraction for metrics, traces, and logs  
 - [x] In-memory storage with cardinality tracking
@@ -330,7 +389,7 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 - P95 latency 45ms under load
 - See [docs/SCALABILITY.md](docs/SCALABILITY.md) for details
 
-### Phase 2: Production Hardening ✅
+### Phase 2: Production Hardening
 - [x] OTLP gRPC receiver (port 4317)
 - [x] Automatic log template extraction with Drain algorithm
 - [x] Pattern pre-masking (timestamps, UUIDs, IPs, URLs, etc.)
@@ -341,51 +400,20 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 - [ ] Helm charts for easier Kubernetes deployment
 
 ### Phase 3: Enhanced Features (Future)
-- [x] Web UI for visualization
-- [ ] Alerting on cardinality thresholds
+- [x] Web UI for visualization (embedded React UI)
 - [ ] CI/CD integrations
-- [ ] Time-series cardinality trends
 - [ ] Comparison tools
-- [ ] Multi-replica support with shared storage
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────┐
-│  OTLP Cardinality Checker               │
-│                                         │
-│  ┌─────────────────────────────────┐  │
-│  │  OTLP Receiver Layer            │  │
-│  │  └─ HTTP Server (port 4318)     │  │
-│  └──────────────┬──────────────────┘  │
-│                 │                      │
-│  ┌──────────────▼──────────────────┐  │
-│  │  Metadata Extractor             │  │
-│  │  ├─ Metrics Analyzer            │  │
-│  │  ├─ Traces Analyzer             │  │
-│  │  └─ Logs Analyzer               │  │
-│  └──────────────┬──────────────────┘  │
-│                 │                      │
-│  ┌──────────────▼──────────────────┐  │
-│  │  Storage Layer                  │  │
-│  │  └─ In-Memory Store             │  │
-│  └──────────────┬──────────────────┘  │
-│                 │                      │
-│  ┌──────────────▼──────────────────┐  │
-│  │  REST API (port 8080)           │  │
-│  └─────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design.
 
 ## Technology Stack
 
 - **Language**: Go 1.24+
-- **OTLP**: OpenTelemetry Collector SDK
-- **Storage**: In-memory only (ephemeral by design)
-- **API**: net/http with chi router
-- **Testing**: Go testing, testify
+- **OTLP**: gRPC (4317) and HTTP (4318) receivers using OpenTelemetry SDK
+- **Storage**: In-memory (ephemeral by design)
+- **API**: REST API with chi router
+- **UI**: React with Vite (embedded in binary)
+- **Algorithms**: Drain (log templates), HyperLogLog (cardinality estimation)
+- **Testing**: Go testing, testify, K6 load tests
 
 ## Contributing
 
@@ -419,11 +447,11 @@ git push origin feature/your-feature
 
 | Tool | When to use instead |
 |------|--------------------|
-| Prometheus Cardinality Explorer | If you only care about metrics and already run Prometheus |
-| Full observability backend | If you need long-term storage and querying |
-| Custom Collector processor | If you want inline processing without a separate tool |
+| Prometheus /api/v1/status/tsdb or VictoriaMetrics Cardinality Explorer | If you only need metrics cardinality analysis and already run Prometheus/VictoriaMetrics |
+| Full observability backend (Grafana Cloud, Datadog, etc.) | If you need long-term storage, alerting, and dashboards |
+| OpenTelemetry Collector processor | If you want inline telemetry transformation without a separate analysis tool |
 
-This tool is useful when you want a quick, standalone analysis of your telemetry metadata without committing to a full backend.
+This tool is useful when you want a quick, standalone analysis of your OTLP telemetry metadata across metrics, traces, and logs - without committing to a full observability backend.
 
 ## FAQ
 
@@ -465,13 +493,7 @@ docker run -p 4317:4317 -p 4318:4318 -p 8080:8080 occ:latest
 
 ## License
 
-Apache License 2.0 - See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- [OpenTelemetry](https://opentelemetry.io/) for the OTLP specification
-- [OpenTelemetry Collector](https://github.com/open-telemetry/opentelemetry-collector) for receiver components
-- The Go community for excellent tooling
+Apache License 2.0 - See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
 
 ## Contact
 
@@ -480,7 +502,7 @@ Apache License 2.0 - See [LICENSE](LICENSE) for details.
 
 ## Roadmap
 
-See our [Project Board](https://github.com/yourusername/otlp_cardinality_checker/projects) for current work and future plans.
+See [Project Board](https://github.com/yourusername/otlp_cardinality_checker/projects) for current work and future plans.
 
 ---
 
