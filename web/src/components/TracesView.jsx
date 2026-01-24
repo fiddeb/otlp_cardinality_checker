@@ -117,7 +117,6 @@ function TracesView({ onViewDetails }) {
             <th>Span Name</th>
             <th>Kind</th>
             <th>Samples</th>
-            <th>Patterns</th>
             <th>Attributes</th>
             <th>Max Cardinality</th>
             <th>Services</th>
@@ -128,8 +127,6 @@ function TracesView({ onViewDetails }) {
             const maxCard = getMaxCardinality(span)
             const attrCount = span.attribute_keys ? Object.keys(span.attribute_keys).length : 0
             const serviceCount = span.services ? Object.keys(span.services).length : 0
-            const patternCount = span.name_patterns ? span.name_patterns.length : 0
-            const topPattern = span.name_patterns && span.name_patterns[0] ? span.name_patterns[0].template : null
             
             return (
               <tr key={i}>
@@ -145,17 +142,6 @@ function TracesView({ onViewDetails }) {
                   <span className="key-badge">{span.kind || 'Unknown'}</span>
                 </td>
                 <td>{span.sample_count.toLocaleString()}</td>
-                <td>
-                  {patternCount > 0 ? (
-                    <span 
-                      className="key-badge" 
-                      title={topPattern || 'No pattern'}
-                      style={{ cursor: 'help' }}
-                    >
-                      {patternCount}
-                    </span>
-                  ) : '-'}
-                </td>
                 <td>{attrCount}</td>
                 <td>
                   {maxCard > 0 ? (
