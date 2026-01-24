@@ -80,10 +80,10 @@
 - [ ] 4.1.3 Write tests verifying cardinality accuracy after merge
 
 ### 4.2 Metadata Merge
-- [ ] 4.2.1 Implement metric metadata merge (sum counts, union keys)
-- [ ] 4.2.2 Implement span metadata merge
-- [ ] 4.2.3 Implement log metadata merge
-- [ ] 4.2.4 Implement attribute catalog merge
+- [x] 4.2.1 Implement metric metadata merge (sum counts, union keys) → Uses existing MergeMetricMetadata
+- [x] 4.2.2 Implement span metadata merge → Uses StoreSpan with merge logic
+- [x] 4.2.3 Implement log metadata merge → Uses StoreLog with merge logic
+- [x] 4.2.4 Implement attribute catalog merge → Added MergeAttribute method
 - [x] 4.2.5 Handle timestamp merge (min FirstSeen, max LastSeen)
 - [ ] 4.2.6 Write integration tests for multi-session merge
 
