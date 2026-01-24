@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -11,8 +12,9 @@ import (
 
 // TracesAnalyzer extracts metadata from OTLP traces.
 type TracesAnalyzer struct {
-	catalog      AttributeCatalog
+	catalog           AttributeCatalog
 	spanNameAnalyzers map[string]*SpanNameAnalyzer // per span name
+	mu                sync.RWMutex                 // protects spanNameAnalyzers
 }
 
 // NewTracesAnalyzer creates a new traces analyzer.
@@ -72,14 +74,19 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 					}
 					
 					// Initialize span name analyzer for this span name
+					a.mu.Lock()
 					a.spanNameAnalyzers[key] = NewSpanNameAnalyzer()
+					a.mu.Unlock()
 				}
 
 				metadata := spanMap[key]
 				metadata.SampleCount++
 				
 				// Track span name pattern
-				if analyzer, ok := a.spanNameAnalyzers[key]; ok {
+				a.mu.RLock()
+				analyzer, ok := a.spanNameAnalyzers[key]
+				a.mu.RUnlock()
+				if ok {
 					analyzer.AddSpanName(span.Name)
 				}
 
@@ -228,7 +235,10 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 		}
 		
 		// Populate span name patterns
-		if analyzer, ok := a.spanNameAnalyzers[spanName]; ok {
+		a.mu.RLock()
+		analyzer, ok := a.spanNameAnalyzers[spanName]
+		a.mu.RUnlock()
+		if ok {
 			metadata.NamePatterns = analyzer.GetPatterns()
 		}
 		
