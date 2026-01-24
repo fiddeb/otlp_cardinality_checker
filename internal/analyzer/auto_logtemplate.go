@@ -5,8 +5,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
+	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
 )
 
 // AutoLogBodyAnalyzer uses the autotemplate miner for log template extraction
