@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,11 +13,36 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// StoreAccessor provides read/write access to the main telemetry store.
+type StoreAccessor interface {
+	// GetAll returns all metadata from the store
+	GetAll(ctx context.Context) (
+		metrics []*models.MetricMetadata,
+		spans []*models.SpanMetadata,
+		logs []*models.LogMetadata,
+		attrs []*models.AttributeMetadata,
+		services []string,
+		err error,
+	)
+	// MergeMetric merges a metric into the store
+	MergeMetric(ctx context.Context, metric *models.MetricMetadata) error
+	// MergeSpan merges a span into the store
+	MergeSpan(ctx context.Context, span *models.SpanMetadata) error
+	// MergeLog merges a log into the store
+	MergeLog(ctx context.Context, log *models.LogMetadata) error
+	// MergeAttribute merges an attribute into the store
+	MergeAttribute(ctx context.Context, attr *models.AttributeMetadata) error
+	// Clear removes all data from the store
+	Clear(ctx context.Context) error
+}
+
 // SessionHandler handles session-related API requests.
 type SessionHandler struct {
-	store      *sessions.Store
-	serializer *sessions.Serializer
-	mainStore  func() (
+	store        *sessions.Store
+	serializer   *sessions.Serializer
+	storeAccess  StoreAccessor
+	// Legacy getter for backward compatibility
+	mainStore func() (
 		metrics []*models.MetricMetadata,
 		spans []*models.SpanMetadata,
 		logs []*models.LogMetadata,
@@ -39,6 +65,18 @@ func NewSessionHandler(store *sessions.Store, mainStoreGetter func() (
 		store:      store,
 		serializer: sessions.NewSerializer(),
 		mainStore:  mainStoreGetter,
+	}
+}
+
+// NewSessionHandlerWithStore creates a session handler with full store access.
+func NewSessionHandlerWithStore(sessionStore *sessions.Store, storeAccess StoreAccessor) *SessionHandler {
+	return &SessionHandler{
+		store:       sessionStore,
+		serializer:  sessions.NewSerializer(),
+		storeAccess: storeAccess,
+		mainStore: func() ([]*models.MetricMetadata, []*models.SpanMetadata, []*models.LogMetadata, []*models.AttributeMetadata, []string, error) {
+			return storeAccess.GetAll(context.Background())
+		},
 	}
 }
 
@@ -239,7 +277,22 @@ func (h *SessionHandler) MergeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return session data for merging - actual merge would be handled by caller
+	// If we have store access, perform actual merge
+	if h.storeAccess != nil {
+		mergedCounts, err := h.performMerge(ctx, session)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to merge session: "+err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": "Session merged successfully",
+			"session": session.ID,
+			"merged":  mergedCounts,
+		})
+		return
+	}
+
+	// Legacy: Return session data for client-side merging
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Session ready for merge",
 		"session": session.ID,
@@ -247,6 +300,74 @@ func (h *SessionHandler) MergeSession(w http.ResponseWriter, r *http.Request) {
 		"data":    session.Data,
 		"action":  "merge",
 	})
+}
+
+// performMerge merges session data into the main store.
+func (h *SessionHandler) performMerge(ctx context.Context, session *models.Session) (map[string]int, error) {
+	counts := map[string]int{
+		"metrics":    0,
+		"spans":      0,
+		"logs":       0,
+		"attributes": 0,
+	}
+
+	// Merge metrics
+	if len(session.Data.Metrics) > 0 {
+		metrics, err := h.serializer.UnmarshalMetrics(session.Data.Metrics)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range metrics {
+			if err := h.storeAccess.MergeMetric(ctx, m); err != nil {
+				return nil, err
+			}
+			counts["metrics"]++
+		}
+	}
+
+	// Merge spans
+	if len(session.Data.Spans) > 0 {
+		spans, err := h.serializer.UnmarshalSpans(session.Data.Spans)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range spans {
+			if err := h.storeAccess.MergeSpan(ctx, s); err != nil {
+				return nil, err
+			}
+			counts["spans"]++
+		}
+	}
+
+	// Merge logs
+	if len(session.Data.Logs) > 0 {
+		logs, err := h.serializer.UnmarshalLogs(session.Data.Logs)
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range logs {
+			if err := h.storeAccess.MergeLog(ctx, l); err != nil {
+				return nil, err
+			}
+			counts["logs"]++
+		}
+	}
+
+	// Merge attributes
+	if len(session.Data.Attributes) > 0 {
+		attrs, err := h.serializer.UnmarshalAttributes(session.Data.Attributes)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range attrs {
+			if err := h.storeAccess.MergeAttribute(ctx, a); err != nil {
+				return nil, err
+			}
+			counts["attributes"]++
+		}
+	}
+
+	return counts, nil
 }
 
 // ExportSession downloads a session as JSON.
