@@ -22,7 +22,7 @@
 - [x] 1.3.2 Add `UnmarshalSession()` method → Created in serializer.go
 - [x] 1.3.3 Implement HLL register serialization (base64)
 - [x] 1.3.4 Handle nil HLL gracefully during serialization
-- [ ] 1.3.5 Write tests for large session serialization (50k+ metrics)
+- [x] 1.3.5 Write tests for large session serialization (50k+ metrics)
 
 ## Phase 2: Session API
 
