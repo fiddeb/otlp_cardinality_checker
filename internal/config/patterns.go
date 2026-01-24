@@ -81,6 +81,12 @@ func DefaultPatterns() []CompiledPattern {
 			Description: "Email addresses",
 		},
 		{
+			Name:        "service_method",
+			Regex:       regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9_-]*)/([a-zA-Z][a-zA-Z0-9]+)$`),
+			Placeholder: "$1/<METHOD>",
+			Description: "gRPC or internal service/method style spans",
+		},
+		{
 			Name:        "url",
 			Regex:       regexp.MustCompile(`https?://[^\s]+|\s(/[a-zA-Z0-9/_.-]+)`),
 			Placeholder: " <URL>",
