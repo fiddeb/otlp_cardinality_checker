@@ -47,14 +47,28 @@ Skip proposal for:
 4. Run `openspec validate <id> --strict` and resolve any issues before sharing the proposal.
 
 ### Stage 2: Implementing Changes
-Track these steps as TODOs and complete them one by one.
-1. **Read proposal.md** - Understand what's being built
-2. **Read design.md** (if exists) - Review technical decisions
-3. **Read tasks.md** - Get implementation checklist
-4. **Implement tasks sequentially** - Complete in order
-5. **Confirm completion** - Ensure every item in `tasks.md` is finished before updating statuses
-6. **Update checklist** - After all work is done, set every task to `- [x]` so the list reflects reality
-7. **Approval gate** - Do not start implementation until the proposal is reviewed and approved
+
+**Starting Implementation:**
+1. Create a feature branch from main: `git checkout -b feature/<change-id>`
+2. Read proposal.md, design.md (if exists), and tasks.md
+
+**Implementation Loop (per task):**
+1. Implement the task
+2. Run build: `go build ./...` (or project-appropriate build command)
+3. Run tests: `go test ./...` (or project-appropriate test command)
+4. When build and tests pass:
+   - Update tasks.md: mark task as `- [x]`
+   - Commit with descriptive message: `git commit -am "<type>: <description>"`
+5. Repeat for each task
+
+**Commit Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`
+
+**Completion:**
+1. Ensure every item in tasks.md is marked `- [x]`
+2. Push branch: `git push -u origin feature/<change-id>`
+3. Create Pull Request to main (never merge directly)
+
+**Approval gate:** Do not start implementation until the proposal is reviewed and approved
 
 ### Stage 3: Archiving Changes
 After deployment, create separate PR to:
