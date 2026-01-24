@@ -33,6 +33,14 @@
 - [x] 5.2 Update USAGE.md with span pattern analysis examples
 - [x] 5.3 Add inline code comments explaining pattern matching logic
 
+## 6. UI Integration
+
+- [x] 6.1 Add Patterns column to TracesView.jsx showing per-span pattern count
+- [x] 6.2 Add `/api/v1/span-patterns` endpoint for global pattern aggregation
+- [x] 6.3 Implement `GetSpanPatterns()` in storage interface and memory store
+- [x] 6.4 Create `TracePatterns.jsx` component with multi-span pattern highlighting
+- [x] 6.5 Add "Trace Patterns" tab to App.jsx navigation
+
 ## Dependencies
 
 - Tasks 2.x must complete before 3.x (analyzer needed for integration)
