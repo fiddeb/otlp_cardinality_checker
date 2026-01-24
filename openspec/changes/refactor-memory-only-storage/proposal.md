@@ -6,7 +6,8 @@ Remove all database persistence (ClickHouse, dual-mode) and simplify the applica
 
 ## Status
 - **Created**: 2026-01-24
-- **State**: Draft
+- **State**: Complete
+- **Completed**: 2026-01-24
 - **Breaking**: Yes (API responses may change, deployment configuration changes)
 
 ## Why
@@ -234,14 +235,14 @@ services:
 
 ## Success Criteria
 
-- [ ] All ClickHouse code removed (`internal/storage/clickhouse/`, `internal/storage/dual/`)
-- [ ] ClickHouse dependencies removed from `go.mod`
-- [ ] All tests pass (remove ClickHouse integration tests)
-- [ ] Application builds successfully
-- [ ] Memory storage handles full feature set (metrics, traces, logs, attributes, patterns)
-- [ ] Documentation updated (README, project.md, etc.)
-- [ ] Deployment manifests updated (k8s, Dockerfile)
-- [ ] No references to ClickHouse remain in codebase (search for "clickhouse", "ClickHouse")
+- [x] All ClickHouse code removed (`internal/storage/clickhouse/`, `internal/storage/dual/`)
+- [x] ClickHouse dependencies removed from `go.mod`
+- [x] All tests pass (remove ClickHouse integration tests)
+- [x] Application builds successfully
+- [x] Memory storage handles full feature set (metrics, traces, logs, attributes, patterns)
+- [x] Documentation updated (README, project.md, etc.)
+- [x] Deployment manifests updated (k8s, Dockerfile)
+- [x] No references to ClickHouse remain in codebase (except archive)
 
 ## Timeline
 
