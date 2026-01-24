@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
-	"github.com/fidde/otlp_cardinality_checker/internal/config"
+	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
 )
 
 // AutoLogBodyAnalyzer uses the autotemplate miner for log template extraction
@@ -17,7 +17,7 @@ type AutoLogBodyAnalyzer struct {
 	total     int64
 	
 	// Optional pre-masking patterns (applied before miner)
-	patterns []config.CompiledPattern
+	patterns []patterns.CompiledPattern
 }
 
 // NewAutoLogBodyAnalyzer creates a new auto-template analyzer
@@ -26,10 +26,10 @@ func NewAutoLogBodyAnalyzer(minerCfg autotemplate.Config) *AutoLogBodyAnalyzer {
 }
 
 // NewAutoLogBodyAnalyzerWithPatterns creates analyzer with pre-masking patterns
-func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, patterns []config.CompiledPattern) *AutoLogBodyAnalyzer {
-	if patterns == nil {
+func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, pats []patterns.CompiledPattern) *AutoLogBodyAnalyzer {
+	if pats == nil {
 		// Use default patterns for pre-masking
-		patterns = config.DefaultPatterns()
+		pats = patterns.DefaultPatterns()
 	}
 	
 	miner := autotemplate.NewShardedMiner(minerCfg)
@@ -37,7 +37,7 @@ func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, patterns [
 	return &AutoLogBodyAnalyzer{
 		miner:     miner,
 		templates: make(map[string]*LogTemplate),
-		patterns:  patterns,
+		patterns:  pats,
 	}
 }
 
