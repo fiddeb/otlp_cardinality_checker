@@ -123,7 +123,8 @@ function TracePatterns({ onViewDetails }) {
         <section className="pattern-section">
           <h3>High Cardinality Patterns ({multiSpanPatterns.length})</h3>
           <p className="section-info">
-            These patterns match multiple distinct span names - dynamic values (IDs, timestamps) in span names.
+            Patterns with 2+ variants = multiple span names normalized to the same pattern.
+            This indicates dynamic values (IDs, paths) embedded in span names.
           </p>
           <div className="pattern-list">
             {multiSpanPatterns.map((pg, idx) => {
@@ -241,7 +242,7 @@ function TracePatterns({ onViewDetails }) {
                           {example}
                         </span>
                       ) : (
-                        <span className="same-as-pattern">= pattern</span>
+                        <span className="no-example">-</span>
                       )}
                     </td>
                     <td>
@@ -438,10 +439,8 @@ function TracePatterns({ onViewDetails }) {
         .row-normalized {
           background: rgba(124, 58, 237, 0.1);
         }
-        .same-as-pattern {
+        .no-example {
           color: var(--text-tertiary);
-          font-style: italic;
-          font-size: 0.9em;
         }
         .empty-state {
           text-align: center;
