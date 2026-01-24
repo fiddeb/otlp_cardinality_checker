@@ -1,0 +1,39 @@
+OTLP Cardinality Checker
+Copyright 2025 Fredrik Berggren
+
+This product includes software developed at
+https://github.com/fiddeb/otlp_cardinality_checker
+
+---
+
+Log Template Extraction
+
+The automatic log template extraction feature uses the Drain algorithm
+as described in:
+
+  "Drain: An Online Log Parsing Approach with Fixed Depth Tree"
+  Pinjia He, Jieming Zhu, Zibin Zheng, and Michael R. Lyu
+  IEEE International Conference on Web Services (ICWS), 2017
+  https://jiemingzhu.github.io/pub/pjhe_icws2017.pdf
+
+---
+
+OpenTelemetry
+
+This product uses the OpenTelemetry Protocol (OTLP) specification and
+imports packages from the OpenTelemetry project, which is licensed under
+the Apache License 2.0.
+
+  https://opentelemetry.io/
+  https://github.com/open-telemetry/opentelemetry-proto
+
+---
+
+HyperLogLog
+
+The cardinality estimation feature uses the HyperLogLog algorithm as
+described in:
+
+  "HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm"
+  Philippe Flajolet, Éric Fusy, Olivier Gandouet, and Frédéric Meunier
+  Conference on Analysis of Algorithms (AofA), 2007
