@@ -62,7 +62,7 @@ func TestDefaultPatterns(t *testing.T) {
 	}
 	
 	// Verify we have expected patterns
-	expectedNames := []string{"timestamp", "uuid", "email", "url", "duration", "size", "ip", "hex", "number"}
+	expectedNames := []string{"timestamp", "uuid", "email", "service_method", "url", "duration", "size", "ip", "hex", "number"}
 	if len(patterns) != len(expectedNames) {
 		t.Errorf("Expected %d default patterns, got %d", len(expectedNames), len(patterns))
 	}
@@ -70,6 +70,45 @@ func TestDefaultPatterns(t *testing.T) {
 	for i, expected := range expectedNames {
 		if patterns[i].Name != expected {
 			t.Errorf("Pattern %d: expected name '%s', got '%s'", i, expected, patterns[i].Name)
+		}
+	}
+}
+
+func TestServiceMethodPattern(t *testing.T) {
+	patterns := DefaultPatterns()
+	
+	// Find service_method pattern
+	var pattern *CompiledPattern
+	for i := range patterns {
+		if patterns[i].Name == "service_method" {
+			pattern = &patterns[i]
+			break
+		}
+	}
+	
+	if pattern == nil {
+		t.Fatal("service_method pattern not found")
+	}
+	
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"user-service/resetPassword", "user-service/<METHOD>"},
+		{"user-service/getUserProfile", "user-service/<METHOD>"},
+		{"order-service/createOrder", "order-service/<METHOD>"},
+		{"product-service/getProductDetails", "product-service/<METHOD>"},
+		{"cache/get", "cache/<METHOD>"},
+		{"db/query", "db/<METHOD>"},
+		// Should NOT match these
+		{"GET /api/v1/users", "GET /api/v1/users"},               // HTTP method with URL
+		{"POST /api/v1/orders/create", "POST /api/v1/orders/create"}, // HTTP method with URL
+	}
+	
+	for _, tt := range tests {
+		result := pattern.Regex.ReplaceAllString(tt.input, pattern.Placeholder)
+		if result != tt.expected {
+			t.Errorf("Input: %q\nExpected: %q\nGot: %q", tt.input, tt.expected, result)
 		}
 	}
 }
