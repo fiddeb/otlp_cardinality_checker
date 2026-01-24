@@ -11,18 +11,22 @@ import (
 
 // TracesAnalyzer extracts metadata from OTLP traces.
 type TracesAnalyzer struct {
-	catalog AttributeCatalog
+	catalog      AttributeCatalog
+	spanNameAnalyzers map[string]*SpanNameAnalyzer // per span name
 }
 
 // NewTracesAnalyzer creates a new traces analyzer.
 func NewTracesAnalyzer() *TracesAnalyzer {
-	return &TracesAnalyzer{}
+	return &TracesAnalyzer{
+		spanNameAnalyzers: make(map[string]*SpanNameAnalyzer),
+	}
 }
 
 // NewTracesAnalyzerWithCatalog creates a new traces analyzer with attribute catalog.
 func NewTracesAnalyzerWithCatalog(catalog AttributeCatalog) *TracesAnalyzer {
 	return &TracesAnalyzer{
-		catalog: catalog,
+		catalog:      catalog,
+		spanNameAnalyzers: make(map[string]*SpanNameAnalyzer),
 	}
 }
 
@@ -66,10 +70,18 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 							spanMap[key].ResourceKeys[resKey] = models.NewKeyMetadata()
 						}
 					}
+					
+					// Initialize span name analyzer for this span name
+					a.spanNameAnalyzers[key] = NewSpanNameAnalyzer()
 				}
 
 				metadata := spanMap[key]
 				metadata.SampleCount++
+				
+				// Track span name pattern
+				if analyzer, ok := a.spanNameAnalyzers[key]; ok {
+					analyzer.AddSpanName(span.Name)
+				}
 
 				// Track service
 				if serviceName != "" {
@@ -200,7 +212,7 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 
 	// Convert map to slice and calculate percentages
 	results := make([]*models.SpanMetadata, 0, len(spanMap))
-	for _, metadata := range spanMap {
+	for spanName, metadata := range spanMap {
 		// Calculate percentages for attribute keys
 		for _, keyMeta := range metadata.AttributeKeys {
 			if metadata.SampleCount > 0 {
@@ -213,6 +225,11 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 			if metadata.SampleCount > 0 {
 				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
 			}
+		}
+		
+		// Populate span name patterns
+		if analyzer, ok := a.spanNameAnalyzers[spanName]; ok {
+			metadata.NamePatterns = analyzer.GetPatterns()
 		}
 		
 		results = append(results, metadata)

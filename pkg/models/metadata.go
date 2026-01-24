@@ -126,6 +126,10 @@ type SpanMetadata struct {
 	// ScopeInfo contains instrumentation scope information
 	ScopeInfo *ScopeMetadata `json:"scope_info,omitempty"`
 
+	// NamePatterns contains extracted patterns from span names
+	// Helps identify dynamic values in span names (e.g., IDs, timestamps)
+	NamePatterns []*SpanNamePattern `json:"name_patterns,omitempty"`
+
 	// SampleCount is the total number of spans observed with this name
 	SampleCount int64 `json:"sample_count"`
 
@@ -213,6 +217,14 @@ type BodyTemplate struct {
 	Count      int64   `json:"count"`
 	Percentage float64 `json:"percentage"`
 	Example    string  `json:"example"` // First sample that matched this template
+}
+
+// SpanNamePattern represents a pattern extracted from span names
+type SpanNamePattern struct {
+	Template   string   `json:"template"`   // Pattern: "GET /users/<NUM>"
+	Count      int64    `json:"count"`      // How many spans matched
+	Percentage float64  `json:"percentage"` // % of total spans
+	Examples   []string `json:"examples"`   // First 3 unique examples
 }
 
 // KeyMetadata tracks statistics about a specific attribute/label key.
