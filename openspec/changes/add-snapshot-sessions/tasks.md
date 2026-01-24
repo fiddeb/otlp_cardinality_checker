@@ -32,20 +32,20 @@
 - [x] 2.1.3 Implement `GET /api/v1/sessions/{name}` - get session metadata
 - [x] 2.1.4 Implement `DELETE /api/v1/sessions/{name}` - delete session
 - [x] 2.1.5 Add request validation (name format, size limits)
-- [ ] 2.1.6 Write API tests for all CRUD operations
+- [x] 2.1.6 Write API tests for all CRUD operations
 
 ### 2.2 Load and Merge Endpoints
 - [x] 2.2.1 Implement `POST /api/v1/sessions/{name}/load` - load session
 - [x] 2.2.2 Implement `POST /api/v1/sessions/{name}/merge` - merge into current
 - [ ] 2.2.3 Add `signals` filter parameter (metrics, traces, logs)
 - [ ] 2.2.4 Add `services` filter parameter
-- [ ] 2.2.5 Write tests for filtered load/merge
+- [x] 2.2.5 Write tests for filtered load/merge
 
 ### 2.3 Export/Import Endpoints
 - [x] 2.3.1 Implement `GET /api/v1/sessions/{name}/export` - download session JSON
 - [x] 2.3.2 Implement `POST /api/v1/sessions/import` - upload session JSON
 - [ ] 2.3.3 Add Content-Type handling (application/json, application/gzip)
-- [ ] 2.3.4 Write tests for export/import round-trip
+- [x] 2.3.4 Write tests for export/import round-trip
 
 ## Phase 3: Diff Engine
 
