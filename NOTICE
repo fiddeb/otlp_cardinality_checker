@@ -30,6 +30,20 @@ the Apache License 2.0.
 
   https://opentelemetry.io/
   https://github.com/open-telemetry/opentelemetry-proto
+  https://github.com/open-telemetry/opentelemetry-collector
+
+We are grateful to the OpenTelemetry community for the OTLP specification
+and the OpenTelemetry Collector SDK that makes building OTLP receivers
+straightforward.
+
+---
+
+Go Programming Language
+
+This project is built with Go and benefits from the excellent tooling,
+standard library, and community support that the Go ecosystem provides.
+
+  https://go.dev/
 
 ---
 
