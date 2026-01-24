@@ -35,9 +35,9 @@ function TracePatterns({ onViewDetails }) {
     }))
   }
 
-  // Check if a pattern was normalized (contains placeholders like <NUM>, <URL>, <HEX>, <UUID>)
+  // Check if a pattern was normalized (contains any placeholder like <NUM>, <URL>, <METHOD>, etc.)
   const isNormalized = (pattern) => {
-    return /<(NUM|URL|HEX|UUID|ID|DATE|TIME|TIMESTAMP)>/i.test(pattern)
+    return /<[A-Z_]+>/i.test(pattern)
   }
 
   // Get an example span name that differs from the pattern
