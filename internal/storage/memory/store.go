@@ -932,7 +932,102 @@ func (s *Store) trackServices(services map[string]int64) {
 	}
 }
 
+// spanKindToString converts a span kind int32 to a human-readable string.
+func spanKindToString(kind int32) string {
+	switch kind {
+	case 0:
+		return "Unspecified"
+	case 1:
+		return "Internal"
+	case 2:
+		return "Server"
+	case 3:
+		return "Client"
+	case 4:
+		return "Producer"
+	case 5:
+		return "Consumer"
+	default:
+		return "Unknown"
+	}
+}
+
 // Close cleans up resources (no-op for in-memory store).
 func (s *Store) Close() error {
 	return nil
+}
+
+// GetSpanPatterns aggregates span names into patterns globally.
+// Returns patterns with matching spans grouped together.
+func (s *Store) GetSpanPatterns(ctx context.Context) (*models.SpanPatternResponse, error) {
+	s.spansmu.RLock()
+	defer s.spansmu.RUnlock()
+
+	// Group spans by their extracted patterns
+	patternMap := make(map[string]*models.SpanPatternGroup)
+
+	for _, span := range s.spans {
+		// Get the pattern template for this span name
+		var pattern string
+		if len(span.NamePatterns) > 0 {
+			pattern = span.NamePatterns[0].Template
+		} else {
+			// If no pattern was extracted, the span name itself is the pattern
+			pattern = span.Name
+		}
+
+		// Get or create pattern group
+		pg, exists := patternMap[pattern]
+		if !exists {
+			pg = &models.SpanPatternGroup{
+				Pattern:       pattern,
+				MatchingSpans: []models.SpanPatternMatch{},
+				TotalSamples:  0,
+				SpanCount:     0,
+			}
+			patternMap[pattern] = pg
+		}
+
+		// Extract service names
+		services := make([]string, 0, len(span.Services))
+		for svc := range span.Services {
+			services = append(services, svc)
+		}
+
+		// Convert span kind to string
+		kindStr := spanKindToString(span.Kind)
+
+		// Add this span to the pattern group
+		pg.MatchingSpans = append(pg.MatchingSpans, models.SpanPatternMatch{
+			SpanName:    span.Name,
+			SampleCount: span.SampleCount,
+			Services:    services,
+			Kind:        kindStr,
+		})
+		pg.TotalSamples += span.SampleCount
+		pg.SpanCount++
+	}
+
+	// Convert to slice and sort by span count (most matches first)
+	patterns := make([]models.SpanPatternGroup, 0, len(patternMap))
+	for _, pg := range patternMap {
+		// Sort matching spans by sample count
+		sort.Slice(pg.MatchingSpans, func(i, j int) bool {
+			return pg.MatchingSpans[i].SampleCount > pg.MatchingSpans[j].SampleCount
+		})
+		patterns = append(patterns, *pg)
+	}
+
+	// Sort patterns: multi-span patterns first, then by total samples
+	sort.Slice(patterns, func(i, j int) bool {
+		if patterns[i].SpanCount != patterns[j].SpanCount {
+			return patterns[i].SpanCount > patterns[j].SpanCount
+		}
+		return patterns[i].TotalSamples > patterns[j].TotalSamples
+	})
+
+	return &models.SpanPatternResponse{
+		Patterns: patterns,
+		Total:    len(patterns),
+	}, nil
 }

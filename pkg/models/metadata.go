@@ -227,6 +227,28 @@ type SpanNamePattern struct {
 	Examples   []string `json:"examples"`   // First 3 unique examples
 }
 
+// SpanPatternGroup represents an aggregated pattern across multiple span names.
+type SpanPatternGroup struct {
+	Pattern       string             `json:"pattern"`
+	MatchingSpans []SpanPatternMatch `json:"matching_spans"`
+	TotalSamples  int64              `json:"total_samples"`
+	SpanCount     int                `json:"span_count"`
+}
+
+// SpanPatternMatch represents a span that matches a pattern.
+type SpanPatternMatch struct {
+	SpanName    string   `json:"span_name"`
+	SampleCount int64    `json:"sample_count"`
+	Services    []string `json:"services"`
+	Kind        string   `json:"kind"`
+}
+
+// SpanPatternResponse is the API response for span patterns.
+type SpanPatternResponse struct {
+	Patterns []SpanPatternGroup `json:"patterns"`
+	Total    int                `json:"total"`
+}
+
 // KeyMetadata tracks statistics about a specific attribute/label key.
 type KeyMetadata struct {
 	// Count is the number of times this key has been observed
