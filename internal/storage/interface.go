@@ -4,7 +4,7 @@ package storage
 import (
 	"context"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
+	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 )
 

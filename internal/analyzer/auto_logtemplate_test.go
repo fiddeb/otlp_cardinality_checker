@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
+	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
 )
 
 func TestAutoLogBodyAnalyzer(t *testing.T) {

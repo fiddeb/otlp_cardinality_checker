@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/analyzer/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
+	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 )
