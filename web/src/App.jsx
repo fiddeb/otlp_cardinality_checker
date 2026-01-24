@@ -4,6 +4,7 @@ import MetadataComplexity from './components/MetadataComplexity'
 import MetricsView from './components/MetricsView'
 import MetricsOverview from './components/MetricsOverview'
 import TracesView from './components/TracesView'
+import TracePatterns from './components/TracePatterns'
 import LogsView from './components/LogsView'
 import ServiceExplorer from './components/ServiceExplorer'
 import Details from './components/Details'
@@ -252,6 +253,15 @@ function App() {
             Traces
           </button>
           <button 
+            className={`tab ${activeTab === 'trace-patterns' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('trace-patterns')
+              setNavigationHistory([])
+            }}
+          >
+            Trace Patterns
+          </button>
+          <button 
             className={`tab ${activeTab === 'logs' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('logs')
@@ -312,6 +322,10 @@ function App() {
 
       {activeTab === 'traces' && (
         <TracesView onViewDetails={handleViewDetails} />
+      )}
+
+      {activeTab === 'trace-patterns' && (
+        <TracePatterns onViewDetails={handleViewDetails} />
       )}
 
       {activeTab === 'logs' && (

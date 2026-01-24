@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -11,18 +12,23 @@ import (
 
 // TracesAnalyzer extracts metadata from OTLP traces.
 type TracesAnalyzer struct {
-	catalog AttributeCatalog
+	catalog           AttributeCatalog
+	spanNameAnalyzers map[string]*SpanNameAnalyzer // per span name
+	mu                sync.RWMutex                 // protects spanNameAnalyzers
 }
 
 // NewTracesAnalyzer creates a new traces analyzer.
 func NewTracesAnalyzer() *TracesAnalyzer {
-	return &TracesAnalyzer{}
+	return &TracesAnalyzer{
+		spanNameAnalyzers: make(map[string]*SpanNameAnalyzer),
+	}
 }
 
 // NewTracesAnalyzerWithCatalog creates a new traces analyzer with attribute catalog.
 func NewTracesAnalyzerWithCatalog(catalog AttributeCatalog) *TracesAnalyzer {
 	return &TracesAnalyzer{
-		catalog: catalog,
+		catalog:      catalog,
+		spanNameAnalyzers: make(map[string]*SpanNameAnalyzer),
 	}
 }
 
@@ -66,10 +72,23 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 							spanMap[key].ResourceKeys[resKey] = models.NewKeyMetadata()
 						}
 					}
+					
+					// Initialize span name analyzer for this span name
+					a.mu.Lock()
+					a.spanNameAnalyzers[key] = NewSpanNameAnalyzer()
+					a.mu.Unlock()
 				}
 
 				metadata := spanMap[key]
 				metadata.SampleCount++
+				
+				// Track span name pattern
+				a.mu.RLock()
+				analyzer, ok := a.spanNameAnalyzers[key]
+				a.mu.RUnlock()
+				if ok {
+					analyzer.AddSpanName(span.Name)
+				}
 
 				// Track service
 				if serviceName != "" {
@@ -200,7 +219,7 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 
 	// Convert map to slice and calculate percentages
 	results := make([]*models.SpanMetadata, 0, len(spanMap))
-	for _, metadata := range spanMap {
+	for spanName, metadata := range spanMap {
 		// Calculate percentages for attribute keys
 		for _, keyMeta := range metadata.AttributeKeys {
 			if metadata.SampleCount > 0 {
@@ -213,6 +232,14 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 			if metadata.SampleCount > 0 {
 				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
 			}
+		}
+		
+		// Populate span name patterns
+		a.mu.RLock()
+		analyzer, ok := a.spanNameAnalyzers[spanName]
+		a.mu.RUnlock()
+		if ok {
+			metadata.NamePatterns = analyzer.GetPatterns()
 		}
 		
 		results = append(results, metadata)
