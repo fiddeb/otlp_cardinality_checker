@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/config"
+	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
 )
 
 // LogTemplate represents a pattern extracted from log messages
@@ -27,7 +27,7 @@ type LogBodyAnalyzer struct {
 	total     int64
 	
 	// Compiled patterns from config
-	patterns []config.CompiledPattern
+	patterns []patterns.CompiledPattern
 }
 
 // NewLogBodyAnalyzer creates a new log body analyzer
@@ -36,15 +36,15 @@ func NewLogBodyAnalyzer() *LogBodyAnalyzer {
 }
 
 // NewLogBodyAnalyzerWithPatterns creates a new analyzer with custom patterns
-func NewLogBodyAnalyzerWithPatterns(patterns []config.CompiledPattern) *LogBodyAnalyzer {
-	if patterns == nil {
+func NewLogBodyAnalyzerWithPatterns(pats []patterns.CompiledPattern) *LogBodyAnalyzer {
+	if pats == nil {
 		// Use default patterns if none provided
-		patterns = config.DefaultPatterns()
+		pats = patterns.DefaultPatterns()
 	}
 	
 	return &LogBodyAnalyzer{
 		templates: make(map[uint64]*LogTemplate),
-		patterns:  patterns,
+		patterns:  pats,
 	}
 }
 
