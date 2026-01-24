@@ -62,7 +62,7 @@ func TestDefaultPatterns(t *testing.T) {
 	}
 	
 	// Verify we have expected patterns
-	expectedNames := []string{"timestamp", "uuid", "email", "service_method", "url", "duration", "size", "ip", "hex", "number"}
+	expectedNames := []string{"timestamp", "uuid", "email", "sql_select", "sql_delete", "sql_update", "sql_insert", "service_method", "url", "duration", "size", "ip", "hex", "number"}
 	if len(patterns) != len(expectedNames) {
 		t.Errorf("Expected %d default patterns, got %d", len(expectedNames), len(patterns))
 	}
@@ -110,6 +110,70 @@ func TestServiceMethodPattern(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("Input: %q\nExpected: %q\nGot: %q", tt.input, tt.expected, result)
 		}
+	}
+}
+
+func TestSQLPatterns(t *testing.T) {
+	patterns := DefaultPatterns()
+	
+	// Collect SQL patterns
+	sqlPatterns := make(map[string]*CompiledPattern)
+	for i := range patterns {
+		if patterns[i].Name == "sql_select" || patterns[i].Name == "sql_delete" ||
+			patterns[i].Name == "sql_update" || patterns[i].Name == "sql_insert" {
+			sqlPatterns[patterns[i].Name] = &patterns[i]
+		}
+	}
+	
+	tests := []struct {
+		name     string
+		pattern  string
+		input    string
+		expected string
+	}{
+		{
+			"SELECT with WHERE",
+			"sql_select",
+			"db/query: SELECT FROM users WHERE id = ?",
+			"db/query: SELECT FROM users <WHERE>",
+		},
+		{
+			"SELECT with columns and WHERE",
+			"sql_select",
+			"db/query: SELECT id, name FROM users WHERE active = 1",
+			"db/query: SELECT id, name FROM users <WHERE>",
+		},
+		{
+			"DELETE with WHERE",
+			"sql_delete",
+			"db/query: DELETE FROM sessions WHERE userId = ?",
+			"db/query: DELETE FROM sessions <WHERE>",
+		},
+		{
+			"UPDATE with SET and WHERE",
+			"sql_update",
+			"db/query: UPDATE products SET stock = ? WHERE id = ?",
+			"db/query: UPDATE products <SET>",
+		},
+		{
+			"INSERT with VALUES",
+			"sql_insert",
+			"db/query: INSERT INTO orders VALUES (...)",
+			"db/query: INSERT INTO orders <VALUES>",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := sqlPatterns[tt.pattern]
+			if p == nil {
+				t.Fatalf("Pattern %s not found", tt.pattern)
+			}
+			result := p.Regex.ReplaceAllString(tt.input, p.Placeholder)
+			if result != tt.expected {
+				t.Errorf("Input: %q\nExpected: %q\nGot: %q", tt.input, tt.expected, result)
+			}
+		})
 	}
 }
 
