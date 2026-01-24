@@ -119,6 +119,39 @@ Response format: Same as metrics, but with span metadata
 GET /api/v1/spans/{name}
 ```
 
+Response example (with span name patterns):
+```json
+{
+  "name": "HTTP GET /api/users",
+  "kind": 2,
+  "kind_name": "Server",
+  "attribute_keys": {...},
+  "resource_keys": {...},
+  "name_patterns": [
+    {
+      "template": "HTTP GET <URL>",
+      "count": 4500,
+      "percentage": 90.0,
+      "examples": ["HTTP GET /api/users/123", "HTTP GET /api/users/456", "HTTP GET /api/users/789"]
+    },
+    {
+      "template": "HTTP GET /api/users",
+      "count": 500,
+      "percentage": 10.0,
+      "examples": ["HTTP GET /api/users"]
+    }
+  ],
+  "sample_count": 5000,
+  "services": {"my-service": 5000}
+}
+```
+
+The `name_patterns` field shows patterns extracted from span names:
+- `template`: The pattern with dynamic values replaced by placeholders (`<NUM>`, `<UUID>`, `<URL>`, etc.)
+- `count`: Number of spans matching this pattern
+- `percentage`: Percentage of total spans matching this pattern
+- `examples`: Up to 3 example span names that matched this pattern
+
 ### Logs
 
 #### List all log metadata
