@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/fidde/otlp_cardinality_checker/internal/config"
+	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 )
 
@@ -42,7 +42,7 @@ type SpanNameAnalyzer struct {
 	total    int64
 
 	// Compiled patterns from config (reused from log templates)
-	compiledPatterns []config.CompiledPattern
+	compiledPatterns []patterns.CompiledPattern
 
 	// MaxExamples is the maximum number of example span names to keep per pattern
 	MaxExamples int
@@ -54,14 +54,14 @@ func NewSpanNameAnalyzer() *SpanNameAnalyzer {
 }
 
 // NewSpanNameAnalyzerWithPatterns creates a new analyzer with custom patterns
-func NewSpanNameAnalyzerWithPatterns(patterns []config.CompiledPattern) *SpanNameAnalyzer {
-	if patterns == nil {
-		patterns = config.DefaultPatterns()
+func NewSpanNameAnalyzerWithPatterns(pats []patterns.CompiledPattern) *SpanNameAnalyzer {
+	if pats == nil {
+		pats = patterns.DefaultPatterns()
 	}
 
 	return &SpanNameAnalyzer{
 		patterns:         make(map[uint64]*spanNameEntry),
-		compiledPatterns: patterns,
+		compiledPatterns: pats,
 		MaxExamples:      3, // Default: keep first 3 unique examples
 	}
 }
