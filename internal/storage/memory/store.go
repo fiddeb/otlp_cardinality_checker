@@ -776,15 +776,18 @@ func (s *Store) Clear(ctx context.Context) error {
 	s.metricsmu.Lock()
 	s.spansmu.Lock()
 	s.logsmu.Lock()
+	s.attributesmu.Lock()
 	s.servicesmu.Lock()
 	defer s.metricsmu.Unlock()
 	defer s.spansmu.Unlock()
 	defer s.logsmu.Unlock()
+	defer s.attributesmu.Unlock()
 	defer s.servicesmu.Unlock()
 
 	s.metrics = make(map[string]*models.MetricMetadata)
 	s.spans = make(map[string]*models.SpanMetadata)
 	s.logs = make(map[string]*models.LogMetadata)
+	s.attributes = make(map[string]*models.AttributeMetadata)
 	s.services = make(map[string]struct{})
 
 	return nil
