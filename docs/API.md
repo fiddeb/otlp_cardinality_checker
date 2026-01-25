@@ -462,3 +462,220 @@ curl -s "http://localhost:8080/api/v1/attributes" | \
 - **Sample values**: Only first 10 unique values are stored
 - **SQLite performance**: Under high load, synchronous writes can be slow (future optimization planned)
 - **No historical data**: Only tracks attributes from telemetry received while running
+
+---
+
+## Sessions API
+
+Sessions allow you to save, load, and compare snapshots of metadata state.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/sessions` | List all saved sessions |
+| POST | `/api/v1/sessions` | Create a new session |
+| GET | `/api/v1/sessions/{name}` | Get session metadata |
+| DELETE | `/api/v1/sessions/{name}` | Delete a session |
+| POST | `/api/v1/sessions/{name}/load` | Load session (replace current data) |
+| POST | `/api/v1/sessions/{name}/merge` | Merge session into current data |
+| GET | `/api/v1/sessions/{name}/export` | Download session as JSON |
+| POST | `/api/v1/sessions/import` | Upload session from JSON |
+| GET | `/api/v1/sessions/diff` | Compare two sessions |
+
+### Create Session
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "baseline-2026-01-25",
+    "description": "Pre-deploy baseline",
+    "signals": ["metrics", "traces"],
+    "services": ["payment-service"]
+  }'
+```
+
+Response:
+```json
+{
+  "message": "Session created successfully",
+  "session": {
+    "name": "baseline-2026-01-25",
+    "description": "Pre-deploy baseline",
+    "created_at": "2026-01-25T10:30:00Z",
+    "size_bytes": 1245678,
+    "signals": ["metrics", "traces"],
+    "stats": {
+      "metric_count": 150,
+      "span_count": 45,
+      "log_count": 0,
+      "attribute_count": 320
+    }
+  }
+}
+```
+
+### List Sessions
+
+```bash
+curl http://localhost:8080/api/v1/sessions
+```
+
+Response:
+```json
+{
+  "sessions": [
+    {
+      "name": "baseline-2026-01-25",
+      "created_at": "2026-01-25T10:30:00Z",
+      "size_bytes": 1245678,
+      "stats": { ... }
+    },
+    {
+      "name": "post-deploy-v2",
+      "created_at": "2026-01-25T14:15:00Z",
+      "size_bytes": 1567890,
+      "stats": { ... }
+    }
+  ],
+  "total": 2
+}
+```
+
+### Compare Sessions (Diff)
+
+```bash
+curl "http://localhost:8080/api/v1/sessions/diff?from=baseline-2026-01-25&to=post-deploy-v2"
+```
+
+Response:
+```json
+{
+  "from_session": "baseline-2026-01-25",
+  "to_session": "post-deploy-v2",
+  "summary": {
+    "total_changes": 15,
+    "critical": 2,
+    "warning": 5,
+    "info": 8
+  },
+  "changes": {
+    "metrics": {
+      "added": [
+        {
+          "name": "http_request_duration_new",
+          "severity": "warning",
+          "metadata": {
+            "active_series": 5000,
+            "label_count": 8
+          }
+        }
+      ],
+      "removed": [],
+      "changed": [
+        {
+          "name": "user_sessions",
+          "severity": "critical",
+          "details": [
+            {
+              "field": "labels.user_id.cardinality",
+              "from": 100,
+              "to": 50000,
+              "change_pct": 49900.0,
+              "severity": "critical"
+            }
+          ]
+        }
+      ]
+    },
+    "spans": { ... },
+    "logs": { ... }
+  }
+}
+```
+
+### Filter Diff by Severity
+
+```bash
+curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&min_severity=warning"
+```
+
+### Load Session
+
+Load a session, replacing the current in-memory data:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/load
+```
+
+### Merge Session
+
+Merge a session into the current data (additive):
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/merge
+```
+
+### Export/Import Sessions
+
+Export for backup or sharing:
+```bash
+curl http://localhost:8080/api/v1/sessions/baseline-2026-01-25/export > backup.json
+```
+
+Import from file:
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions/import \
+  -H "Content-Type: application/json" \
+  -d @backup.json
+```
+
+### Configuration
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `OCC_SESSION_DIR` | `./data/sessions` | Directory for session storage |
+| `OCC_MAX_SESSION_SIZE` | `104857600` (100MB) | Maximum session file size |
+| `OCC_MAX_SESSIONS` | `50` | Maximum number of saved sessions |
+
+### Use Cases
+
+#### Pre/Post Deploy Comparison
+
+```bash
+# Before deploy
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d '{"name": "pre-deploy-v2.1"}'
+
+# ... deploy happens ...
+
+# After deploy (wait for new telemetry)
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d '{"name": "post-deploy-v2.1"}'
+
+# Compare
+curl "http://localhost:8080/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post-deploy-v2.1"
+```
+
+#### Multi-Signal Analysis
+
+Save different signals from separate test runs and merge them:
+
+```bash
+# Day 1: Collect metrics
+curl -X POST -d '{"name": "metrics-jan25", "signals": ["metrics"]}' \
+  http://localhost:8080/api/v1/sessions
+
+# Day 2: Collect traces
+curl -X POST -d '{"name": "traces-jan26", "signals": ["traces"]}' \
+  http://localhost:8080/api/v1/sessions
+
+# Merge traces into metrics session view
+curl -X POST http://localhost:8080/api/v1/sessions/metrics-jan25/load
+curl -X POST http://localhost:8080/api/v1/sessions/traces-jan26/merge
+
+# Save combined view
+curl -X POST -d '{"name": "combined-jan25-26"}' \
+  http://localhost:8080/api/v1/sessions
+```

@@ -628,6 +628,53 @@ func (m *MetricMetadata) CalculateActiveSeries() int64 {
 	return m.GetActiveSeries()
 }
 
+// MarshalSeriesHLL serializes the series HLL to bytes for session storage.
+func (m *MetricMetadata) MarshalSeriesHLL() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.seriesHLL == nil {
+		return nil, nil
+	}
+	return m.seriesHLL.MarshalBinary()
+}
+
+// UnmarshalSeriesHLL deserializes series HLL from bytes.
+func (m *MetricMetadata) UnmarshalSeriesHLL(data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(data) == 0 {
+		return nil
+	}
+
+	hll, err := hyperloglog.FromBytes(data)
+	if err != nil {
+		return err
+	}
+
+	m.seriesHLL = hll
+	m.ActiveSeries = int64(hll.Count())
+	return nil
+}
+
+// GetSeriesHLL returns the series HLL for session serialization.
+func (m *MetricMetadata) GetSeriesHLL() *hyperloglog.HyperLogLog {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.seriesHLL
+}
+
+// SetSeriesHLL sets the series HLL from session deserialization.
+func (m *MetricMetadata) SetSeriesHLL(hll *hyperloglog.HyperLogLog) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.seriesHLL = hll
+	if hll != nil {
+		m.ActiveSeries = int64(hll.Count())
+	}
+}
+
 // ServiceOverview contains a summary of all telemetry for a service.
 // This is used by the API to provide aggregated views across all signal types.
 type ServiceOverview struct {

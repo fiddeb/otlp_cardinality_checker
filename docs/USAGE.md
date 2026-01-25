@@ -1633,6 +1633,493 @@ For comprehensive K6 load testing examples, see [scripts/README.md](scripts/READ
 
 ---
 
+## 📸 Working with Sessions
+
+Sessions allow you to save snapshots of metadata state, compare versions, and analyze changes over time. This is essential for pre/post deployment comparisons and incremental telemetry analysis.
+
+### Session Basics
+
+#### Save Current State as Session
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "baseline-2026-01-25",
+    "description": "Pre-deploy baseline",
+    "signals": ["metrics", "traces"],
+    "services": ["payment-service"]
+  }'
+```
+
+**Response:**
+```json
+{
+  "message": "Session created successfully",
+  "session": {
+    "name": "baseline-2026-01-25",
+    "created_at": "2026-01-25T10:30:00Z",
+    "size_bytes": 1245678,
+    "stats": {
+      "metric_count": 150,
+      "span_count": 45
+    }
+  }
+}
+```
+
+---
+
+#### List All Sessions
+
+```bash
+curl http://localhost:8080/api/v1/sessions
+```
+
+**Response:**
+```json
+{
+  "sessions": [
+    {
+      "name": "baseline-2026-01-25",
+      "created_at": "2026-01-25T10:30:00Z",
+      "size_bytes": 1245678
+    },
+    {
+      "name": "post-deploy-v2",
+      "created_at": "2026-01-25T14:15:00Z",
+      "size_bytes": 1567890
+    }
+  ],
+  "total": 2
+}
+```
+
+---
+
+#### Load a Session (Replace Current Data)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/load
+```
+
+This **clears** the current in-memory state and loads the session data.
+
+---
+
+#### Merge a Session (Additive)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/merge
+```
+
+This **combines** the session data with the current state (HyperLogLog union for cardinality, sum for counts).
+
+---
+
+#### Compare Two Sessions (Diff)
+
+```bash
+curl "http://localhost:8080/api/v1/sessions/diff?from=baseline-2026-01-25&to=post-deploy-v2"
+```
+
+**Response:**
+```json
+{
+  "from_session": "baseline-2026-01-25",
+  "to_session": "post-deploy-v2",
+  "summary": {
+    "total_changes": 15,
+    "metrics": {
+      "added": 3,
+      "removed": 1,
+      "changed": 2
+    }
+  },
+  "critical_changes": [
+    {
+      "type": "changed",
+      "signal_type": "metric",
+      "name": "user_sessions",
+      "severity": "critical",
+      "details": [
+        {
+          "field": "labels.user_id.cardinality",
+          "from": 100,
+          "to": 50000,
+          "change_pct": 49900.0,
+          "severity": "critical"
+        }
+      ]
+    }
+  ],
+  "changes": {
+    "metrics": { ... },
+    "spans": { ... },
+    "logs": { ... }
+  }
+}
+```
+
+---
+
+### Session Filters
+
+#### Save Only Specific Signal Types
+
+```bash
+# Save only metrics and traces
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d '{"name": "metrics-only", "signals": ["metrics"]}'
+```
+
+#### Load Only Specific Signals
+
+```bash
+# Load only traces from a session
+curl -X POST "http://localhost:8080/api/v1/sessions/full-session/load?signals=traces"
+```
+
+#### Filter by Service
+
+```bash
+# Save only one service's data
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d '{"name": "payment-service", "services": ["payment-service"]}'
+```
+
+---
+
+### Session Export/Import
+
+#### Export Session to JSON
+
+```bash
+curl http://localhost:8080/api/v1/sessions/baseline-2026-01-25/export > backup.json
+```
+
+#### Import Session from JSON
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions/import \
+  -H "Content-Type: application/json" \
+  -d @backup.json
+```
+
+---
+
+### Session Configuration
+
+By default, sessions are stored as gzip-compressed JSON files in `data/sessions/`.
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `OCC_SESSION_DIR` | `./data/sessions` | Directory for session storage |
+| `OCC_MAX_SESSION_SIZE` | `104857600` (100MB) | Maximum session file size |
+| `OCC_MAX_SESSIONS` | `50` | Maximum number of saved sessions |
+
+---
+
+### Real-World Session Workflows
+
+#### Pre/Post Deploy Comparison
+
+```bash
+#!/bin/bash
+# 1. Before deploy - save baseline
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d '{"name": "pre-deploy-v2.1", "description": "Before v2.1 deployment"}'
+
+# ... deploy happens ...
+
+# 2. After deploy - wait for new telemetry (e.g., 5 minutes)
+echo "Waiting for new telemetry..."
+sleep 300
+
+# 3. Save post-deploy snapshot
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d '{"name": "post-deploy-v2.1", "description": "After v2.1 deployment"}'
+
+# 4. Compare sessions
+curl -s "http://localhost:8080/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post-deploy-v2.1" | \
+  jq '{
+    total_changes: .summary.total_changes,
+    critical: [.critical_changes[] | {name, severity, details}]
+  }'
+```
+
+**Example output:**
+```json
+{
+  "total_changes": 15,
+  "critical": [
+    {
+      "name": "user_sessions",
+      "severity": "critical",
+      "details": [
+        {
+          "field": "labels.user_id.cardinality",
+          "from": 100,
+          "to": 50000
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+#### Multi-Day Signal Collection
+
+Collect different signal types on different days, then merge them:
+
+```bash
+# Day 1: Collect metrics
+curl -X POST -d '{"name": "metrics-jan25", "signals": ["metrics"]}' \
+  http://localhost:8080/api/v1/sessions
+
+# Day 2: Clear data and collect traces
+curl -X POST http://localhost:8080/api/v1/admin/clear
+# ... collect traces ...
+curl -X POST -d '{"name": "traces-jan26", "signals": ["traces"]}' \
+  http://localhost:8080/api/v1/sessions
+
+# Day 3: Merge both sessions
+curl -X POST http://localhost:8080/api/v1/sessions/metrics-jan25/load
+curl -X POST http://localhost:8080/api/v1/sessions/traces-jan26/merge
+
+# Analyze the combined data
+curl http://localhost:8080/api/v1/services
+```
+
+---
+
+#### Service-Specific Analysis
+
+```bash
+# Save each service separately
+for service in api-server worker cache; do
+  curl -X POST http://localhost:8080/api/v1/sessions \
+    -d "{\"name\": \"${service}-snapshot\", \"services\": [\"$service\"]}"
+done
+
+# Later: Compare two services
+curl "http://localhost:8080/api/v1/sessions/diff?from=api-server-snapshot&to=worker-snapshot" | \
+  jq '.changes.metrics | {added, removed}'
+```
+
+---
+
+#### Cardinality Growth Tracking
+
+```bash
+#!/bin/bash
+# Track cardinality growth over a week
+
+for day in {1..7}; do
+  echo "Day $day: Collecting data..."
+  
+  # Wait 24 hours for telemetry
+  sleep 86400
+  
+  # Save snapshot
+  curl -X POST http://localhost:8080/api/v1/sessions \
+    -d "{\"name\": \"day-$day\", \"description\": \"Day $day snapshot\"}"
+done
+
+# Compare first and last day
+curl -s "http://localhost:8080/api/v1/sessions/diff?from=day-1&to=day-7&min_severity=warning" | \
+  jq '.changes.metrics.changed[] | select(.details[].field | contains("cardinality"))'
+```
+
+---
+
+#### CI/CD Integration with Sessions
+
+```bash
+#!/bin/bash
+# Pre-deploy check: Compare against known-good baseline
+
+BASELINE="known-good-baseline"
+CANDIDATE="ci-build-$BUILD_ID"
+
+# Save current state
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d "{\"name\": \"$CANDIDATE\"}"
+
+# Diff against baseline
+critical_count=$(curl -s "http://localhost:8080/api/v1/sessions/diff?from=$BASELINE&to=$CANDIDATE&min_severity=critical" | \
+  jq '.summary.total_changes')
+
+if [ "$critical_count" -gt 0 ]; then
+  echo "❌ Critical cardinality changes detected!"
+  curl -s "http://localhost:8080/api/v1/sessions/diff?from=$BASELINE&to=$CANDIDATE&min_severity=critical" | \
+    jq '.critical_changes'
+  exit 1
+else
+  echo "✅ No critical changes detected"
+fi
+```
+
+---
+
+#### Delete Old Sessions
+
+```bash
+# Delete a specific session
+curl -X DELETE http://localhost:8080/api/v1/sessions/old-session-name
+
+# Delete all sessions older than 30 days (requires jq)
+curl -s http://localhost:8080/api/v1/sessions | \
+  jq -r ".sessions[] | select(.created_at | fromdateiso8601 < (now - 2592000)) | .name" | \
+  while read name; do
+    echo "Deleting old session: $name"
+    curl -X DELETE "http://localhost:8080/api/v1/sessions/$name"
+  done
+```
+
+---
+
+### Session Diff Filters
+
+#### Filter by Signal Type
+
+```bash
+# Show only metric changes
+curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric"
+
+# Show only span changes
+curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=span"
+```
+
+#### Filter by Service
+
+```bash
+# Show only changes affecting payment-service
+curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&service=payment-service"
+```
+
+#### Filter by Severity
+
+```bash
+# Show only critical and warning changes
+curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&min_severity=warning"
+```
+
+#### Combine Filters
+
+```bash
+# Critical metric changes for payment-service only
+curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric&service=payment-service&min_severity=critical"
+```
+
+---
+
+### Session Best Practices
+
+#### Use Descriptive Names
+
+```bash
+# Good names are timestamped and specific
+"pre-deploy-v2.1-2026-01-25"
+"payment-service-baseline-jan2026"
+"load-test-1000rps-traces"
+
+# Avoid generic names
+"test1"
+"backup"
+"session"
+```
+
+#### Add Descriptions
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -d '{
+    "name": "load-test-baseline",
+    "description": "Baseline at 500 RPS, all services, before optimization"
+  }'
+```
+
+#### Filter by Signal When You Can
+
+Smaller sessions load faster:
+```bash
+# If you only need metrics
+curl -X POST -d '{"name": "metrics-only", "signals": ["metrics"]}' \
+  http://localhost:8080/api/v1/sessions
+```
+
+#### Clean Up Old Sessions
+
+Set up a cron job to delete old sessions:
+```bash
+# Keep only last 30 days
+0 2 * * * /usr/local/bin/cleanup-old-sessions.sh
+```
+
+#### Back Up Important Baselines
+
+```bash
+# Export production baselines regularly
+curl http://localhost:8080/api/v1/sessions/production-baseline/export > \
+  /backups/production-baseline-$(date +%Y%m%d).json
+```
+
+---
+
+### Troubleshooting Sessions
+
+#### Session Creation Fails
+
+**Error: "Session already exists"**
+```bash
+# Use ?force=true to overwrite
+curl -X POST "http://localhost:8080/api/v1/sessions?force=true" \
+  -d '{"name": "existing-session"}'
+```
+
+**Error: "Maximum number of sessions reached"**
+```bash
+# Delete old sessions first
+curl -X DELETE http://localhost:8080/api/v1/sessions/old-session
+```
+
+**Error: "Session data too large"**
+```bash
+# Filter by service or signal type to reduce size
+curl -X POST -d '{"name": "large-session", "services": ["api-server"]}' \
+  http://localhost:8080/api/v1/sessions
+```
+
+#### Session Load/Merge Fails
+
+**Check session exists:**
+```bash
+curl http://localhost:8080/api/v1/sessions/my-session
+```
+
+**Verify session is not corrupted:**
+```bash
+curl http://localhost:8080/api/v1/sessions/my-session/export | jq .
+```
+
+#### Diff Shows Unexpected Changes
+
+**Verify both sessions exist:**
+```bash
+curl http://localhost:8080/api/v1/sessions | jq '.sessions[].name'
+```
+
+**Check if sessions cover different time periods:**
+```bash
+curl http://localhost:8080/api/v1/sessions/session-a | jq '.created_at'
+curl http://localhost:8080/api/v1/sessions/session-b | jq '.created_at'
+```
+
+---
+
 ## Next Steps
 
 - **Production Deployment**: See [../k8s/README.md](../k8s/README.md) for Kubernetes deployment guide
