@@ -284,9 +284,9 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
                 <th>Description</th>
                 <th>Created</th>
                 <th>Size</th>
-                <th>Metrics</th>
-                <th>Spans</th>
-                <th>Logs</th>
+                <th title="Total data points received">Data Points</th>
+                <th title="Total spans received">Spans</th>
+                <th title="Total log messages received">Log Messages</th>
                 <th>Actions</th>
               </tr>
             </thead>
