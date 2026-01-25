@@ -1,7 +1,8 @@
 # api Specification
 
 ## Purpose
-TBD - created by archiving change add-attribute-catalog. Update Purpose after archive.
+Provides REST API endpoints for querying and retrieving attribute metadata collected from OTLP telemetry. Enables filtering, sorting, and pagination of attributes by signal type, scope, and cardinality metrics.
+
 ## Requirements
 ### Requirement: List Attributes Endpoint
 The system SHALL provide GET /api/v1/attributes endpoint for listing attributes.
