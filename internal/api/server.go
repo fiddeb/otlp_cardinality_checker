@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/storage"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage/sessions"
 	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 	"github.com/fidde/otlp_cardinality_checker/web"
 	"github.com/go-chi/chi/v5"
@@ -22,9 +23,10 @@ import (
 
 // Server is the REST API server.
 type Server struct {
-	store  storage.Storage
-	router *chi.Mux
-	server *http.Server
+	store          storage.Storage
+	router         *chi.Mux
+	server         *http.Server
+	sessionHandler *SessionHandler
 }
 
 // dbProvider interface for storage backends that provide direct SQL database access.
@@ -125,6 +127,29 @@ func NewServer(addr string, store storage.Storage) *Server {
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Timeout(60 * time.Second))
 
+	// Initialize session storage
+	sessionStore, err := sessions.New()
+	if err != nil {
+		log.Printf("Warning: Could not initialize session storage: %v", err)
+	} else {
+		// Check if store implements StoreAccessor for full session support
+		if storeAccessor, ok := store.(StoreAccessor); ok {
+			s.sessionHandler = NewSessionHandlerWithStore(sessionStore, storeAccessor)
+		} else {
+			// Fallback to read-only session handler
+			mainStoreGetter := func() ([]*models.MetricMetadata, []*models.SpanMetadata, []*models.LogMetadata, []*models.AttributeMetadata, []string, error) {
+				ctx := context.Background()
+				metrics, _ := store.ListMetrics(ctx, "")
+				spans, _ := store.ListSpans(ctx, "")
+				logs, _ := store.ListLogs(ctx, "")
+				attrs, _ := store.ListAttributes(ctx, nil)
+				services, _ := store.ListServices(ctx)
+				return metrics, spans, logs, attrs, services, nil
+			}
+			s.sessionHandler = NewSessionHandler(sessionStore, mainStoreGetter)
+		}
+	}
+
 	// API routes
 	s.router.Route("/api/v1", func(r chi.Router) {
 		// Health endpoint
@@ -162,6 +187,19 @@ func NewServer(addr string, store storage.Storage) *Server {
 
 		// Admin endpoints
 		r.Post("/admin/clear", s.clearAllData)
+
+		// Sessions endpoints
+		if s.sessionHandler != nil {
+			r.Get("/sessions", s.sessionHandler.ListSessions)
+			r.Post("/sessions", s.sessionHandler.CreateSession)
+			r.Get("/sessions/diff", s.sessionHandler.DiffSessions)
+			r.Post("/sessions/import", s.sessionHandler.ImportSession)
+			r.Get("/sessions/{name}", s.sessionHandler.GetSessionMetadata)
+			r.Delete("/sessions/{name}", s.sessionHandler.DeleteSession)
+			r.Post("/sessions/{name}/load", s.sessionHandler.LoadSession)
+			r.Post("/sessions/{name}/merge", s.sessionHandler.MergeSession)
+			r.Get("/sessions/{name}/export", s.sessionHandler.ExportSession)
+		}
 	})
 
 	// Serve embedded static files with SPA fallback

@@ -776,15 +776,18 @@ func (s *Store) Clear(ctx context.Context) error {
 	s.metricsmu.Lock()
 	s.spansmu.Lock()
 	s.logsmu.Lock()
+	s.attributesmu.Lock()
 	s.servicesmu.Lock()
 	defer s.metricsmu.Unlock()
 	defer s.spansmu.Unlock()
 	defer s.logsmu.Unlock()
+	defer s.attributesmu.Unlock()
 	defer s.servicesmu.Unlock()
 
 	s.metrics = make(map[string]*models.MetricMetadata)
 	s.spans = make(map[string]*models.SpanMetadata)
 	s.logs = make(map[string]*models.LogMetadata)
+	s.attributes = make(map[string]*models.AttributeMetadata)
 	s.services = make(map[string]struct{})
 
 	return nil
@@ -1030,4 +1033,96 @@ func (s *Store) GetSpanPatterns(ctx context.Context) (*models.SpanPatternRespons
 		Patterns: patterns,
 		Total:    len(patterns),
 	}, nil
+}
+
+// GetAll returns all metadata from the store for session saving.
+// Implements api.StoreAccessor interface.
+func (s *Store) GetAll(ctx context.Context) (
+	metrics []*models.MetricMetadata,
+	spans []*models.SpanMetadata,
+	logs []*models.LogMetadata,
+	attrs []*models.AttributeMetadata,
+	services []string,
+	err error,
+) {
+	// Get metrics
+	s.metricsmu.RLock()
+	metrics = make([]*models.MetricMetadata, 0, len(s.metrics))
+	for _, m := range s.metrics {
+		metrics = append(metrics, m)
+	}
+	s.metricsmu.RUnlock()
+
+	// Get spans
+	s.spansmu.RLock()
+	spans = make([]*models.SpanMetadata, 0, len(s.spans))
+	for _, sp := range s.spans {
+		spans = append(spans, sp)
+	}
+	s.spansmu.RUnlock()
+
+	// Get logs
+	s.logsmu.RLock()
+	logs = make([]*models.LogMetadata, 0, len(s.logs))
+	for _, l := range s.logs {
+		logs = append(logs, l)
+	}
+	s.logsmu.RUnlock()
+
+	// Get attributes
+	s.attributesmu.RLock()
+	attrs = make([]*models.AttributeMetadata, 0, len(s.attributes))
+	for _, a := range s.attributes {
+		attrs = append(attrs, a)
+	}
+	s.attributesmu.RUnlock()
+
+	// Get services
+	s.servicesmu.RLock()
+	services = make([]string, 0, len(s.services))
+	for svc := range s.services {
+		services = append(services, svc)
+	}
+	s.servicesmu.RUnlock()
+
+	return metrics, spans, logs, attrs, services, nil
+}
+
+// MergeMetric merges a metric into the store.
+// Implements api.StoreAccessor interface.
+func (s *Store) MergeMetric(ctx context.Context, metric *models.MetricMetadata) error {
+	return s.StoreMetric(ctx, metric)
+}
+
+// MergeSpan merges a span into the store.
+// Implements api.StoreAccessor interface.
+func (s *Store) MergeSpan(ctx context.Context, span *models.SpanMetadata) error {
+	return s.StoreSpan(ctx, span)
+}
+
+// MergeLog merges a log into the store.
+// Implements api.StoreAccessor interface.
+func (s *Store) MergeLog(ctx context.Context, log *models.LogMetadata) error {
+	return s.StoreLog(ctx, log)
+}
+
+// MergeAttribute merges an attribute into the store.
+// Implements api.StoreAccessor interface.
+func (s *Store) MergeAttribute(ctx context.Context, attr *models.AttributeMetadata) error {
+	if attr == nil {
+		return nil
+	}
+
+	s.attributesmu.Lock()
+	defer s.attributesmu.Unlock()
+
+	existing, exists := s.attributes[attr.Key]
+	if !exists {
+		s.attributes[attr.Key] = attr
+		return nil
+	}
+
+	// Merge the attribute using existing function
+	models.MergeAttributeMetadata(existing, attr)
+	return nil
 }
