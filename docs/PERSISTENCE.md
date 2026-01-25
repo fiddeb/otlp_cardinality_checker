@@ -1,10 +1,10 @@
 # Persistence Design
 
-OTLP Cardinality Checker uses **in-memory storage only** by design. This is an intentional architectural decision, not a limitation.
+OTLP Cardinality Checker uses in-memory storage only by design. This is intentional, not a limitation.
 
 ## Why Ephemeral?
 
-The tool is designed as a **diagnostic analyzer**, not a telemetry database:
+The tool is a diagnostic analyzer, not a telemetry database:
 
 | Diagnostic Tool | Telemetry Database |
 |-----------------|-------------------|
@@ -13,19 +13,19 @@ The tool is designed as a **diagnostic analyzer**, not a telemetry database:
 | Ephemeral, restart-friendly | Persistent, durable |
 | Like `htop` or `top` | Like Prometheus or ClickHouse |
 
-**Core insight**: Metadata analysis is diagnostic. You analyze current instrumentation, identify issues, fix them, and move on. Historical storage adds complexity without clear value for this use case.
+Metadata analysis is diagnostic. You analyze current instrumentation, identify issues, fix them, and move on. Historical storage adds complexity without much value here.
 
 ## Memory Characteristics
 
 ### Capacity
 
-- **500,000+ metrics** with moderate cardinality
-- **<256MB memory** under typical load
-- **~8-10 KB per metric** including attribute tracking
+- 500,000+ metrics with moderate cardinality
+- <256MB memory under typical load
+- ~8-10 KB per metric including attribute tracking
 
 ### Cardinality Estimation
 
-Uses **HyperLogLog** algorithm for memory-efficient cardinality estimation:
+Uses HyperLogLog algorithm for memory-efficient cardinality estimation:
 - ~16KB per tracked attribute
 - ~0.81% estimation error
 - Allows tracking millions of unique values without storing them
@@ -47,7 +47,7 @@ When the application restarts:
 3. New data flows in from OpenTelemetry Collector
 4. Metadata rebuilds as telemetry arrives
 
-**This is expected behavior**, not data loss.
+This is expected behavior, not data loss.
 
 ## Use Cases
 
@@ -97,10 +97,10 @@ curl http://localhost:8080/api/v1/cardinality/high
 
 If you need to handle very large deployments:
 
-1. **Increase container memory**: Default 512MB, can increase to 1-2GB
-2. **Use sampling**: Configure OpenTelemetry Collector to sample data
-3. **Filter at source**: Don't send all services to analyzer
-4. **Multiple analyzers**: Run separate instances per environment/team
+1. Increase container memory: Default 512MB, can increase to 1-2GB
+2. Use sampling: Configure OpenTelemetry Collector to sample data
+3. Filter at source: Don't send all services to analyzer
+4. Multiple analyzers: Run separate instances per environment/team
 
 ## Future: Export/Import (If Needed)
 
@@ -125,16 +125,16 @@ curl -s http://localhost:8080/api/v1/logs > "metadata-${DATE}-logs.json"
 echo "Exported to metadata-${DATE}-*.json"
 ```
 
-**Note**: Import functionality is not yet implemented. Re-analyze from source if needed.
+Note: Import functionality is not yet implemented. Re-analyze from source if needed.
 
 ## Comparison with Alternatives
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| **In-memory (current)** | Simple, fast, no dependencies | Data lost on restart |
-| **SQLite** | Persistent, embedded | Slower writes, WAL complexity |
-| **PostgreSQL** | Scalable, proven | External dependency, operational overhead |
-| **ClickHouse** | High performance | Heavy external dependency |
+| In-memory (current) | Simple, fast, no dependencies | Data lost on restart |
+| SQLite | Persistent, embedded | Slower writes, WAL complexity |
+| PostgreSQL | Scalable, proven | External dependency, operational overhead |
+| ClickHouse | High performance | Heavy external dependency |
 
 We chose in-memory because the benefits of persistence don't outweigh the complexity for a diagnostic tool.
 
@@ -146,4 +146,4 @@ Consider adding persistence if:
 - Multiple teams need shared access to analysis results
 - Compliance requires audit trails of instrumentation
 
-**Current recommendation**: Export JSON if you need to save results. If there's strong demand for built-in persistence, we can revisit.
+For now: Export JSON if you need to save results. If there's real demand for built-in persistence, we'll add it.

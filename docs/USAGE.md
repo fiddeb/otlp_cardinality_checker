@@ -1,17 +1,13 @@
 # Usage Guide
 
-A practical guide for using the OTLP Cardinality Checker to analyze your telemetry metadata.
+Practical guide for using the OTLP Cardinality Checker to analyze telemetry metadata.
 
 ## Quick Start
 
 ### 1. Start the Server
 
 ```bash
-# Build
-# Build
 make build
-
-# Run
 ./bin/occ
 
 # Server starts on:
@@ -19,6 +15,234 @@ make build
 #   OTLP HTTP: http://localhost:4318
 #   REST API:  http://localhost:8080
 ```
+
+### 2. Send Telemetry Data
+
+Point your OpenTelemetry Collector or SDK to the OTLP endpoint:
+
+```yaml
+# OpenTelemetry Collector config (gRPC)
+exporters:
+  otlp/cardinality:
+    endpoint: localhost:4317
+    tls:
+      insecure: true
+    
+service:
+  pipelines:
+    metrics:
+      exporters: [otlp/cardinality]
+    traces:
+      exporters: [otlp/cardinality]
+    logs:
+      exporters: [otlp/cardinality]
+```
+
+Or from your application:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+```
+
+### 3. Query Metadata
+
+```bash
+# Check if data is arriving
+curl http://localhost:8080/api/v1/health
+
+# List all metrics
+curl http://localhost:8080/api/v1/metrics?limit=5
+
+# Get details for a specific metric
+curl http://localhost:8080/api/v1/metrics/your_metric_name
+```
+
+### 4. Quick Test - Check Your Metric
+
+```bash
+# Step 1: Find a metric name
+curl -s "http://localhost:8080/api/v1/metrics?limit=5" | jq -r '.data[].name'
+
+# Step 2: Check its labels and cardinality
+curl -s "http://localhost:8080/api/v1/metrics/YOUR_METRIC_NAME" | \
+  jq '.label_keys | to_entries[] | {
+    label: .key,
+    cardinality: .value.estimated_cardinality,
+    sample_values: .value.value_samples[0:3]
+  }'
+```
+
+Example output:
+```json
+{
+  "label": "user_id",
+  "cardinality": 20,
+  "sample_values": ["user_1", "user_10", "user_11"]
+}
+{
+  "label": "method",
+  "cardinality": 1,
+  "sample_values": ["GET"]
+}
+```
+
+`user_id` has 20 unique values, creating 20+ time series. `method` has 1 unique value and doesn't add cardinality.
+
+---
+
+## Common Workflows
+
+### Finding High Cardinality Issues
+
+1. List metrics for your service:
+```bash
+curl -s "http://localhost:8080/api/v1/metrics?service=my-service" | jq -r '.data[].name'
+```
+
+2. Check a specific metric's labels:
+```bash
+curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+  jq '.label_keys | to_entries[] | {label: .key, cardinality: .value.estimated_cardinality}'
+```
+
+3. Find labels with cardinality over 100:
+```bash
+curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+  jq '.label_keys | to_entries[] | select(.value.estimated_cardinality > 100)'
+```
+
+### Analyzing Span Patterns
+
+```bash
+# List span operations
+curl -s "http://localhost:8080/api/v1/spans?service=api-server" | jq -r '.data[].name'
+
+# Check for dynamic span names
+curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | jq '.name_patterns'
+```
+
+### Checking Log Attributes
+
+```bash
+# List log severities
+curl -s "http://localhost:8080/api/v1/logs" | jq -r '.data[].severity'
+
+# Check ERROR log attributes
+curl -s "http://localhost:8080/api/v1/logs/ERROR" | jq '.attribute_keys | keys'
+```
+
+### Service Overview
+
+```bash
+curl -s "http://localhost:8080/api/v1/services/my-service/overview" | \
+  jq '{
+    metrics: [.metrics[].name],
+    spans: [.spans[].name],
+    logs: [.logs[].severity]
+  }'
+```
+
+---
+
+## Key Concepts
+
+### Cardinality
+
+Cardinality is the number of unique values for an attribute:
+- **Low** (<10): status codes, HTTP methods
+- **Medium** (10-100): endpoints, hosts
+- **High** (>100): user IDs, request IDs (problematic)
+
+High cardinality attributes create many time series, increasing storage costs and query times.
+
+### Resource vs Data Attributes
+
+- **Resource attributes**: Identify the source (`service.name`, `host.name`)
+- **Data attributes**: Specific to each data point (`http.method`, `user_id`)
+
+Resource attributes should have low cardinality.
+
+### Sample Percentage
+
+The percentage field shows how often an attribute appears:
+- **100%**: Always present
+- **<100%**: Optional or conditionally added
+
+---
+
+## Working with Sessions
+
+Sessions let you save snapshots and compare changes over time.
+
+### Save Current State
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"name": "baseline-2026-01-25", "description": "Pre-deploy baseline"}'
+```
+
+### Compare Two Sessions
+
+```bash
+curl "http://localhost:8080/api/v1/sessions/diff?from=baseline&to=current" | \
+  jq '.summary'
+```
+
+See [SESSIONS.md](SESSIONS.md) for detailed session workflows.
+
+---
+
+## Best Practices
+
+### 1. Filter by Service
+
+Always filter by service to reduce noise:
+```bash
+curl "http://localhost:8080/api/v1/metrics?service=my-service"
+```
+
+### 2. Use Pagination
+
+Don't fetch all data at once:
+```bash
+# Bad: Returns everything
+curl "http://localhost:8080/api/v1/metrics"
+
+# Good: Returns 100 at a time
+curl "http://localhost:8080/api/v1/metrics?limit=100"
+```
+
+### 3. Set Cardinality Budgets
+
+Define limits per team:
+- Status codes, methods: <10
+- Endpoints, services: 10-100
+- User IDs: Requires approval (>100)
+
+### 4. Regular Monitoring
+
+Check daily for new high-cardinality attributes:
+```bash
+curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
+  jq '.data[] | select(.label_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
+```
+
+---
+
+## Load Testing
+
+Quick test:
+```bash
+./scripts/run-all-tests.sh quick
+```
+
+See [scripts/README.md](../scripts/README.md) for detailed K6 examples.
+
+---
+
+
 
 ### 2. Send Telemetry Data
 
@@ -96,7 +320,7 @@ curl -s "http://localhost:8080/api/v1/metrics/YOUR_METRIC_NAME" | \
   }'
 ```
 
-**Example output:**
+Example output:
 ```json
 {
   "label": "user_id",
@@ -110,30 +334,28 @@ curl -s "http://localhost:8080/api/v1/metrics/YOUR_METRIC_NAME" | \
 }
 ```
 
-**Interpretation:**
-- `user_id` has 20 unique values → creates 20+ time series
-- `method` has 1 unique value → not contributing to cardinality
+`user_id` has 20 unique values, creating 20+ time series. `method` has 1 unique value and doesn't add cardinality.
 
 ---
 
 ## Common Use Cases
 
-This section covers real-world scenarios for analyzing **Metrics**, **Traces**, and **Logs**. Each example includes the API endpoint and expected output.
+Real-world scenarios for analyzing metrics, traces, and logs. Each example includes the API endpoint and expected output.
 
 ---
 
-## 📊 Working with Metrics
+## Working with Metrics
 
-### 🔍 Find Metrics for a Service
+### Find Metrics for a Service
 
-**Question:** What metrics does `my-service` produce?
+What metrics does `my-service` produce?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics?service=my-service" | \
   jq -r '.data[] | .name'
 ```
 
-**Output:**
+Output:
 ```
 http_requests_total
 http_request_duration_seconds
@@ -143,9 +365,9 @@ database_queries_total
 
 ---
 
-### 📊 Check Metric Labels
+### Check Metric Labels
 
-**Question:** What labels does `http_requests_total` have?
+What labels does `http_requests_total` have?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
@@ -161,7 +383,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 ]
 ```
 
-**With cardinality info:**
+With cardinality info:
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
@@ -177,9 +399,9 @@ status: 8 unique values
 
 ---
 
-### ⚠️ Identify High Cardinality Labels in Metrics
+### Identify High Cardinality Labels in Metrics
 
-**Question:** Which metric labels have too many unique values?
+Which metric labels have too many unique values?
 
 ```bash
 # Find labels with >20 unique values (adjust threshold as needed)
@@ -206,13 +428,13 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 }
 ```
 
-**Interpretation:** ⚠️ `user_id` has 1247 unique values - this will create 1247+ time series!
+**Interpretation:** `user_id` has 1247 unique values - this will create 1247+ time series!
 
 ---
 
-### 📊 List All Metrics with Sample Counts
+### List All Metrics with Sample Counts
 
-**Question:** Which metrics receive the most samples?
+Which metrics receive the most samples?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics?limit=100" | \
@@ -229,9 +451,9 @@ memory_bytes: 10000 samples
 
 ---
 
-### 📈 Check Resource Attributes for Metrics
+### Check Resource Attributes for Metrics
 
-**Question:** What resource attributes (like `service.name`, `host.name`) are attached to metrics?
+What resource attributes (like `service.name`, `host.name`) are attached to metrics?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
@@ -258,11 +480,11 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 
 ---
 
-## 🔍 Working with Traces (Spans)
+## Working with Traces (Spans)
 
-### 📋 List All Span Operations
+### List All Span Operations
 
-**Question:** What span operations are being traced?
+What span operations are being traced?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
@@ -280,9 +502,9 @@ external_api_call
 
 ---
 
-### 🔍 Get Details for a Specific Span
+### Get Details for a Specific Span
 
-**Question:** What attributes does the `HTTP GET /api/users` span have?
+What attributes does the `HTTP GET /api/users` span have?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
@@ -311,9 +533,9 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 
 ---
 
-### ⚠️ Identify High Cardinality Span Attributes
+### Identify High Cardinality Span Attributes
 
-**Question:** Which span attributes have too many unique values?
+Which span attributes have too many unique values?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
@@ -339,13 +561,13 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 }
 ```
 
-**Interpretation:** ⚠️ `http.target` includes user IDs in the path, creating high cardinality. Consider using `http.route` instead (e.g., `/api/users/:id`).
+`http.target` includes user IDs in the path, creating high cardinality. Consider using `http.route` instead (e.g., `/api/users/:id`).
 
 ---
 
-### 🔍 Find Traces by Service
+### Find Traces by Service
 
-**Question:** What operations does `api-server` trace?
+What operations does `api-server` trace?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans?service=api-server" | \
@@ -362,9 +584,9 @@ database_query
 
 ---
 
-### 📊 Check Span Resource Attributes
+### Check Span Resource Attributes
 
-**Question:** What resource attributes are attached to spans?
+What resource attributes are attached to spans?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/database_query" | \
@@ -391,9 +613,9 @@ curl -s "http://localhost:8080/api/v1/spans/database_query" | \
 
 ---
 
-### 📈 List Spans by Sample Count
+### List Spans by Sample Count
 
-**Question:** Which span operations are most frequently traced?
+Which span operations are most frequently traced?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
@@ -410,9 +632,9 @@ cache_lookup: 4800 samples
 
 ---
 
-### 🔍 Analyze Span Name Patterns
+### Analyze Span Name Patterns
 
-**Question:** What patterns exist in span names? Are there dynamic values like IDs or timestamps?
+What patterns exist in span names? Are there dynamic values like IDs or timestamps?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
@@ -444,7 +666,7 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 
 ---
 
-### ⚠️ Identify High Cardinality Span Names
+### Identify High Cardinality Span Names
 
 **Question:** Which spans have dynamic values in their names causing cardinality issues?
 
@@ -468,13 +690,13 @@ curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
 }
 ```
 
-**Interpretation:** ⚠️ Span names contain batch IDs. This creates many unique span names which fragments your trace analysis.
+**Interpretation:** Span names contain batch IDs. This creates many unique span names which fragments your trace analysis.
 
 ---
 
-## 📝 Working with Logs
+## Working with Logs
 
-### 📋 List All Log Severities
+### List All Log Severities
 
 **Question:** What log severity levels are being collected?
 
@@ -493,7 +715,7 @@ DEBUG
 
 ---
 
-### 📝 Get Details for a Specific Severity
+### Get Details for a Specific Severity
 
 **Question:** What attributes do ERROR logs have?
 
@@ -522,7 +744,7 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 
 ---
 
-### ⚠️ Identify High Cardinality Log Attributes
+### Identify High Cardinality Log Attributes
 
 **Question:** Which log attributes have too many unique values?
 
@@ -550,11 +772,11 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 }
 ```
 
-**Interpretation:** ⚠️ `error.message` has 487 unique values. This is expected for error messages, but consider if you need to store all variations.
+**Interpretation:** `error.message` has 487 unique values. This is expected for error messages, but consider if you need to store all variations.
 
 ---
 
-### 📝 Find Logs by Service
+### Find Logs by Service
 
 **Question:** What log severities does `api-server` produce?
 
@@ -572,7 +794,7 @@ ERROR
 
 ---
 
-### 📊 Check Log Resource Attributes
+### Check Log Resource Attributes
 
 **Question:** What resource attributes are attached to logs?
 
@@ -601,7 +823,7 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 
 ---
 
-### 📈 Compare Log Volumes by Severity
+### Compare Log Volumes by Severity
 
 **Question:** Which log severities have the most samples?
 
@@ -621,9 +843,9 @@ DEBUG: 800 samples
 
 ---
 
-## 🔄 Cross-Signal Analysis
+## Cross-Signal Analysis
 
-### 📊 Compare All Signal Types for a Service
+### Compare All Signal Types for a Service
 
 **Question:** What telemetry does `api-server` produce across all signal types?
 
@@ -660,7 +882,7 @@ curl -s "http://localhost:8080/api/v1/services/api-server/overview" | \
 
 ---
 
-### 📈 Find Services with High Cardinality Across All Signals
+### Find Services with High Cardinality Across All Signals
 
 **Question:** Which services have cardinality issues in any signal type?
 
@@ -671,10 +893,9 @@ curl -s "http://localhost:8080/api/v1/services/api-server/overview" | \
 
 **Output:**
 ```
-═══════════════════════════════════════════════════════════════
-1️⃣  Services by Total Sample Volume
-═══════════════════════════════════════════════════════════════
-  📊 api-server:
+Services by Total Sample Volume
+─────────────────────────────────────────────────────────────────
+api-server:
      Total: 15000 samples
      Metrics: 8000 | Traces: 5000 | Logs: 2000
      Signal types: metrics, traces, logs
@@ -682,11 +903,9 @@ curl -s "http://localhost:8080/api/v1/services/api-server/overview" | \
 
 ---
 
-## 📉 Optimization Use Cases
+## Optimization Use Cases
 
-### 📉 Find Underutilized Labels (Metrics)
-
-### 📉 Find Underutilized Labels (Metrics)
+### Find Underutilized Labels (Metrics)
 
 **Question:** Which metric labels are rarely used?
 
@@ -713,7 +932,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 
 ---
 
-### 📉 Find Underutilized Attributes (Spans)
+### Find Underutilized Attributes (Spans)
 
 **Question:** Which span attributes are rarely used?
 
@@ -735,7 +954,7 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 
 ---
 
-### 📉 Find Underutilized Attributes (Logs)
+### Find Underutilized Attributes (Logs)
 
 **Question:** Which log attributes are rarely populated?
 
@@ -749,7 +968,7 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 
 ---
 
-### 🔄 Compare Services
+### Compare Services
 
 **Question:** How does telemetry differ between services?
 
@@ -768,7 +987,7 @@ done
 
 ---
 
-### 📈 Monitor Cardinality Growth (Metrics)
+### Monitor Cardinality Growth (Metrics)
 
 **Question:** Is metric cardinality increasing over time?
 
@@ -790,7 +1009,7 @@ echo "Growth: $(($(cat snapshot2.txt) - $(cat snapshot1.txt))) new unique values
 
 ---
 
-### 📈 Monitor Cardinality Growth (Spans)
+### Monitor Cardinality Growth (Spans)
 
 **Question:** Is span attribute cardinality increasing?
 
@@ -1445,10 +1664,10 @@ high_card=$(curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
   jq "[.data[] | .label_keys | to_entries[] | select(.value.estimated_cardinality > $MAX_CARDINALITY)] | length")
 
 if [ "$high_card" -gt 0 ]; then
-  echo "❌ Found $high_card labels with cardinality > $MAX_CARDINALITY"
+  echo "FAIL: Found $high_card labels with cardinality > $MAX_CARDINALITY"
   exit 1
 else
-  echo "✅ All labels within cardinality limits"
+  echo "PASS: All labels within cardinality limits"
 fi
 ```
 
@@ -1633,7 +1852,7 @@ For comprehensive K6 load testing examples, see [scripts/README.md](scripts/READ
 
 ---
 
-## 📸 Working with Sessions
+## Working with Sessions
 
 Sessions allow you to save snapshots of metadata state, compare versions, and analyze changes over time. This is essential for pre/post deployment comparisons and incremental telemetry analysis.
 
@@ -1953,12 +2172,12 @@ critical_count=$(curl -s "http://localhost:8080/api/v1/sessions/diff?from=$BASEL
   jq '.summary.total_changes')
 
 if [ "$critical_count" -gt 0 ]; then
-  echo "❌ Critical cardinality changes detected!"
+  echo "FAIL: Critical cardinality changes detected!"
   curl -s "http://localhost:8080/api/v1/sessions/diff?from=$BASELINE&to=$CANDIDATE&min_severity=critical" | \
     jq '.critical_changes'
   exit 1
 else
-  echo "✅ No critical changes detected"
+  echo "PASS: No critical changes detected"
 fi
 ```
 
