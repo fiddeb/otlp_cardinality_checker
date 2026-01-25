@@ -15,6 +15,8 @@ import LogServiceDetails from './components/LogServiceDetails'
 import LogPatternDetails from './components/LogPatternDetails'
 import AttributesView from './components/AttributesView'
 import ActiveSeries from './components/ActiveSeries'
+import SessionsView from './components/SessionsView'
+import DiffView from './components/DiffView'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -25,6 +27,8 @@ function App() {
   const [selectedLogPattern, setSelectedLogPattern] = useState(null)
   const [navigationHistory, setNavigationHistory] = useState([])
   const [isClearing, setIsClearing] = useState(false)
+  const [currentSessionName, setCurrentSessionName] = useState(null)
+  const [diffFromSession, setDiffFromSession] = useState(null)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode')
@@ -178,6 +182,11 @@ function App() {
           <p className="subtitle">Analyze metadata structure from OpenTelemetry signals</p>
         </div>
         <div className="header-actions">
+          {currentSessionName && (
+            <span className="header-session-badge" title="Active session">
+              {currentSessionName}
+            </span>
+          )}
           <button 
             className="clear-button" 
             onClick={handleClearData}
@@ -196,7 +205,7 @@ function App() {
         </div>
       </header>
 
-      {!selectedItem && !selectedService && !selectedTemplate && (
+      {!selectedItem && !selectedService && !selectedTemplate && activeTab !== 'diff' && (
         <div className="tabs">
           <button 
             className={`tab ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -297,6 +306,15 @@ function App() {
           >
             Memory
           </button>
+          <button 
+            className={`tab ${activeTab === 'sessions' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('sessions')
+              setNavigationHistory([])
+            }}
+          >
+            Sessions
+          </button>
         </div>
       )}
 
@@ -342,6 +360,27 @@ function App() {
 
       {activeTab === 'memory' && (
         <MemoryView />
+      )}
+
+      {activeTab === 'sessions' && (
+        <SessionsView 
+          currentSessionName={currentSessionName}
+          onSessionChange={setCurrentSessionName}
+          onCompare={(sessionName) => {
+            setDiffFromSession(sessionName)
+            setActiveTab('diff')
+          }}
+        />
+      )}
+
+      {activeTab === 'diff' && (
+        <DiffView 
+          initialFrom={diffFromSession}
+          onBack={() => {
+            setDiffFromSession(null)
+            setActiveTab('sessions')
+          }}
+        />
       )}
 
       {activeTab === 'template-details' && selectedTemplate && (

@@ -90,26 +90,26 @@
 ## Phase 5: UI Integration
 
 ### 5.1 Sessions Tab
-- [ ] 5.1.1 Create `SessionsView.jsx` component
-- [ ] 5.1.2 Implement session list with metadata display
-- [ ] 5.1.3 Add "Save Current" button/modal
-- [ ] 5.1.4 Add Load/Merge/Delete actions
-- [ ] 5.1.5 Add export/import functionality
-- [ ] 5.1.6 Add session indicator in header (loaded session name)
+- [x] 5.1.1 Create `SessionsView.jsx` component
+- [x] 5.1.2 Implement session list with metadata display
+- [x] 5.1.3 Add "Save Current" button/modal
+- [x] 5.1.4 Add Load/Merge/Delete actions
+- [x] 5.1.5 Add export/import functionality
+- [x] 5.1.6 Add session indicator in header (loaded session name)
 
 ### 5.2 Diff View
-- [ ] 5.2.1 Create `DiffView.jsx` component
-- [ ] 5.2.2 Implement session pair selector
-- [ ] 5.2.3 Display summary (added/removed/changed counts)
-- [ ] 5.2.4 Display critical changes with highlighting
-- [ ] 5.2.5 Implement expandable change details
-- [ ] 5.2.6 Add signal type filter tabs
-- [ ] 5.2.7 Add service filter dropdown
+- [x] 5.2.1 Create `DiffView.jsx` component
+- [x] 5.2.2 Implement session pair selector
+- [x] 5.2.3 Display summary (added/removed/changed counts)
+- [x] 5.2.4 Display critical changes with highlighting
+- [x] 5.2.5 Implement expandable change details
+- [x] 5.2.6 Add signal type filter tabs
+- [x] 5.2.7 Add service filter dropdown
 
 ### 5.3 Navigation
-- [ ] 5.3.1 Add Sessions tab to main navigation
-- [ ] 5.3.2 Add "Compare" button in Sessions list
-- [ ] 5.3.3 Link from diff results to detailed views
+- [x] 5.3.1 Add Sessions tab to main navigation
+- [x] 5.3.2 Add "Compare" button in Sessions list
+- [x] 5.3.3 Link from diff results to detailed views
 
 ## Phase 6: Documentation and Polish
 
