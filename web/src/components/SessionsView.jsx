@@ -156,30 +156,15 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
     }
   }
 
-  const handleExport = async (sessionName) => {
-    setActionInProgress(`exporting-${sessionName}`)
-    try {
-      const response = await fetch(`/api/v1/sessions/${encodeURIComponent(sessionName)}/export`)
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to export session')
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${sessionName}.json`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    } finally {
-      setActionInProgress(null)
-    }
+  const handleExport = (sessionName) => {
+    // Use direct link download for large files (avoids fetch timeout/memory issues)
+    const url = `/api/v1/sessions/${encodeURIComponent(sessionName)}/export`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${sessionName}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   const handleImportClick = () => {
@@ -346,10 +331,9 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
                     <button
                       className="action-btn export-btn"
                       onClick={() => handleExport(session.id)}
-                      disabled={actionInProgress?.startsWith('exporting')}
                       title="Export session as JSON"
                     >
-                      {actionInProgress === `exporting-${session.id}` ? '...' : 'Export'}
+                      Export
                     </button>
                     <button
                       className="action-btn delete-btn"
