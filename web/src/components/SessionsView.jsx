@@ -299,11 +299,11 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
                   <td className="session-description">
                     {session.description || <span className="text-muted">-</span>}
                   </td>
-                  <td className="session-date">{formatDate(session.created_at)}</td>
+                  <td className="session-date">{formatDate(session.created)}</td>
                   <td>{formatSize(session.size_bytes)}</td>
-                  <td>{session.stats?.metrics || 0}</td>
-                  <td>{session.stats?.spans || 0}</td>
-                  <td>{session.stats?.logs || 0}</td>
+                  <td>{session.stats?.metrics_count || 0}</td>
+                  <td>{session.stats?.spans_count || 0}</td>
+                  <td>{session.stats?.logs_count || 0}</td>
                   <td className="session-actions">
                     <button
                       className="action-btn load-btn"

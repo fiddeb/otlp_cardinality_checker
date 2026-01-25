@@ -544,7 +544,10 @@ func (s *Serializer) CreateSession(
 			return nil, fmt.Errorf("marshaling metrics: %w", err)
 		}
 		session.Data.Metrics = serialized
-		session.Stats.MetricsCount = len(serialized)
+		// Count total data points, not just unique metric names
+		for _, m := range filteredMetrics {
+			session.Stats.MetricsCount += int(m.SampleCount)
+		}
 	}
 
 	// Filter and serialize spans
@@ -555,7 +558,10 @@ func (s *Serializer) CreateSession(
 			return nil, fmt.Errorf("marshaling spans: %w", err)
 		}
 		session.Data.Spans = serialized
-		session.Stats.SpansCount = len(serialized)
+		// Count total spans observed, not just unique span names
+		for _, sp := range filteredSpans {
+			session.Stats.SpansCount += int(sp.SampleCount)
+		}
 	}
 
 	// Filter and serialize logs
@@ -566,7 +572,10 @@ func (s *Serializer) CreateSession(
 			return nil, fmt.Errorf("marshaling logs: %w", err)
 		}
 		session.Data.Logs = serialized
-		session.Stats.LogsCount = len(serialized)
+		// Count total log messages, not just unique severity levels
+		for _, l := range filteredLogs {
+			session.Stats.LogsCount += int(l.SampleCount)
+		}
 	}
 
 	// Serialize attributes
