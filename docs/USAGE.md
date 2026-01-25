@@ -1810,7 +1810,7 @@ curl -X POST http://localhost:8080/api/v1/sessions/import \
 
 ### Session Configuration
 
-Sessions are stored as gzip-compressed JSON files under `data/sessions/` by default.
+By default, sessions are stored as gzip-compressed JSON files in `data/sessions/`.
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
@@ -1872,7 +1872,7 @@ curl -s "http://localhost:8080/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post
 
 #### Multi-Day Signal Collection
 
-Collect different signal types on different days and merge them:
+Collect different signal types on different days, then merge them:
 
 ```bash
 # Day 1: Collect metrics
@@ -1885,11 +1885,11 @@ curl -X POST http://localhost:8080/api/v1/admin/clear
 curl -X POST -d '{"name": "traces-jan26", "signals": ["traces"]}' \
   http://localhost:8080/api/v1/sessions
 
-# Day 3: Merge both sessions to see complete picture
+# Day 3: Merge both sessions
 curl -X POST http://localhost:8080/api/v1/sessions/metrics-jan25/load
 curl -X POST http://localhost:8080/api/v1/sessions/traces-jan26/merge
 
-# Now analyze complete telemetry
+# Analyze the combined data
 curl http://localhost:8080/api/v1/services
 ```
 
@@ -1920,15 +1920,15 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=api-server-snapshot&to=wor
 for day in {1..7}; do
   echo "Day $day: Collecting data..."
   
-  # Let telemetry collect for 24 hours
+  # Wait 24 hours for telemetry
   sleep 86400
   
-  # Save daily snapshot
+  # Save snapshot
   curl -X POST http://localhost:8080/api/v1/sessions \
     -d "{\"name\": \"day-$day\", \"description\": \"Day $day snapshot\"}"
 done
 
-# Compare day 1 vs day 7
+# Compare first and last day
 curl -s "http://localhost:8080/api/v1/sessions/diff?from=day-1&to=day-7&min_severity=warning" | \
   jq '.changes.metrics.changed[] | select(.details[].field | contains("cardinality"))'
 ```
@@ -2018,21 +2018,21 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric&
 
 ### Session Best Practices
 
-#### 1. Use Descriptive Names
+#### Use Descriptive Names
 
 ```bash
-# GOOD: Clear, timestamped, descriptive
+# Good names are timestamped and specific
 "pre-deploy-v2.1-2026-01-25"
 "payment-service-baseline-jan2026"
 "load-test-1000rps-traces"
 
-# BAD: Generic, unclear
+# Avoid generic names
 "test1"
 "backup"
 "session"
 ```
 
-#### 2. Add Descriptions
+#### Add Descriptions
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/sessions \
@@ -2042,16 +2042,16 @@ curl -X POST http://localhost:8080/api/v1/sessions \
   }'
 ```
 
-#### 3. Filter by Signal When Possible
+#### Filter by Signal When You Can
 
-Smaller sessions = faster operations:
+Smaller sessions load faster:
 ```bash
-# If you only care about metrics
+# If you only need metrics
 curl -X POST -d '{"name": "metrics-only", "signals": ["metrics"]}' \
   http://localhost:8080/api/v1/sessions
 ```
 
-#### 4. Regular Cleanup
+#### Clean Up Old Sessions
 
 Set up a cron job to delete old sessions:
 ```bash
@@ -2059,10 +2059,10 @@ Set up a cron job to delete old sessions:
 0 2 * * * /usr/local/bin/cleanup-old-sessions.sh
 ```
 
-#### 5. Export Important Baselines
+#### Back Up Important Baselines
 
 ```bash
-# Export critical baseline sessions for backup
+# Export production baselines regularly
 curl http://localhost:8080/api/v1/sessions/production-baseline/export > \
   /backups/production-baseline-$(date +%Y%m%d).json
 ```
