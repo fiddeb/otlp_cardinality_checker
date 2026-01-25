@@ -120,10 +120,10 @@
 - [x] 6.1.4 Add CI/CD integration examples
 
 ### 6.2 Polish
-- [ ] 6.2.1 Add progress indicator for large session operations (UI feature - out of scope for backend)
+- [x] 6.2.1 Add progress indicator for large session operations (spinner overlay with operation description)
 - [x] 6.2.2 Add error handling and user feedback (errors.Is checks, validation, proper HTTP status codes)
 - [x] 6.2.3 Add session naming validation (kebab-case regex in ValidateSessionName)
-- [ ] 6.2.4 Add disk space warnings (nice-to-have, not critical)
+- [-] 6.2.4 Add disk space warnings (nice-to-have, not critical)
 
 ## Dependencies
 

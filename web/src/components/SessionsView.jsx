@@ -7,6 +7,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [actionInProgress, setActionInProgress] = useState(null)
+  const [progressInfo, setProgressInfo] = useState(null) // { title, description }
   const fileInputRef = useRef(null)
 
   // Save modal state
@@ -49,6 +50,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
 
     setSaving(true)
     setSaveError(null)
+    setProgressInfo({ title: 'Saving Session', description: `Creating snapshot "${saveName.trim()}"...` })
 
     try {
       const response = await fetch('/api/v1/sessions', {
@@ -74,6 +76,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
       setSaveError(err.message)
     } finally {
       setSaving(false)
+      setProgressInfo(null)
     }
   }
 
@@ -83,6 +86,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
     }
 
     setActionInProgress(`loading-${sessionName}`)
+    setProgressInfo({ title: 'Loading Session', description: `Restoring data from "${sessionName}"...` })
     try {
       const response = await fetch(`/api/v1/sessions/${encodeURIComponent(sessionName)}/load`, {
         method: 'POST',
@@ -103,6 +107,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
       alert(`Error: ${err.message}`)
     } finally {
       setActionInProgress(null)
+      setProgressInfo(null)
     }
   }
 
@@ -112,6 +117,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
     }
 
     setActionInProgress(`merging-${sessionName}`)
+    setProgressInfo({ title: 'Merging Session', description: `Combining data from "${sessionName}"...` })
     try {
       const response = await fetch(`/api/v1/sessions/${encodeURIComponent(sessionName)}/merge`, {
         method: 'POST',
@@ -129,6 +135,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
       alert(`Error: ${err.message}`)
     } finally {
       setActionInProgress(null)
+      setProgressInfo(null)
     }
   }
 
@@ -176,6 +183,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
     if (!file) return
 
     setActionInProgress('importing')
+    setProgressInfo({ title: 'Importing Session', description: `Processing "${file.name}"...` })
     try {
       const text = await file.text()
       const session = JSON.parse(text)
@@ -197,6 +205,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
       alert(`Error: ${err.message}`)
     } finally {
       setActionInProgress(null)
+      setProgressInfo(null)
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -396,6 +405,17 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
                 {saving ? 'Saving...' : 'Save Session'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Progress Overlay */}
+      {progressInfo && (
+        <div className="progress-overlay">
+          <div className="progress-modal">
+            <div className="progress-spinner"></div>
+            <div className="progress-title">{progressInfo.title}</div>
+            <div className="progress-description">{progressInfo.description}</div>
           </div>
         </div>
       )}
