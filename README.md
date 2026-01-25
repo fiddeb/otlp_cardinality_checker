@@ -98,7 +98,23 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 
 ### Installation
 
-#### Option 1: Build and Run Locally
+#### Option 1: Download Pre-built Binary
+
+Download the latest release for your platform from the [Releases page](https://github.com/fiddeb/otlp_cardinality_checker/releases).
+
+**macOS Users**: Downloaded binaries are not code-signed and will be blocked by Gatekeeper. To run them:
+
+```bash
+# Remove quarantine flag
+xattr -d com.apple.quarantine otlp_cardinality_checker-darwin-arm64
+
+# Or use the built-in workaround:
+# Right-click the binary → Open → Click "Open" in the dialog
+```
+
+Alternatively, build from source (no code-signing needed for locally built binaries).
+
+#### Option 2: Build and Run Locally
 
 ```bash
 # Clone repository
@@ -112,7 +128,7 @@ make build
 ./bin/occ
 ```
 
-#### Option 2: Deploy to Kubernetes
+#### Option 3: Deploy to Kubernetes
 
 ```bash
 # Build Docker image (on a machine with Docker)
