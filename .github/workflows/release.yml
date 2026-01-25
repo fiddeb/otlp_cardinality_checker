@@ -37,6 +37,19 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Set up Node.js
+        if: steps.tag_version.outputs.new_tag
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React UI
+        if: steps.tag_version.outputs.new_tag
+        run: |
+          cd web
+          npm ci
+          npm run build
+
       - name: Build binaries
         if: steps.tag_version.outputs.new_tag
         run: |
