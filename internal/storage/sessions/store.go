@@ -22,7 +22,7 @@ import (
 // Default configuration values
 const (
 	DefaultSessionDir     = "./data/sessions"
-	DefaultMaxSessionSize = 100 * 1024 * 1024 // 100MB
+	DefaultMaxSessionSize = 1024 * 1024 * 1024 // 1GB
 	DefaultMaxSessions    = 50
 	SessionFileExtension  = ".json.gz"
 	CurrentVersion        = 1
