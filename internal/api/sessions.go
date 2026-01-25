@@ -243,14 +243,36 @@ func (h *SessionHandler) LoadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return session data - actual loading into store would be handled by caller
-	// For now, just return the session data that can be processed by the UI
+	// If we have store access, perform actual load (clear + merge)
+	if h.storeAccess != nil {
+		// Clear existing data
+		if err := h.storeAccess.Clear(ctx); err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to clear store: "+err.Error())
+			return
+		}
+
+		// Merge session data into store
+		loadedCounts, err := h.performMerge(ctx, session)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to load session data: "+err.Error())
+			return
+		}
+
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"message": "Session loaded successfully",
+			"session": session.ID,
+			"loaded":  loadedCounts,
+		})
+		return
+	}
+
+	// Legacy: Return session data for client-side loading
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"message":   "Session loaded",
-		"session":   session.ID,
-		"stats":     session.Stats,
-		"data":      session.Data,
-		"action":    "replace",
+		"message": "Session loaded",
+		"session": session.ID,
+		"stats":   session.Stats,
+		"data":    session.Data,
+		"action":  "replace",
 	})
 }
 
