@@ -132,17 +132,22 @@ func NewServer(addr string, store storage.Storage) *Server {
 	if err != nil {
 		log.Printf("Warning: Could not initialize session storage: %v", err)
 	} else {
-		// Create main store getter for session handler
-		mainStoreGetter := func() ([]*models.MetricMetadata, []*models.SpanMetadata, []*models.LogMetadata, []*models.AttributeMetadata, []string, error) {
-			ctx := context.Background()
-			metrics, _ := store.ListMetrics(ctx, "")
-			spans, _ := store.ListSpans(ctx, "")
-			logs, _ := store.ListLogs(ctx, "")
-			attrs, _ := store.ListAttributes(ctx, nil)
-			services, _ := store.ListServices(ctx)
-			return metrics, spans, logs, attrs, services, nil
+		// Check if store implements StoreAccessor for full session support
+		if storeAccessor, ok := store.(StoreAccessor); ok {
+			s.sessionHandler = NewSessionHandlerWithStore(sessionStore, storeAccessor)
+		} else {
+			// Fallback to read-only session handler
+			mainStoreGetter := func() ([]*models.MetricMetadata, []*models.SpanMetadata, []*models.LogMetadata, []*models.AttributeMetadata, []string, error) {
+				ctx := context.Background()
+				metrics, _ := store.ListMetrics(ctx, "")
+				spans, _ := store.ListSpans(ctx, "")
+				logs, _ := store.ListLogs(ctx, "")
+				attrs, _ := store.ListAttributes(ctx, nil)
+				services, _ := store.ListServices(ctx)
+				return metrics, spans, logs, attrs, services, nil
+			}
+			s.sessionHandler = NewSessionHandler(sessionStore, mainStoreGetter)
 		}
-		s.sessionHandler = NewSessionHandler(sessionStore, mainStoreGetter)
 	}
 
 	// API routes
