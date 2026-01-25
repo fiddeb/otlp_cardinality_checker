@@ -222,6 +222,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 
 // LoadSession loads a session into the current store (replacing current data).
 // POST /api/v1/sessions/{name}/load
+// Query params: signals=metrics,spans,logs (optional, comma-separated)
 func (h *SessionHandler) LoadSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
@@ -232,6 +233,9 @@ func (h *SessionHandler) LoadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse signals filter
+	signalsFilter := parseSignalsFilter(r.URL.Query().Get("signals"))
+
 	// Load session from disk
 	session, err := h.store.Load(ctx, decodedName)
 	if err != nil {
@@ -241,6 +245,11 @@ func (h *SessionHandler) LoadSession(w http.ResponseWriter, r *http.Request) {
 		}
 		respondError(w, http.StatusInternalServerError, "Failed to load session: "+err.Error())
 		return
+	}
+
+	// Apply signals filter to session data
+	if len(signalsFilter) > 0 {
+		session = filterSessionBySignals(session, signalsFilter)
 	}
 
 	// If we have store access, perform actual load (clear + merge)
@@ -278,6 +287,7 @@ func (h *SessionHandler) LoadSession(w http.ResponseWriter, r *http.Request) {
 
 // MergeSession merges a session into the current store (additive).
 // POST /api/v1/sessions/{name}/merge
+// Query params: signals=metrics,spans,logs (optional, comma-separated)
 func (h *SessionHandler) MergeSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
@@ -288,6 +298,9 @@ func (h *SessionHandler) MergeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse signals filter
+	signalsFilter := parseSignalsFilter(r.URL.Query().Get("signals"))
+
 	// Load session from disk
 	session, err := h.store.Load(ctx, decodedName)
 	if err != nil {
@@ -297,6 +310,11 @@ func (h *SessionHandler) MergeSession(w http.ResponseWriter, r *http.Request) {
 		}
 		respondError(w, http.StatusInternalServerError, "Failed to load session: "+err.Error())
 		return
+	}
+
+	// Apply signals filter to session data
+	if len(signalsFilter) > 0 {
+		session = filterSessionBySignals(session, signalsFilter)
 	}
 
 	// If we have store access, perform actual merge
@@ -462,7 +480,7 @@ func (h *SessionHandler) ImportSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // DiffSessions compares two sessions.
-// GET /api/v1/sessions/diff?from=A&to=B
+// GET /api/v1/sessions/diff?from=A&to=B&signal_type=metric&service=svc&min_severity=warning
 func (h *SessionHandler) DiffSessions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -495,11 +513,25 @@ func (h *SessionHandler) DiffSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse filter parameters
+	signalType := r.URL.Query().Get("signal_type")
+	serviceFilter := r.URL.Query().Get("service")
+	minSeverity := r.URL.Query().Get("min_severity")
+
 	// Compute diff
 	diff := h.computeDiff(fromSession, toSession)
 
+	// Apply signal_type filter
+	if signalType != "" {
+		diff = filterDiffBySignalType(diff, signalType)
+	}
+
+	// Apply service filter
+	if serviceFilter != "" {
+		diff = filterDiffByService(diff, serviceFilter)
+	}
+
 	// Apply severity filter if specified
-	minSeverity := r.URL.Query().Get("min_severity")
 	if minSeverity != "" {
 		diff.Changes.Metrics.Added = filterChangesBySeverity(diff.Changes.Metrics.Added, minSeverity)
 		diff.Changes.Metrics.Removed = filterChangesBySeverity(diff.Changes.Metrics.Removed, minSeverity)
@@ -510,6 +542,9 @@ func (h *SessionHandler) DiffSessions(w http.ResponseWriter, r *http.Request) {
 		diff.Changes.Logs.Added = filterChangesBySeverity(diff.Changes.Logs.Added, minSeverity)
 		diff.Changes.Logs.Removed = filterChangesBySeverity(diff.Changes.Logs.Removed, minSeverity)
 		diff.Changes.Logs.Changed = filterChangesBySeverity(diff.Changes.Logs.Changed, minSeverity)
+		diff.Changes.Attributes.Added = filterChangesBySeverity(diff.Changes.Attributes.Added, minSeverity)
+		diff.Changes.Attributes.Removed = filterChangesBySeverity(diff.Changes.Attributes.Removed, minSeverity)
+		diff.Changes.Attributes.Changed = filterChangesBySeverity(diff.Changes.Attributes.Changed, minSeverity)
 	}
 
 	respondJSON(w, http.StatusOK, diff)
@@ -518,6 +553,9 @@ func (h *SessionHandler) DiffSessions(w http.ResponseWriter, r *http.Request) {
 // computeDiff calculates the differences between two sessions.
 func (h *SessionHandler) computeDiff(from, to *models.Session) *models.DiffResult {
 	diff := models.NewDiffResult(from.ID, to.ID)
+
+	// Diff attributes
+	h.diffAttributes(from, to, diff)
 
 	// Build maps for quick lookup
 	fromMetrics := make(map[string]*models.SerializedMetric)
@@ -834,6 +872,325 @@ func (h *SessionHandler) diffLogs(from, to *models.Session, diff *models.DiffRes
 // filterChangesBySeverity filters changes by minimum severity.
 func filterChangesBySeverity(changes []models.Change, minSeverity string) []models.Change {
 	return models.FilterBySeverity(changes, minSeverity)
+}
+
+// diffAttributes compares attributes between sessions.
+func (h *SessionHandler) diffAttributes(from, to *models.Session, diff *models.DiffResult) {
+	fromAttrs := make(map[string]*models.SerializedAttribute)
+	for _, a := range from.Data.Attributes {
+		fromAttrs[a.Key] = a
+	}
+
+	toAttrs := make(map[string]*models.SerializedAttribute)
+	for _, a := range to.Data.Attributes {
+		toAttrs[a.Key] = a
+	}
+
+	// Find added attributes
+	for key, toAttr := range toAttrs {
+		if _, exists := fromAttrs[key]; !exists {
+			severity := models.SeverityInfo
+			if toAttr.EstimatedCardinality > 1000 {
+				severity = models.SeverityWarning
+			}
+			diff.AddChange(models.Change{
+				Type:       models.ChangeTypeAdded,
+				SignalType: models.SignalTypeAttribute,
+				Name:       key,
+				Severity:   severity,
+				Metadata: map[string]interface{}{
+					"count":                 toAttr.Count,
+					"estimated_cardinality": toAttr.EstimatedCardinality,
+					"scope":                 toAttr.Scope,
+					"signal_types":          toAttr.SignalTypes,
+				},
+			})
+		}
+	}
+
+	// Find removed attributes
+	for key := range fromAttrs {
+		if _, exists := toAttrs[key]; !exists {
+			diff.AddChange(models.Change{
+				Type:       models.ChangeTypeRemoved,
+				SignalType: models.SignalTypeAttribute,
+				Name:       key,
+				Severity:   models.SeverityInfo,
+			})
+		}
+	}
+
+	// Find changed attributes
+	for key, toAttr := range toAttrs {
+		fromAttr, exists := fromAttrs[key]
+		if !exists {
+			continue
+		}
+
+		var changes []models.FieldChange
+
+		// Compare count
+		if toAttr.Count != fromAttr.Count {
+			pct := 0.0
+			if fromAttr.Count > 0 {
+				pct = float64(toAttr.Count-fromAttr.Count) / float64(fromAttr.Count) * 100
+			}
+			changes = append(changes, models.FieldChange{
+				Field:     "count",
+				From:      fromAttr.Count,
+				To:        toAttr.Count,
+				ChangePct: pct,
+				Severity:  models.CalculateSampleRateSeverity(fromAttr.Count, toAttr.Count),
+			})
+		}
+
+		// Compare cardinality
+		if toAttr.EstimatedCardinality != fromAttr.EstimatedCardinality {
+			pct := 0.0
+			if fromAttr.EstimatedCardinality > 0 {
+				pct = float64(toAttr.EstimatedCardinality-fromAttr.EstimatedCardinality) / float64(fromAttr.EstimatedCardinality) * 100
+			}
+			changes = append(changes, models.FieldChange{
+				Field:     "estimated_cardinality",
+				From:      fromAttr.EstimatedCardinality,
+				To:        toAttr.EstimatedCardinality,
+				ChangePct: pct,
+				Severity:  models.CalculateSeverity(fromAttr.EstimatedCardinality, toAttr.EstimatedCardinality),
+			})
+		}
+
+		if len(changes) > 0 {
+			maxSeverity := models.SeverityInfo
+			for _, c := range changes {
+				maxSeverity = models.MaxSeverity(maxSeverity, c.Severity)
+			}
+			diff.AddChange(models.Change{
+				Type:       models.ChangeTypeChanged,
+				SignalType: models.SignalTypeAttribute,
+				Name:       key,
+				Severity:   maxSeverity,
+				Details:    changes,
+			})
+		}
+	}
+}
+
+// parseSignalsFilter parses comma-separated signals filter string.
+func parseSignalsFilter(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var result []string
+	for _, sig := range splitAndTrim(s, ",") {
+		// Normalize: traces -> spans for consistency
+		if sig == "traces" {
+			sig = "spans"
+		}
+		if sig == "metrics" || sig == "spans" || sig == "logs" || sig == "attributes" {
+			result = append(result, sig)
+		}
+	}
+	return result
+}
+
+// splitAndTrim splits a string and trims whitespace from each part.
+func splitAndTrim(s, sep string) []string {
+	parts := make([]string, 0)
+	for _, p := range splitString(s, sep) {
+		trimmed := trimSpace(p)
+		if trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return parts
+}
+
+// splitString splits a string by separator (simple implementation).
+func splitString(s, sep string) []string {
+	if s == "" {
+		return nil
+	}
+	var result []string
+	start := 0
+	for i := 0; i <= len(s)-len(sep); i++ {
+		if s[i:i+len(sep)] == sep {
+			result = append(result, s[start:i])
+			start = i + len(sep)
+			i += len(sep) - 1
+		}
+	}
+	result = append(result, s[start:])
+	return result
+}
+
+// trimSpace trims whitespace from a string.
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
+}
+
+// filterSessionBySignals returns a copy of the session with only the specified signals.
+func filterSessionBySignals(session *models.Session, signals []string) *models.Session {
+	filtered := &models.Session{
+		Version:     session.Version,
+		ID:          session.ID,
+		Description: session.Description,
+		Created:     session.Created,
+		Signals:     signals,
+		Data:        models.SessionData{},
+		Stats:       session.Stats,
+	}
+
+	for _, sig := range signals {
+		switch sig {
+		case "metrics":
+			filtered.Data.Metrics = session.Data.Metrics
+		case "spans", "traces":
+			filtered.Data.Spans = session.Data.Spans
+		case "logs":
+			filtered.Data.Logs = session.Data.Logs
+		case "attributes":
+			filtered.Data.Attributes = session.Data.Attributes
+		}
+	}
+
+	return filtered
+}
+
+// filterDiffBySignalType returns a diff with only changes of the specified signal type.
+func filterDiffBySignalType(diff *models.DiffResult, signalType string) *models.DiffResult {
+	filtered := models.NewDiffResult(diff.From, diff.To)
+
+	switch signalType {
+	case "metric", "metrics":
+		filtered.Changes.Metrics = diff.Changes.Metrics
+		filtered.Summary.Metrics = diff.Summary.Metrics
+	case "span", "spans", "trace", "traces":
+		filtered.Changes.Spans = diff.Changes.Spans
+		filtered.Summary.Spans = diff.Summary.Spans
+	case "log", "logs":
+		filtered.Changes.Logs = diff.Changes.Logs
+		filtered.Summary.Logs = diff.Summary.Logs
+	case "attribute", "attributes":
+		filtered.Changes.Attributes = diff.Changes.Attributes
+		filtered.Summary.Attributes = diff.Summary.Attributes
+	default:
+		// Unknown signal type - return empty diff
+		return filtered
+	}
+
+	// Copy critical changes that match the signal type
+	for _, c := range diff.CriticalChanges {
+		if matchesSignalType(c.SignalType, signalType) {
+			filtered.CriticalChanges = append(filtered.CriticalChanges, c)
+		}
+	}
+
+	return filtered
+}
+
+// matchesSignalType checks if a change's signal type matches the filter.
+func matchesSignalType(changeType, filter string) bool {
+	switch filter {
+	case "metric", "metrics":
+		return changeType == models.SignalTypeMetric
+	case "span", "spans", "trace", "traces":
+		return changeType == models.SignalTypeSpan
+	case "log", "logs":
+		return changeType == models.SignalTypeLog
+	case "attribute", "attributes":
+		return changeType == models.SignalTypeAttribute
+	}
+	return false
+}
+
+// filterDiffByService returns a diff with only changes that involve the specified service.
+func filterDiffByService(diff *models.DiffResult, service string) *models.DiffResult {
+	filtered := models.NewDiffResult(diff.From, diff.To)
+
+	// Filter metrics
+	filtered.Changes.Metrics.Added = filterChangesByService(diff.Changes.Metrics.Added, service)
+	filtered.Changes.Metrics.Removed = filterChangesByService(diff.Changes.Metrics.Removed, service)
+	filtered.Changes.Metrics.Changed = filterChangesByService(diff.Changes.Metrics.Changed, service)
+	filtered.Summary.Metrics.Added = len(filtered.Changes.Metrics.Added)
+	filtered.Summary.Metrics.Removed = len(filtered.Changes.Metrics.Removed)
+	filtered.Summary.Metrics.Changed = len(filtered.Changes.Metrics.Changed)
+
+	// Filter spans
+	filtered.Changes.Spans.Added = filterChangesByService(diff.Changes.Spans.Added, service)
+	filtered.Changes.Spans.Removed = filterChangesByService(diff.Changes.Spans.Removed, service)
+	filtered.Changes.Spans.Changed = filterChangesByService(diff.Changes.Spans.Changed, service)
+	filtered.Summary.Spans.Added = len(filtered.Changes.Spans.Added)
+	filtered.Summary.Spans.Removed = len(filtered.Changes.Spans.Removed)
+	filtered.Summary.Spans.Changed = len(filtered.Changes.Spans.Changed)
+
+	// Filter logs
+	filtered.Changes.Logs.Added = filterChangesByService(diff.Changes.Logs.Added, service)
+	filtered.Changes.Logs.Removed = filterChangesByService(diff.Changes.Logs.Removed, service)
+	filtered.Changes.Logs.Changed = filterChangesByService(diff.Changes.Logs.Changed, service)
+	filtered.Summary.Logs.Added = len(filtered.Changes.Logs.Added)
+	filtered.Summary.Logs.Removed = len(filtered.Changes.Logs.Removed)
+	filtered.Summary.Logs.Changed = len(filtered.Changes.Logs.Changed)
+
+	// Filter attributes (attributes don't have service association, so include all)
+	filtered.Changes.Attributes = diff.Changes.Attributes
+	filtered.Summary.Attributes = diff.Summary.Attributes
+
+	// Filter critical changes
+	for _, c := range diff.CriticalChanges {
+		if changeHasService(c, service) {
+			filtered.CriticalChanges = append(filtered.CriticalChanges, c)
+		}
+	}
+
+	return filtered
+}
+
+// filterChangesByService filters changes to only include those involving a service.
+func filterChangesByService(changes []models.Change, service string) []models.Change {
+	var result []models.Change
+	for _, c := range changes {
+		if changeHasService(c, service) {
+			result = append(result, c)
+		}
+	}
+	return result
+}
+
+// changeHasService checks if a change involves a specific service.
+func changeHasService(c models.Change, service string) bool {
+	if c.Metadata == nil {
+		return true // If no metadata, include by default
+	}
+
+	// Check if services field exists
+	if services, ok := c.Metadata["services"]; ok {
+		switch s := services.(type) {
+		case map[string]interface{}:
+			_, exists := s[service]
+			return exists
+		case map[string]int64:
+			_, exists := s[service]
+			return exists
+		case []string:
+			for _, svc := range s {
+				if svc == service {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	// If no services info, include by default
+	return true
 }
 
 // Helper functions for JSON responses (package-level to avoid circular deps)
