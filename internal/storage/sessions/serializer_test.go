@@ -280,14 +280,15 @@ func TestSerializer_CreateSession(t *testing.T) {
 	if session.ID != "test-session" {
 		t.Errorf("ID mismatch: %s", session.ID)
 	}
-	if session.Stats.MetricsCount != 1 {
-		t.Errorf("MetricsCount mismatch: %d", session.Stats.MetricsCount)
+	// Stats should reflect total sample counts, not number of unique items
+	if session.Stats.MetricsCount != 100 {
+		t.Errorf("MetricsCount mismatch: expected 100, got %d", session.Stats.MetricsCount)
 	}
-	if session.Stats.SpansCount != 1 {
-		t.Errorf("SpansCount mismatch: %d", session.Stats.SpansCount)
+	if session.Stats.SpansCount != 50 {
+		t.Errorf("SpansCount mismatch: expected 50, got %d", session.Stats.SpansCount)
 	}
-	if session.Stats.LogsCount != 1 {
-		t.Errorf("LogsCount mismatch: %d", session.Stats.LogsCount)
+	if session.Stats.LogsCount != 25 {
+		t.Errorf("LogsCount mismatch: expected 25, got %d", session.Stats.LogsCount)
 	}
 }
 
@@ -296,10 +297,10 @@ func TestSerializer_CreateSession_FilterBySignal(t *testing.T) {
 	ctx := context.Background()
 
 	metrics := []*models.MetricMetadata{
-		{Name: "m1", LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
+		{Name: "m1", SampleCount: 10, LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
 	}
 	spans := []*models.SpanMetadata{
-		{Name: "s1", AttributeKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
+		{Name: "s1", SampleCount: 5, AttributeKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
 	}
 
 	// Create session with only metrics
@@ -312,11 +313,12 @@ func TestSerializer_CreateSession_FilterBySignal(t *testing.T) {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
-	if session.Stats.MetricsCount != 1 {
-		t.Errorf("Expected 1 metric, got %d", session.Stats.MetricsCount)
+	// MetricsCount should be sum of SampleCount (10), not number of metrics (1)
+	if session.Stats.MetricsCount != 10 {
+		t.Errorf("Expected 10 metric samples, got %d", session.Stats.MetricsCount)
 	}
 	if session.Stats.SpansCount != 0 {
-		t.Errorf("Expected 0 spans, got %d", session.Stats.SpansCount)
+		t.Errorf("Expected 0 spans (filtered out), got %d", session.Stats.SpansCount)
 	}
 }
 
@@ -325,9 +327,9 @@ func TestSerializer_CreateSession_FilterByService(t *testing.T) {
 	ctx := context.Background()
 
 	metrics := []*models.MetricMetadata{
-		{Name: "m1", Services: map[string]int64{"svc-a": 100}, LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
-		{Name: "m2", Services: map[string]int64{"svc-b": 100}, LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
-		{Name: "m3", Services: map[string]int64{"svc-a": 50, "svc-c": 50}, LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
+		{Name: "m1", SampleCount: 100, Services: map[string]int64{"svc-a": 100}, LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
+		{Name: "m2", SampleCount: 100, Services: map[string]int64{"svc-b": 100}, LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
+		{Name: "m3", SampleCount: 50, Services: map[string]int64{"svc-a": 50, "svc-c": 50}, LabelKeys: map[string]*models.KeyMetadata{}, ResourceKeys: map[string]*models.KeyMetadata{}},
 	}
 
 	// Create session filtered by service
@@ -340,9 +342,10 @@ func TestSerializer_CreateSession_FilterByService(t *testing.T) {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
-	// Should include m1 and m3 (both have svc-a)
-	if session.Stats.MetricsCount != 2 {
-		t.Errorf("Expected 2 metrics, got %d", session.Stats.MetricsCount)
+	// Should include m1 (100 samples) and m3 (50 samples) - both have svc-a
+	// Total = 100 + 50 = 150
+	if session.Stats.MetricsCount != 150 {
+		t.Errorf("Expected 150 metric samples (m1=100 + m3=50), got %d", session.Stats.MetricsCount)
 	}
 }
 
@@ -396,11 +399,17 @@ func TestSerializer_LargeSession(t *testing.T) {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
-	if session.Stats.MetricsCount != numMetrics {
-		t.Errorf("Expected %d metrics, got %d", numMetrics, session.Stats.MetricsCount)
+	// MetricsCount is sum of all SampleCount values
+	// SampleCount = i * 10 for i=0..9999, so sum = 10 * (0+1+2+...+9999) = 10 * 9999*10000/2 = 499950000
+	expectedSampleCount := 0
+	for i := 0; i < numMetrics; i++ {
+		expectedSampleCount += i * 10
+	}
+	if session.Stats.MetricsCount != expectedSampleCount {
+		t.Errorf("Expected %d metric samples, got %d", expectedSampleCount, session.Stats.MetricsCount)
 	}
 
-	t.Logf("Created session with %d metrics in %v", numMetrics, createDuration)
+	t.Logf("Created session with %d metrics (%d samples) in %v", numMetrics, session.Stats.MetricsCount, createDuration)
 
 	// Verify round-trip
 	restored, err := serializer.UnmarshalMetrics(session.Data.Metrics)
