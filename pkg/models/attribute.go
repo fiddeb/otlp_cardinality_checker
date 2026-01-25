@@ -7,7 +7,7 @@ import (
 	"github.com/fidde/otlp_cardinality_checker/pkg/hyperloglog"
 )
 
-// AttributeMetadata tracks metadata for a single attribute key across all signals.
+// AttributeMetadata tracks metadata for a single attribute key across all telemetry signals.
 // It uses HyperLogLog to estimate cardinality of unique values for the attribute.
 type AttributeMetadata struct {
 	mu sync.RWMutex
