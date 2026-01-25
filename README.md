@@ -139,7 +139,9 @@ The tool will start listening on:
 
 ### Web UI
 
-Open your browser at `http://localhost:8080` to access the embedded React UI. The UI is built into the binary and provides:
+![Dashboard](docs/img/dashboard.png)
+
+ The UI is built into the binary and provides:
 
 - **Dashboard** - Service overview with telemetry summary
 - **Metadata Complexity** - Identify metrics/spans/logs with high-cardinality attributes
