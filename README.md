@@ -355,21 +355,12 @@ curl http://localhost:8080/api/v1/logs/INFO | jq '.body_templates'
 curl http://localhost:8080/api/v1/logs/ERROR | jq '{severity, sample_count, body_templates}'
 ```
 
-See [docs/research/log-templating/](docs/research/log-templating/) for algorithm details and performance benchmarks.
-
 ## Documentation
 
 - **[docs/USAGE.md](docs/USAGE.md)** - **Start here!** Practical usage guide with examples
 - **[docs/API.md](docs/API.md)** - Complete REST API documentation with pagination examples
-- **[docs/SCALABILITY.md](docs/SCALABILITY.md)** - Performance optimizations and scalability limits
-- **[docs/research/log-templating/](docs/research/log-templating/)** - Automatic log template extraction with Drain algorithm
-  - **[README.md](docs/research/log-templating/README.md)** - Algorithm research and comparison
-  - **[STATUS.md](docs/research/log-templating/STATUS.md)** - Implementation details and benchmarks
 - **[k8s/README.md](k8s/README.md)** - Kubernetes deployment guide
 - **[scripts/README.md](scripts/README.md)** - Load testing guide with K6
-- **[PRODUCT.md](PRODUCT.md)** - Product overview and requirements
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design decisions
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
 - **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - GitHub Copilot coding guidelines
 
 ## Project Status
@@ -389,7 +380,6 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 - 50,000 metrics in 421 MB memory (~8.4 KB per metric)
 - 450 req/s, 4,455 datapoints/s sustained
 - P95 latency 45ms under load
-- See [docs/SCALABILITY.md](docs/SCALABILITY.md) for details
 
 ### Phase 2: Production Hardening
 - [x] OTLP gRPC receiver (port 4317)
@@ -419,12 +409,7 @@ See [docs/research/log-templating/](docs/research/log-templating/) for algorithm
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Development setup
-- Coding guidelines
-- Testing requirements
-- PR process
+We welcome contributions!
 
 ### Quick Contribution Guide
 

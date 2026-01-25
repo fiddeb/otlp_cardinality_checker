@@ -2,7 +2,7 @@
 
 ## Pagination
 
-All list endpoints support pagination to handle large datasets efficiently.
+All list endpoints support pagination for large datasets.
 
 ### Query Parameters
 
@@ -190,7 +190,7 @@ Response: Complete telemetry footprint for a service
 }
 ```
 
-Note: Service overview is **not paginated** as it's meant to show the complete footprint. For large services with many metrics, consider using the filtered list endpoints instead:
+Note: Service overview is not paginated since it shows the complete footprint. For large services with many metrics, use the filtered list endpoints instead:
 ```bash
 curl "http://localhost:8080/api/v1/metrics?service=my-service&limit=100"
 ```
@@ -211,7 +211,7 @@ Response:
 
 ## Performance Considerations
 
-### Optimal Page Sizes
+### Page Sizes
 
 - **Default (100)**: Good balance for web UI pagination
 - **Small (10-50)**: Better for real-time updates, lower latency
@@ -226,12 +226,9 @@ With in-memory storage:
 
 ### Best Practices
 
-1. **Always use pagination** when listing resources
-2. **Start with default limit** (100) and adjust based on needs
-3. **Filter by service** when possible to reduce dataset size
-4. **Cache responses** if data doesn't change frequently
-5. **Use offset-based pagination** for simple navigation
-6. **Consider cursor-based pagination** for very large datasets (future enhancement)
+Use pagination when listing resources. The default limit of 100 works well for most cases. Filter by service to reduce the dataset size. Cache responses if your data doesn't change often.
+
+Offset-based pagination works fine for simple navigation. For very large datasets, cursor-based pagination might be added later.
 
 ## Cardinality Metadata
 
@@ -244,7 +241,7 @@ With in-memory storage:
 
 #### `value_samples`
 - Up to 100 example values
-- **Always sorted** for consistency
+- Always sorted for consistency
 - Useful for spotting cardinality issues
 
 #### `percentage`
@@ -274,7 +271,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 
 ## Attribute Catalog
 
-The attribute catalog provides a **global view** of all attribute keys across metrics, spans, and logs. This helps identify high-cardinality attributes that may be causing performance or cost issues in your observability system.
+The attribute catalog shows all attribute keys across metrics, spans, and logs. Use it to find high-cardinality attributes that cause performance or cost issues.
 
 ### List All Attributes
 
@@ -388,15 +385,14 @@ Total number of times this attribute key was observed across all signals
 
 #### `estimated_cardinality`
 Estimated number of unique values for this attribute key using HyperLogLog algorithm:
-- **Precision**: 14 (±0.81% error)
-- **Memory**: ~16KB per attribute
-- **Accuracy**: Very accurate even for millions of unique values
+- Precision: 14 (±0.81% error)
+- Memory: ~16KB per attribute
+- Accurate for millions of unique values
 
 #### `value_samples`
-Array of up to 10 sample values observed for this attribute:
+Up to 10 sample values:
 - First 10 unique values encountered
 - Useful for understanding what type of data the attribute contains
-- **Not** a statistical sample - just the first few unique values
 
 #### `signal_types`
 Array of signal types where this attribute was observed:
@@ -459,9 +455,9 @@ curl -s "http://localhost:8080/api/v1/attributes" | \
 
 ### Known Limitations
 
-- **Sample values**: Only first 10 unique values are stored
-- **SQLite performance**: Under high load, synchronous writes can be slow (future optimization planned)
-- **No historical data**: Only tracks attributes from telemetry received while running
+- Sample values: Only first 10 unique values are stored
+- SQLite performance: Under high load, synchronous writes can be slow
+- No historical data: Only tracks attributes from telemetry received while running
 
 ---
 
