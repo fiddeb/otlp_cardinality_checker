@@ -101,7 +101,24 @@ func (s *Serializer) UnmarshalMetrics(metrics []*models.SerializedMetric) ([]*mo
 // unmarshalMetric converts a single SerializedMetric to MetricMetadata.
 func (s *Serializer) unmarshalMetric(sm *models.SerializedMetric) (*models.MetricMetadata, error) {
 	// Create basic metric - we don't restore the full MetricData since we only need Type string
-	m := models.NewMetricMetadata(sm.Name, nil)
+	var metricData models.MetricData
+
+	switch sm.Type {
+	case "Gauge":
+		metricData = &models.GaugeMetric{}
+	case "Sum":
+		metricData = &models.SumMetric{}
+	case "Histogram":
+		metricData = &models.HistogramMetric{}
+	case "ExponentialHistogram":
+		metricData = &models.ExponentialHistogramMetric{}
+	case "Summary":
+		metricData = &models.SummaryMetric{}
+	default:
+		metricData = nil
+	}
+
+	m := models.NewMetricMetadata(sm.Name, metricData)
 	m.Description = sm.Description
 	m.Unit = sm.Unit
 	// Note: Type is stored in sm.Type but we don't need to restore MetricData for sessions
