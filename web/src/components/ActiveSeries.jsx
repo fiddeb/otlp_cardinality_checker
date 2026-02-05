@@ -5,7 +5,7 @@ function ActiveSeries() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showAll, setShowAll] = useState(false)
-  const [sortBy, setSortBy] = useState('series') // 'series', 'name', 'samples'
+  const [sortBy, setSortBy] = useState('series-prom') // 'series-otlp', 'series-prom', 'name', 'samples'
 
   useEffect(() => {
     fetch('/api/v1/metrics')
@@ -25,11 +25,16 @@ function ActiveSeries() {
   if (loading) return <div className="loading">Loading...</div>
   if (error) return <div className="error">Error: {error}</div>
 
+  const getOtlpSeries = (metric) => metric.active_series_otlp ?? metric.active_series ?? 0
+  const getPromSeries = (metric) => metric.active_series_prometheus ?? getOtlpSeries(metric)
+
   // Sort metrics
   const sorted = [...data].sort((a, b) => {
     switch (sortBy) {
-      case 'series':
-        return (b.active_series || 0) - (a.active_series || 0)
+      case 'series-otlp':
+        return getOtlpSeries(b) - getOtlpSeries(a)
+      case 'series-prom':
+        return getPromSeries(b) - getPromSeries(a)
       case 'name':
         return a.name.localeCompare(b.name)
       case 'samples':
@@ -40,9 +45,10 @@ function ActiveSeries() {
   })
 
   // Calculate statistics
-  const totalSeries = sorted.reduce((sum, m) => sum + (m.active_series || 0), 0)
-  const avgSeries = totalSeries / (sorted.length || 1)
-  const maxSeries = Math.max(...sorted.map(m => m.active_series || 0))
+  const totalOtlpSeries = sorted.reduce((sum, m) => sum + getOtlpSeries(m), 0)
+  const totalPromSeries = sorted.reduce((sum, m) => sum + getPromSeries(m), 0)
+  const avgOtlpSeries = totalOtlpSeries / (sorted.length || 1)
+  const maxPromSeries = Math.max(...sorted.map(m => getPromSeries(m)))
 
   // Display limit
   const displayLimit = showAll ? sorted.length : 20
@@ -71,28 +77,37 @@ function ActiveSeries() {
           
           <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
             <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Total Active Series
+              Total Active Series (OTLP)
             </div>
             <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
-              {totalSeries.toLocaleString()}
+              {totalOtlpSeries.toLocaleString()}
             </div>
           </div>
           
           <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
             <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Average per Metric
+              Total Active Series (Prometheus)
             </div>
             <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
-              {Math.round(avgSeries).toLocaleString()}
+              {totalPromSeries.toLocaleString()}
             </div>
           </div>
           
           <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
             <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Highest Cardinality
+              Average per Metric (OTLP)
             </div>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: maxSeries > 1000 ? 'var(--danger)' : 'var(--success)' }}>
-              {maxSeries.toLocaleString()}
+            <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
+              {Math.round(avgOtlpSeries).toLocaleString()}
+            </div>
+          </div>
+
+          <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
+            <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+              Highest Cardinality (Prometheus)
+            </div>
+            <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: maxPromSeries > 1000 ? 'var(--danger)' : 'var(--success)' }}>
+              {maxPromSeries.toLocaleString()}
             </div>
           </div>
         </div>
@@ -100,10 +115,16 @@ function ActiveSeries() {
         <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{ fontWeight: '500' }}>Sort by:</span>
           <button 
-            onClick={() => setSortBy('series')}
-            className={sortBy === 'series' ? 'sort-button active' : 'sort-button'}
+            onClick={() => setSortBy('series-otlp')}
+            className={sortBy === 'series-otlp' ? 'sort-button active' : 'sort-button'}
           >
-            Active Series
+            OTLP Series
+          </button>
+          <button 
+            onClick={() => setSortBy('series-prom')}
+            className={sortBy === 'series-prom' ? 'sort-button active' : 'sort-button'}
+          >
+            Prometheus Series
           </button>
           <button 
             onClick={() => setSortBy('name')}
@@ -125,7 +146,8 @@ function ActiveSeries() {
               <th>Rank</th>
               <th>Metric Name</th>
               <th>Type</th>
-              <th>Active Series</th>
+              <th>Active Series (OTLP)</th>
+              <th>Active Series (Prometheus)</th>
               <th>Label Keys</th>
               <th>Samples</th>
             </tr>
@@ -141,8 +163,13 @@ function ActiveSeries() {
                   <span className="type-badge">{metric.type || 'Unknown'}</span>
                 </td>
                 <td>
-                  <span className={`badge ${getSeriesBadge(metric.active_series || 0)}`}>
-                    {(metric.active_series || 0).toLocaleString()}
+                  <span className={`badge ${getSeriesBadge(getOtlpSeries(metric))}`}>
+                    {getOtlpSeries(metric).toLocaleString()}
+                  </span>
+                </td>
+                <td>
+                  <span className={`badge ${getSeriesBadge(getPromSeries(metric))}`}>
+                    {getPromSeries(metric).toLocaleString()}
                   </span>
                 </td>
                 <td>

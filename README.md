@@ -162,7 +162,7 @@ The tool will start listening on:
 - **Dashboard** - Service overview with telemetry summary
 - **Metadata Complexity** - Identify metrics/spans/logs with high-cardinality attributes
 - **Metrics Overview** - Aggregated view of all metrics with type and unit breakdowns
-- **Active Series** - Real-time cardinality tracking with HyperLogLog estimation
+- **Active Series** - Real-time cardinality tracking with HyperLogLog estimation. Shows both OTLP active series (label combinations) and Prometheus active series estimates (buckets plus _sum/_count for histograms).
 - **Metrics Details** - Filterable table of all metrics with attribute analysis
 - **Traces** - Span name analysis with attribute keys and sample counts
 - **Trace Patterns** - Aggregated span name patterns (e.g., `GET <URL>`)
