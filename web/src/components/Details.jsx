@@ -31,6 +31,13 @@ function Details({ type, name, onBack }) {
   if (error) return <div className="error">Error: {error}</div>
 
   const keys = type === 'metrics' ? data.label_keys : data.attribute_keys
+  const otlpSeries = data.active_series_otlp ?? data.active_series ?? 0
+  const promSeries = data.active_series_prometheus ?? otlpSeries
+  const histogramBucketCount = data.type === 'Histogram' && data.data && data.data.explicit_bounds
+    ? data.data.explicit_bounds.length + 1
+    : data.type === 'ExponentialHistogram' && data.data && data.data.scales
+      ? data.data.scales.length * 10
+      : null
 
   const getCardinalityBadge = (card) => {
     if (card > 200) return 'high'
@@ -50,7 +57,7 @@ function Details({ type, name, onBack }) {
         <p>Samples: {data.sample_count}</p>
 
         {/* Active Series (only for metrics) */}
-        {type === 'metrics' && data.active_series !== undefined && (
+        {type === 'metrics' && otlpSeries !== undefined && (
           <>
             <div style={{ 
               marginTop: '16px',
@@ -65,15 +72,32 @@ function Details({ type, name, onBack }) {
                 gap: '8px',
                 marginBottom: '4px'
               }}>
-                <strong>📈 Active Series:</strong>
+                <strong>📈 Active Series (OTLP):</strong>
                 <span style={{ 
                   fontSize: '1.2em',
                   fontWeight: 'bold',
-                  color: data.active_series > 1000 ? 'var(--danger)' : 
-                         data.active_series > 100 ? 'var(--warning)' : 
+                  color: otlpSeries > 1000 ? 'var(--danger)' : 
+                         otlpSeries > 100 ? 'var(--warning)' : 
                          'var(--success)'
                 }}>
-                  {data.active_series.toLocaleString()}
+                  {otlpSeries.toLocaleString()}
+                </span>
+              </div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '4px'
+              }}>
+                <strong>📊 Active Series (Prometheus):</strong>
+                <span style={{ 
+                  fontSize: '1.2em',
+                  fontWeight: 'bold',
+                  color: promSeries > 1000 ? 'var(--danger)' : 
+                         promSeries > 100 ? 'var(--warning)' : 
+                         'var(--success)'
+                }}>
+                  {promSeries.toLocaleString()}
                 </span>
               </div>
               <div style={{ 
@@ -135,7 +159,7 @@ function Details({ type, name, onBack }) {
                           <div>... och {Object.keys(data.label_keys).length - 5} fler labels</div>
                         )}
                         <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
-                          <strong>{data.active_series.toLocaleString()}</strong> unika kombinationer observerade
+                          <strong>{otlpSeries.toLocaleString()}</strong> unika kombinationer observerade (OTLP)
                         </div>
                       </>
                     ) : (
@@ -146,10 +170,28 @@ function Details({ type, name, onBack }) {
                     <strong>Exempel:</strong> Om metric har labels method=GET,status=200 och method=POST,status=404 
                     = 2 unika kombinationer = 2 aktiva serier.
                   </div>
+                  <div style={{ marginTop: '8px' }}>
+                    <strong>Prometheus Active Series:</strong> För histogram räknas buckets som egna serier och
+                    varje label-kombination har även _sum och _count.
+                  </div>
+                  {(data.type === 'Histogram' || data.type === 'ExponentialHistogram') && (
+                    <div style={{ marginTop: '8px' }}>
+                      <strong>Histogram:</strong> OTLP Active Series är unika label-kombinationer, men
+                      Prometheus Active Series = OTLP × (bucket_count + 2).
+                      {histogramBucketCount !== null && (
+                        <span> bucket_count = {histogramBucketCount}.</span>
+                      )}
+                    </div>
+                  )}
+                  {(data.type !== 'Histogram' && data.type !== 'ExponentialHistogram') && (
+                    <div style={{ marginTop: '8px' }}>
+                      <strong>Ej histogram:</strong> Prometheus Active Series = OTLP Active Series.
+                    </div>
+                  )}
                 </div>
               )}
 
-              {data.active_series > 1000 && (
+              {promSeries > 1000 && (
                 <div style={{
                   marginTop: '8px',
                   padding: '8px',

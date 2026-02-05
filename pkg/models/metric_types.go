@@ -10,7 +10,7 @@ import (
 type MetricData interface {
 	// GetType returns the metric type name (Gauge, Sum, Histogram, etc.)
 	GetType() string
-	
+
 	// GetDataPointCount returns the number of data points
 	GetDataPointCount() int64
 }
@@ -26,17 +26,17 @@ func MarshalMetricData(md MetricData) ([]byte, error) {
 	if md == nil {
 		return json.Marshal(nil)
 	}
-	
+
 	dataBytes, err := json.Marshal(md)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	wrapper := metricDataJSON{
 		Type: md.GetType(),
 		Data: dataBytes,
 	}
-	
+
 	return json.Marshal(wrapper)
 }
 
@@ -45,12 +45,12 @@ func UnmarshalMetricData(data []byte) (MetricData, error) {
 	if len(data) == 0 || string(data) == "null" {
 		return nil, nil
 	}
-	
+
 	var wrapper metricDataJSON
 	if err := json.Unmarshal(data, &wrapper); err != nil {
 		return nil, err
 	}
-	
+
 	switch wrapper.Type {
 	case "Gauge":
 		var gauge GaugeMetric
@@ -58,35 +58,35 @@ func UnmarshalMetricData(data []byte) (MetricData, error) {
 			return nil, err
 		}
 		return &gauge, nil
-		
+
 	case "Sum":
 		var sum SumMetric
 		if err := json.Unmarshal(wrapper.Data, &sum); err != nil {
 			return nil, err
 		}
 		return &sum, nil
-		
+
 	case "Histogram":
 		var hist HistogramMetric
 		if err := json.Unmarshal(wrapper.Data, &hist); err != nil {
 			return nil, err
 		}
 		return &hist, nil
-		
+
 	case "ExponentialHistogram":
 		var expHist ExponentialHistogramMetric
 		if err := json.Unmarshal(wrapper.Data, &expHist); err != nil {
 			return nil, err
 		}
 		return &expHist, nil
-		
+
 	case "Summary":
 		var summary SummaryMetric
 		if err := json.Unmarshal(wrapper.Data, &summary); err != nil {
 			return nil, err
 		}
 		return &summary, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unknown metric type: %s", wrapper.Type)
 	}
@@ -99,10 +99,10 @@ type AggregationTemporality int32
 const (
 	// AggregationTemporalityUnspecified is the default, should not be used
 	AggregationTemporalityUnspecified AggregationTemporality = 0
-	
+
 	// AggregationTemporalityDelta reports changes since last report time
 	AggregationTemporalityDelta AggregationTemporality = 1
-	
+
 	// AggregationTemporalityCumulative reports cumulative changes since a fixed start time
 	AggregationTemporalityCumulative AggregationTemporality = 2
 )
@@ -138,10 +138,10 @@ func (g *GaugeMetric) GetDataPointCount() int64 {
 type SumMetric struct {
 	// DataPointCount is the number of data points observed
 	DataPointCount int64 `json:"data_point_count"`
-	
+
 	// AggregationTemporality describes if the aggregator reports delta or cumulative changes
 	AggregationTemporality AggregationTemporality `json:"aggregation_temporality"`
-	
+
 	// IsMonotonic indicates whether the sum is monotonic (only increases)
 	IsMonotonic bool `json:"is_monotonic"`
 }
@@ -159,10 +159,10 @@ func (s *SumMetric) GetDataPointCount() int64 {
 type HistogramMetric struct {
 	// DataPointCount is the number of data points observed
 	DataPointCount int64 `json:"data_point_count"`
-	
+
 	// AggregationTemporality describes if the aggregator reports delta or cumulative changes
 	AggregationTemporality AggregationTemporality `json:"aggregation_temporality"`
-	
+
 	// ExplicitBounds contains the set of bucket boundaries observed across data points.
 	// This is a union of all explicit_bounds arrays seen.
 	ExplicitBounds []float64 `json:"explicit_bounds,omitempty"`
@@ -181,10 +181,10 @@ func (h *HistogramMetric) GetDataPointCount() int64 {
 type ExponentialHistogramMetric struct {
 	// DataPointCount is the number of data points observed
 	DataPointCount int64 `json:"data_point_count"`
-	
+
 	// AggregationTemporality describes if the aggregator reports delta or cumulative changes
 	AggregationTemporality AggregationTemporality `json:"aggregation_temporality"`
-	
+
 	// Scale describes the resolution of the histogram (observed scales)
 	Scales []int32 `json:"scales,omitempty"`
 }
@@ -202,7 +202,7 @@ func (e *ExponentialHistogramMetric) GetDataPointCount() int64 {
 type SummaryMetric struct {
 	// DataPointCount is the number of data points observed
 	DataPointCount int64 `json:"data_point_count"`
-	
+
 	// Note: Summary metrics are always cumulative, no aggregation_temporality field
 }
 
@@ -212,4 +212,26 @@ func (s *SummaryMetric) GetType() string {
 
 func (s *SummaryMetric) GetDataPointCount() int64 {
 	return s.DataPointCount
+}
+
+// EstimatePrometheusActiveSeries estimates Prometheus series count based on OTLP series.
+// For histograms, this accounts for bucket series plus _sum and _count.
+func EstimatePrometheusActiveSeries(activeSeriesOTLP int64, data MetricData) int64 {
+	if activeSeriesOTLP <= 0 {
+		return activeSeriesOTLP
+	}
+	if data == nil {
+		return activeSeriesOTLP
+	}
+
+	switch metric := data.(type) {
+	case *HistogramMetric:
+		bucketCount := len(metric.ExplicitBounds) + 1
+		return activeSeriesOTLP * int64(bucketCount+2)
+	case *ExponentialHistogramMetric:
+		bucketCount := len(metric.Scales) * 10
+		return activeSeriesOTLP * int64(bucketCount+2)
+	default:
+		return activeSeriesOTLP
+	}
 }

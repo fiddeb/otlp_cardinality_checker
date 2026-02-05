@@ -42,11 +42,11 @@ type PaginationParams struct {
 
 // PaginatedResponse wraps a paginated response with metadata.
 type PaginatedResponse struct {
-	Data       interface{} `json:"data"`
-	Total      int         `json:"total"`
-	Limit      int         `json:"limit"`
-	Offset     int         `json:"offset"`
-	HasMore    bool        `json:"has_more"`
+	Data    interface{} `json:"data"`
+	Total   int         `json:"total"`
+	Limit   int         `json:"limit"`
+	Offset  int         `json:"offset"`
+	HasMore bool        `json:"has_more"`
 }
 
 // parsePaginationParams extracts pagination parameters from request.
@@ -167,7 +167,7 @@ func NewServer(addr string, store storage.Storage) *Server {
 		// Logs endpoints
 		r.Get("/logs", s.listLogs)
 		// IMPORTANT: More specific routes must come BEFORE generic {severity} route
-		r.Get("/logs/by-service", s.listLogsByService) // NEW: Service-based navigation
+		r.Get("/logs/by-service", s.listLogsByService)                                     // NEW: Service-based navigation
 		r.Get("/logs/service/{service}/severity/{severity}", s.getLogByServiceAndSeverity) // NEW
 		r.Get("/logs/patterns", s.getLogPatterns)
 		r.Get("/logs/patterns/{severity}/{template}", s.getPatternDetails)
@@ -209,14 +209,14 @@ func NewServer(addr string, store storage.Storage) *Server {
 	} else {
 		// Serve static files from embedded filesystem
 		fileServer := http.FileServer(staticFS)
-		
+
 		s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 			// Check if file exists in embedded FS
 			if staticFS.Exists("", r.URL.Path) {
 				fileServer.ServeHTTP(w, r)
 				return
 			}
-			
+
 			// SPA fallback: serve index.html for routes not matching static files
 			f, err := staticFS.Open("/index.html")
 			if err != nil {
@@ -224,15 +224,17 @@ func NewServer(addr string, store storage.Storage) *Server {
 				return
 			}
 			defer f.Close()
-			
+
 			// Get file info for http.ServeContent
 			stat, err := f.Stat()
 			if err != nil {
 				http.Error(w, "UI not available", http.StatusInternalServerError)
 				return
 			}
-			
-			http.ServeContent(w, r, "index.html", stat.ModTime(), f.(interface{ Seek(int64, int) (int64, error) }).(http.File))
+
+			http.ServeContent(w, r, "index.html", stat.ModTime(), f.(interface {
+				Seek(int64, int) (int64, error)
+			}).(http.File))
 		})
 	}
 
@@ -294,18 +296,24 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 	// Add convenience "type" field at top level for UI compatibility
 	type MetricResponse struct {
 		*models.MetricMetadata
-		Type string `json:"type"`
+		Type                   string `json:"type"`
+		ActiveSeriesOTLP       int64  `json:"active_series_otlp"`
+		ActiveSeriesPrometheus int64  `json:"active_series_prometheus"`
 	}
-	
+
 	metricsWithType := make([]*MetricResponse, len(metrics))
 	for i, m := range metrics {
 		metricType := "Unknown"
 		if m.Data != nil {
 			metricType = m.Data.GetType()
 		}
+		otlpSeries := m.GetActiveSeries()
+		promSeries := models.EstimatePrometheusActiveSeries(otlpSeries, m.Data)
 		metricsWithType[i] = &MetricResponse{
-			MetricMetadata: m,
-			Type:           metricType,
+			MetricMetadata:         m,
+			Type:                   metricType,
+			ActiveSeriesOTLP:       otlpSeries,
+			ActiveSeriesPrometheus: promSeries,
 		}
 	}
 
@@ -332,17 +340,23 @@ func (s *Server) getMetric(w http.ResponseWriter, r *http.Request) {
 	// Add convenience "type" field at top level for UI compatibility
 	type MetricResponse struct {
 		*models.MetricMetadata
-		Type string `json:"type"`
+		Type                   string `json:"type"`
+		ActiveSeriesOTLP       int64  `json:"active_series_otlp"`
+		ActiveSeriesPrometheus int64  `json:"active_series_prometheus"`
 	}
-	
+
 	metricType := "Unknown"
 	if metric.Data != nil {
 		metricType = metric.Data.GetType()
 	}
-	
+	otlpSeries := metric.GetActiveSeries()
+	promSeries := models.EstimatePrometheusActiveSeries(otlpSeries, metric.Data)
+
 	response := &MetricResponse{
-		MetricMetadata: metric,
-		Type:           metricType,
+		MetricMetadata:         metric,
+		Type:                   metricType,
+		ActiveSeriesOTLP:       otlpSeries,
+		ActiveSeriesPrometheus: promSeries,
 	}
 
 	s.respondJSON(w, http.StatusOK, response)
@@ -370,7 +384,7 @@ func (s *Server) listSpans(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getSpan(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	
+
 	// URL decode the span name
 	decodedName, err := url.QueryUnescape(name)
 	if err != nil {
@@ -427,7 +441,7 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	severity := chi.URLParam(r, "severity")
-	
+
 	// URL decode the severity
 	decodedSeverity, err := url.QueryUnescape(severity)
 	if err != nil {
@@ -459,7 +473,7 @@ func (s *Server) listLogsByService(w http.ResponseWriter, r *http.Request) {
 	if dbProv, ok := s.store.(dbProvider); ok {
 		db = dbProv.DB()
 	}
-	
+
 	// If no SQL database available (memory backend), fallback to ListLogs
 	if db == nil {
 		logs, err := s.store.ListLogs(ctx, "")
@@ -467,14 +481,14 @@ func (s *Server) listLogsByService(w http.ResponseWriter, r *http.Request) {
 			s.respondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		
+
 		// Transform logs to service-based view
 		type ServiceLogData struct {
 			ServiceName string `json:"service_name"`
 			Severity    string `json:"severity"`
 			SampleCount int64  `json:"sample_count"`
 		}
-		
+
 		var data []ServiceLogData
 		for _, log := range logs {
 			for serviceName, count := range log.Services {
@@ -485,7 +499,7 @@ func (s *Server) listLogsByService(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
-		
+
 		// Apply pagination
 		_, response := paginateSlice(data, params)
 		s.respondJSON(w, http.StatusOK, response)
@@ -565,7 +579,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 	if dbProv, ok := s.store.(dbProvider); ok {
 		db = dbProv.DB()
 	}
-	
+
 	// If no SQL database available (memory backend), fallback to GetLog
 	if db == nil {
 		log, err := s.store.GetLog(ctx, decodedSeverity)
@@ -577,14 +591,14 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 			s.respondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		
+
 		// Check if service exists in this severity
 		sampleCount, exists := log.Services[decodedService]
 		if !exists {
 			s.respondError(w, http.StatusNotFound, "no data found for this service and severity")
 			return
 		}
-		
+
 		// Build response from log data
 		type LogServiceData struct {
 			Severity      string                         `json:"severity"`
@@ -594,7 +608,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 			AttributeKeys map[string]*models.KeyMetadata `json:"attribute_keys,omitempty"`
 			ResourceKeys  map[string]*models.KeyMetadata `json:"resource_keys,omitempty"`
 		}
-		
+
 		data := LogServiceData{
 			Severity:      decodedSeverity,
 			ServiceName:   decodedService,
@@ -603,17 +617,17 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 			AttributeKeys: log.AttributeKeys,
 			ResourceKeys:  log.ResourceKeys,
 		}
-		
+
 		s.respondJSON(w, http.StatusOK, data)
 		return
 	}
 
 	// Query for this specific service+severity combination (SQLite path)
 	type LogServiceData struct {
-		Severity      string                       `json:"severity"`
-		ServiceName   string                       `json:"service_name"`
-		SampleCount   int64                        `json:"sample_count"`
-		BodyTemplates []models.BodyTemplate        `json:"body_templates,omitempty"`
+		Severity      string                        `json:"severity"`
+		ServiceName   string                        `json:"service_name"`
+		SampleCount   int64                         `json:"sample_count"`
+		BodyTemplates []models.BodyTemplate         `json:"body_templates,omitempty"`
 		AttributeKeys map[string]models.KeyMetadata `json:"attribute_keys,omitempty"`
 		ResourceKeys  map[string]models.KeyMetadata `json:"resource_keys,omitempty"`
 	}
@@ -721,7 +735,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 // getLogPatterns returns advanced pattern analysis view grouped by service.
 func (s *Server) getLogPatterns(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	// Parse query parameters with defaults
 	minCount := int64(10)
 	if minCountStr := r.URL.Query().Get("minCount"); minCountStr != "" {
@@ -729,20 +743,20 @@ func (s *Server) getLogPatterns(w http.ResponseWriter, r *http.Request) {
 			minCount = parsed
 		}
 	}
-	
+
 	minServices := 1
 	if minServicesStr := r.URL.Query().Get("minServices"); minServicesStr != "" {
 		if parsed, err := strconv.Atoi(minServicesStr); err == nil && parsed > 0 {
 			minServices = parsed
 		}
 	}
-	
+
 	patterns, err := s.store.GetLogPatterns(ctx, minCount, minServices)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	
+
 	s.respondJSON(w, http.StatusOK, patterns)
 }
 
@@ -752,27 +766,27 @@ func (s *Server) getPatternDetails(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	severity := chi.URLParam(r, "severity")
 	template := chi.URLParam(r, "template")
-	
+
 	// URL decode parameters
 	decodedSeverity, err := url.QueryUnescape(severity)
 	if err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid severity encoding")
 		return
 	}
-	
+
 	decodedTemplate, err := url.QueryUnescape(template)
 	if err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid template encoding")
 		return
 	}
-	
+
 	// Get all patterns (no filters) and find the matching one
 	allPatterns, err := s.store.GetLogPatterns(ctx, 0, 0)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	
+
 	// Find the pattern that matches template and has this severity
 	var matchedPattern *models.PatternGroup
 	for _, pattern := range allPatterns.Patterns {
@@ -784,12 +798,12 @@ func (s *Server) getPatternDetails(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	if matchedPattern == nil {
 		s.respondError(w, http.StatusNotFound, "pattern not found for this severity")
 		return
 	}
-	
+
 	// Filter services to only show those that have this severity
 	filteredServices := []models.ServicePatternInfo{}
 	for _, service := range matchedPattern.Services {
@@ -805,16 +819,16 @@ func (s *Server) getPatternDetails(w http.ResponseWriter, r *http.Request) {
 			filteredServices = append(filteredServices, service)
 		}
 	}
-	
+
 	// Build response with filtered services
 	response := map[string]interface{}{
-		"template":           matchedPattern.Template,
-		"example_body":       matchedPattern.ExampleBody,
-		"severity":           decodedSeverity,
-		"total_count":        matchedPattern.SeverityBreakdown[decodedSeverity],
-		"services":           filteredServices,
+		"template":     matchedPattern.Template,
+		"example_body": matchedPattern.ExampleBody,
+		"severity":     decodedSeverity,
+		"total_count":  matchedPattern.SeverityBreakdown[decodedSeverity],
+		"services":     filteredServices,
 	}
-	
+
 	s.respondJSON(w, http.StatusOK, response)
 }
 
@@ -943,7 +957,7 @@ func (s *Server) respondError(w http.ResponseWriter, status int, message string)
 // GET /api/v1/attributes?signal_type=metric&scope=resource&sort_by=cardinality&sort_order=desc&limit=100&offset=0
 func (s *Server) listAttributes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	// Parse query parameters
 	filter := &models.AttributeFilter{
 		SignalType:     r.URL.Query().Get("signal_type"),
@@ -955,14 +969,14 @@ func (s *Server) listAttributes(w http.ResponseWriter, r *http.Request) {
 		Limit:          parseInt(r.URL.Query().Get("limit"), 100),
 		Offset:         parseInt(r.URL.Query().Get("offset"), 0),
 	}
-	
+
 	// Get attributes from storage
 	attributes, err := s.store.ListAttributes(ctx, filter)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list attributes: %v", err))
 		return
 	}
-	
+
 	// Count total (for pagination)
 	totalFilter := &models.AttributeFilter{
 		SignalType:     filter.SignalType,
@@ -975,10 +989,10 @@ func (s *Server) listAttributes(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusInternalServerError, "Failed to count attributes")
 		return
 	}
-	
+
 	total := len(allAttributes)
 	hasMore := filter.Offset+len(attributes) < total
-	
+
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{
 		"data":     attributes,
 		"total":    total,
@@ -993,18 +1007,18 @@ func (s *Server) listAttributes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getAttribute(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	key := chi.URLParam(r, "key")
-	
+
 	if key == "" {
 		s.respondError(w, http.StatusBadRequest, "Attribute key is required")
 		return
 	}
-	
+
 	attribute, err := s.store.GetAttribute(ctx, key)
 	if err != nil {
 		s.respondError(w, http.StatusNotFound, fmt.Sprintf("Attribute not found: %v", err))
 		return
 	}
-	
+
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{
 		"data": attribute,
 	})
