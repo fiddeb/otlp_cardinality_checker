@@ -86,6 +86,8 @@ Response:
       },
       "resource_keys": {...},
       "sample_count": 100,
+      "active_series_otlp": 8,
+      "active_series_prometheus": 64,
       "services": {
         "my-service": 100
       }
