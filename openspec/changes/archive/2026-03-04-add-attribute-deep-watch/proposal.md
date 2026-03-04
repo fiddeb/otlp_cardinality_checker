@@ -6,6 +6,15 @@
 ## Status
 Proposed
 
+## Why
+The tool stores at most 10 sample values per attribute key by design, making it impossible to debug corrupted or misbehaving fields because the offending values are never fully captured. Teams must resort to verbose collector debug exporters and manual correlation to identify bad values.
+
+## What Changes
+- New `WatchedAttribute` data model in `attribute-tracking` spec
+- New watch interface methods added to `storage` spec and in-memory implementation
+- New watch API endpoints: `POST/DELETE /api/v1/attributes/:key/watch` and `GET /api/v1/attributes/watched`
+- Watch toggle column and Value Explorer panel added to Attribute Catalog UI
+
 ## Problem
 
 The tool stores a maximum of 10 sample values per attribute key by design — preventing cardinality explosion in the tool itself. This makes it impossible to debug a specific corrupted or misbehaving field, because the actual offending values are never captured.

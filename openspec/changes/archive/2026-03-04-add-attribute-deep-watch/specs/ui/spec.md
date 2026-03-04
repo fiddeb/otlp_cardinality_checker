@@ -1,6 +1,6 @@
 # Spec Delta: ui
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Attribute Catalog Watch Toggle
 The Attribute Catalog table SHALL display a watch toggle for each attribute row, enabling users to activate or deactivate Deep Watch without leaving the UI.

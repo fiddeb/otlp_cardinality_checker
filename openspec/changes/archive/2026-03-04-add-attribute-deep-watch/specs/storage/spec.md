@@ -1,6 +1,6 @@
 # Spec Delta: storage
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Deep Watch Interface Methods
 The `Storage` interface SHALL provide operations to activate, deactivate, and query Deep Watch state for attribute keys.
