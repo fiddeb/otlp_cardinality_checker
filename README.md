@@ -15,12 +15,13 @@
 OTLP Cardinality Checker is a tool that helps you understand the **metadata structure** of your OpenTelemetry telemetry before it explodes your observability costs. It acts as an **OTLP endpoint** that receives telemetry data over HTTP or gRPC and analyzes incoming metrics, traces, and logs to identify:
 
 - Which metric names and attribute keys are being used
-- Which span names and attribute keys exist in traces  
+- Which span names and attribute keys exist in traces
+- Which Log patterns exists  
 - Which log attribute keys appear
 - Resource attributes across all signals
 - Potential cardinality issues in your instrumentation
 
-**Key principle**: We only track metadata keys, never actual values, to avoid creating cardinality problems in the tool itself.
+**Key principle**: We only track metadata keys, and only sample values, to avoid creating cardinality problems in the tool itself.
 
 You can send data directly from applications using the OpenTelemetry SDK, or route data through an OpenTelemetry Collector for more complex scenarios.
 
@@ -79,14 +80,14 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 - OTLP HTTP (4318) and gRPC (4317) endpoints
 - Works with any OTel Collector receiver (Kafka, Redis, Prometheus, etc.)
 - Analyzes metrics, traces, and logs metadata
-- Log template extraction using Drain algorithm (53k-1.6M events/sec)
+- Log template extraction using Drain algorithm 
 - Span name pattern detection for high-cardinality naming
 - Cardinality estimation with HyperLogLog
 - Global attribute catalog across all signals
 - In-memory storage (ephemeral by design)
 - REST API with pagination and filtering
 - Embedded React Web UI (built into the binary)
-- Docker and Kubernetes deployment
+- Standalone, Docker or Kubernetes deployment
 
 ## Quick Start
 
@@ -171,7 +172,8 @@ The tool will start listening on:
 - **Noisy Neighbors** - Identify services generating excessive telemetry volume
 - **Memory** - Runtime memory usage statistics
 - **Service Explorer** - Deep dive into all telemetry for a specific service
-- **Dark Mode** - Toggle between light and dark themes
+- **Sessions** - Snapshot the current in-memory state to a file, restore it later, or merge multiple snapshots to compare telemetry across environments or time windows
+
 
 The UI is statically compiled into the binary, so no external files are needed.
 
@@ -188,7 +190,7 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 ./your-app
 ```
 
-### Query Metadata
+### Query Metadata from api
 
 ```bash
 # List all metrics
@@ -333,20 +335,13 @@ export USE_AUTOTEMPLATE=true
 ./bin/occ
 ```
 
-**Note**: OTLP Cardinality Checker uses **in-memory storage only**. Data is ephemeral and lost on restart. This is by design - the tool is meant for diagnostic analysis, not long-term data retention. Simply restart and re-analyze from your data sources as needed
+**Note**: OTLP Cardinality Checker uses **in-memory storage only**. Data is ephemeral and lost on restart if session isn't saved. This is by design - the tool is meant for diagnostic analysis, not long-term data retention. Simply restart and re-analyze from your data sources as needed
 
 ### Automatic Log Template Extraction
 
-When `USE_AUTOTEMPLATE=true`, the tool uses the **Drain algorithm** to automatically detect patterns in log bodies:
-
-```bash
-# Enable autotemplate mode
-USE_AUTOTEMPLATE=true ./bin/occ
-```
 
 **Features:**
 - **Algorithm**: Drain (ICWS'17) - Fixed-depth tree with token similarity clustering
-- **Performance**: 53k-1.6M events/sec (exceeds 20-30k target by 2-80x)
 - **Pattern detection**: Automatically groups similar log messages into templates
 - **Pre-masking**: Recognizes timestamps, UUIDs, IPs, URLs, emails, and more
 - **Example bodies**: Each template stores an example log for reference
@@ -362,7 +357,7 @@ Apache:
   → <TIMESTAMP> [notice] jk2_init() Found child <NUM>
 ```
 
-**Query templates:**
+**Query templates from api:**
 ```bash
 # Get all INFO-level log templates
 curl http://localhost:8080/api/v1/logs/INFO | jq '.body_templates'
@@ -391,11 +386,6 @@ curl http://localhost:8080/api/v1/logs/ERROR | jq '{severity, sample_count, body
 - [x] Docker and Kubernetes deployment
 - [x] Load testing (validated with 50,000 metrics)
 - [x] Comprehensive documentation
-
-**Performance:**
-- 50,000 metrics in 421 MB memory (~8.4 KB per metric)
-- 450 req/s, 4,455 datapoints/s sustained
-- P95 latency 45ms under load
 
 ### Phase 2: Production Hardening
 - [x] OTLP gRPC receiver (port 4317)
@@ -465,13 +455,13 @@ No. This is a diagnostic tool for understanding your telemetry structure, not fo
 About 8-9 KB per metric. 10k metrics ≈ 85 MB, 50k metrics ≈ 425 MB.
 
 **What about persistence?**  
-Data lives in memory and is lost on restart. This is intentional - restart and re-analyze as needed.
+Data lives in memory and is lost on restart. This is intentional - the tool is meant for diagnostic analysis, not long-term retention. If you want to preserve collected data, use the **Sessions** feature to snapshot the current state to a file. You can reload a snapshot later or merge multiple snapshots to compare telemetry across environments or time windows.
 
 **What is span name pattern analysis?**  
 Groups similar span names into patterns. `GET /users/123` and `GET /users/456` become `GET <URL>`. See the "Trace Patterns" tab or `/api/v1/span-patterns`.
 
 **What is log template extraction?**  
-The Drain algorithm groups similar log messages. "User 123 logged in" and "User 456 logged in" become "User <NUM> logged in". Runs at 53k-1.6M events/sec.
+The Drain algorithm groups similar log messages. "User 123 logged in" and "User 456 logged in" become "User <NUM> logged in".
 
 ## Deployment
 

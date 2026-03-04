@@ -7,8 +7,6 @@ A practical guide for using the OTLP Cardinality Checker to analyze your telemet
 ### 1. Start the Server
 
 ```bash
-# Build
-# Build
 make build
 
 # Run
@@ -110,7 +108,6 @@ curl -s "http://localhost:8080/api/v1/metrics/YOUR_METRIC_NAME" | \
 }
 ```
 
-**Interpretation:**
 - `user_id` has 20 unique values → creates 20+ time series
 - `method` has 1 unique value → not contributing to cardinality
 
@@ -118,15 +115,15 @@ curl -s "http://localhost:8080/api/v1/metrics/YOUR_METRIC_NAME" | \
 
 ## Common Use Cases
 
-This section covers real-world scenarios for analyzing **Metrics**, **Traces**, and **Logs**. Each example includes the API endpoint and expected output.
+This section covers real-world scenarios for analyzing metrics, traces, and logs. Each example includes the API endpoint and expected output.
 
 ---
 
-## 📊 Working with Metrics
+## Working with metrics
 
-### 🔍 Find Metrics for a Service
+### Find metrics for a service
 
-**Question:** What metrics does `my-service` produce?
+What metrics does `my-service` produce?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics?service=my-service" | \
@@ -143,9 +140,9 @@ database_queries_total
 
 ---
 
-### 📊 Check Metric Labels
+### Check metric labels
 
-**Question:** What labels does `http_requests_total` have?
+What labels does `http_requests_total` have?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
@@ -177,9 +174,9 @@ status: 8 unique values
 
 ---
 
-### ⚠️ Identify High Cardinality Labels in Metrics
+### Identify high cardinality labels
 
-**Question:** Which metric labels have too many unique values?
+Which metric labels have too many unique values?
 
 ```bash
 # Find labels with >20 unique values (adjust threshold as needed)
@@ -206,13 +203,13 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 }
 ```
 
-**Interpretation:** ⚠️ `user_id` has 1247 unique values - this will create 1247+ time series!
+`user_id` has 1247 unique values — that's 1247+ time series.
 
 ---
 
-### 📊 List All Metrics with Sample Counts
+### List all metrics by sample count
 
-**Question:** Which metrics receive the most samples?
+Which metrics receive the most samples?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics?limit=100" | \
@@ -229,9 +226,9 @@ memory_bytes: 10000 samples
 
 ---
 
-### 📈 Check Resource Attributes for Metrics
+### Check resource attributes for metrics
 
-**Question:** What resource attributes (like `service.name`, `host.name`) are attached to metrics?
+What resource attributes (like `service.name`, `host.name`) are attached to metrics?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
@@ -258,11 +255,11 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 
 ---
 
-## 🔍 Working with Traces (Spans)
+## Working with traces
 
-### 📋 List All Span Operations
+### List all span operations
 
-**Question:** What span operations are being traced?
+What span operations are being traced?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
@@ -280,9 +277,9 @@ external_api_call
 
 ---
 
-### 🔍 Get Details for a Specific Span
+### Get details for a span
 
-**Question:** What attributes does the `HTTP GET /api/users` span have?
+What attributes does the `HTTP GET /api/users` span have?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
@@ -311,9 +308,9 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 
 ---
 
-### ⚠️ Identify High Cardinality Span Attributes
+### Identify high cardinality span attributes
 
-**Question:** Which span attributes have too many unique values?
+Which span attributes have too many unique values?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
@@ -339,13 +336,13 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 }
 ```
 
-**Interpretation:** ⚠️ `http.target` includes user IDs in the path, creating high cardinality. Consider using `http.route` instead (e.g., `/api/users/:id`).
+`http.target` includes user IDs in the path. Consider using `http.route` instead (e.g. `/api/users/:id`).
 
 ---
 
-### 🔍 Find Traces by Service
+### Find traces by service
 
-**Question:** What operations does `api-server` trace?
+What operations does `api-server` trace?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans?service=api-server" | \
@@ -362,9 +359,9 @@ database_query
 
 ---
 
-### 📊 Check Span Resource Attributes
+### Check span resource attributes
 
-**Question:** What resource attributes are attached to spans?
+What resource attributes are attached to spans?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/database_query" | \
@@ -391,9 +388,9 @@ curl -s "http://localhost:8080/api/v1/spans/database_query" | \
 
 ---
 
-### 📈 List Spans by Sample Count
+### List spans by sample count
 
-**Question:** Which span operations are most frequently traced?
+Which span operations are most frequently traced?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
@@ -410,9 +407,9 @@ cache_lookup: 4800 samples
 
 ---
 
-### 🔍 Analyze Span Name Patterns
+### Analyze span name patterns
 
-**Question:** What patterns exist in span names? Are there dynamic values like IDs or timestamps?
+What patterns exist in span names? Are there dynamic values like IDs or timestamps?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
@@ -440,13 +437,13 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 }
 ```
 
-**Interpretation:** 90% of spans have dynamic URL paths (user IDs in the path). Consider using `http.route` attribute instead of embedding IDs in span names.
+90% of spans have dynamic URL paths with user IDs embedded. Use `http.route` instead of putting IDs directly in span names.
 
 ---
 
-### ⚠️ Identify High Cardinality Span Names
+### Identify high cardinality span names
 
-**Question:** Which spans have dynamic values in their names causing cardinality issues?
+Which spans have dynamic values in their names causing cardinality issues?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
@@ -468,15 +465,15 @@ curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
 }
 ```
 
-**Interpretation:** ⚠️ Span names contain batch IDs. This creates many unique span names which fragments your trace analysis.
+Span names contain batch IDs. This creates many unique span names and fragments trace analysis.
 
 ---
 
-## 📝 Working with Logs
+## Working with logs
 
-### 📋 List All Log Severities
+### List all log severities
 
-**Question:** What log severity levels are being collected?
+What log severity levels are being collected?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/logs" | \
@@ -493,9 +490,9 @@ DEBUG
 
 ---
 
-### 📝 Get Details for a Specific Severity
+### Get details for a severity level
 
-**Question:** What attributes do ERROR logs have?
+What attributes do ERROR logs have?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
@@ -522,9 +519,9 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 
 ---
 
-### ⚠️ Identify High Cardinality Log Attributes
+### Identify high cardinality log attributes
 
-**Question:** Which log attributes have too many unique values?
+Which log attributes have too many unique values?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
@@ -550,13 +547,13 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 }
 ```
 
-**Interpretation:** ⚠️ `error.message` has 487 unique values. This is expected for error messages, but consider if you need to store all variations.
+`error.message` has 487 unique values. For free-text error messages that's expected — consider whether you need all variations or can group by `error.type` instead.
 
 ---
 
-### 📝 Find Logs by Service
+### Find logs by service
 
-**Question:** What log severities does `api-server` produce?
+What log severities does `api-server` produce?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/logs?service=api-server" | \
@@ -572,9 +569,9 @@ ERROR
 
 ---
 
-### 📊 Check Log Resource Attributes
+### Check log resource attributes
 
-**Question:** What resource attributes are attached to logs?
+What resource attributes are attached to logs?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
@@ -601,9 +598,9 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 
 ---
 
-### 📈 Compare Log Volumes by Severity
+### Compare log volumes by severity
 
-**Question:** Which log severities have the most samples?
+Which log severities have the most samples?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/logs?limit=100" | \
@@ -621,11 +618,11 @@ DEBUG: 800 samples
 
 ---
 
-## 🔄 Cross-Signal Analysis
+## Cross-signal analysis
 
-### 📊 Compare All Signal Types for a Service
+### Compare all signal types for a service
 
-**Question:** What telemetry does `api-server` produce across all signal types?
+What telemetry does `api-server` produce across all signal types?
 
 ```bash
 # Get overview for a service
@@ -660,9 +657,9 @@ curl -s "http://localhost:8080/api/v1/services/api-server/overview" | \
 
 ---
 
-### 📈 Find Services with High Cardinality Across All Signals
+### Find services with high cardinality across all signals
 
-**Question:** Which services have cardinality issues in any signal type?
+Which services have cardinality issues in any signal type?
 
 ```bash
 # Use the noisy neighbor detection script
@@ -682,13 +679,11 @@ curl -s "http://localhost:8080/api/v1/services/api-server/overview" | \
 
 ---
 
-## 📉 Optimization Use Cases
+## Optimization use cases
 
-### 📉 Find Underutilized Labels (Metrics)
+### Find underutilized labels (metrics)
 
-### 📉 Find Underutilized Labels (Metrics)
-
-**Question:** Which metric labels are rarely used?
+Which metric labels are rarely used?
 
 ```bash
 # Find labels present in <50% of samples
@@ -709,13 +704,13 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 }
 ```
 
-**Interpretation:** `cache_key` only appears in 23.5% of samples - maybe it's optional or conditionally added.
+`cache_key` only appears in 23.5% of samples — it's probably optional or conditionally set.
 
 ---
 
-### 📉 Find Underutilized Attributes (Spans)
+### Find underutilized attributes (spans)
 
-**Question:** Which span attributes are rarely used?
+Which span attributes are rarely used?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
@@ -735,9 +730,9 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 
 ---
 
-### 📉 Find Underutilized Attributes (Logs)
+### Find underutilized attributes (logs)
 
-**Question:** Which log attributes are rarely populated?
+Which log attributes are rarely populated?
 
 ```bash
 curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
@@ -749,9 +744,9 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 
 ---
 
-### 🔄 Compare Services
+### Compare services
 
-**Question:** How does telemetry differ between services?
+How does telemetry differ between services?
 
 ```bash
 # Get overview for each service
@@ -768,9 +763,9 @@ done
 
 ---
 
-### 📈 Monitor Cardinality Growth (Metrics)
+### Monitor cardinality growth (metrics)
 
-**Question:** Is metric cardinality increasing over time?
+Is metric cardinality increasing over time?
 
 ```bash
 # Take snapshot
@@ -790,9 +785,9 @@ echo "Growth: $(($(cat snapshot2.txt) - $(cat snapshot1.txt))) new unique values
 
 ---
 
-### 📈 Monitor Cardinality Growth (Spans)
+### Monitor cardinality growth (spans)
 
-**Question:** Is span attribute cardinality increasing?
+Is span attribute cardinality increasing?
 
 ```bash
 # Initial snapshot
@@ -809,9 +804,9 @@ echo "Growth: $(($(cat span_snapshot2.txt) - $(cat span_snapshot1.txt))) new uni
 
 ---
 
-## API Reference
+## API reference
 
-### Health Check
+### Health check
 
 ```bash
 GET /api/v1/health
@@ -842,7 +837,7 @@ curl "http://localhost:8080/api/v1/health"
 
 ### Metrics API
 
-#### List All Metrics
+#### List all metrics
 
 ```bash
 GET /api/v1/metrics?service={name}&limit={N}&offset={M}
@@ -879,7 +874,7 @@ curl "http://localhost:8080/api/v1/metrics?limit=10&offset=0"
 }
 ```
 
-#### Get Specific Metric
+#### Get specific metric
 
 ```bash
 GET /api/v1/metrics/{name}
@@ -933,7 +928,7 @@ curl "http://localhost:8080/api/v1/metrics/http_requests_total"
 
 ### Spans (Traces) API
 
-#### List All Spans
+#### List all spans
 
 ```bash
 GET /api/v1/spans?service={name}&limit={N}&offset={M}
@@ -969,7 +964,7 @@ curl "http://localhost:8080/api/v1/spans?service=api-server&limit=10"
 }
 ```
 
-#### Get Specific Span
+#### Get specific span
 
 ```bash
 GET /api/v1/spans/{name}
@@ -1028,7 +1023,7 @@ curl "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers"
 
 ### Logs API
 
-#### List All Log Severities
+#### List all log severities
 
 ```bash
 GET /api/v1/logs?service={name}&limit={N}&offset={M}
@@ -1072,7 +1067,7 @@ curl "http://localhost:8080/api/v1/logs?service=api-server"
 }
 ```
 
-#### Get Specific Log Severity
+#### Get specific log severity
 
 ```bash
 GET /api/v1/logs/{severity}
@@ -1131,7 +1126,7 @@ curl "http://localhost:8080/api/v1/logs/ERROR"
 
 ### Services API
 
-#### List All Services
+#### List all services
 
 ```bash
 GET /api/v1/services
@@ -1155,7 +1150,7 @@ curl "http://localhost:8080/api/v1/services"
 }
 ```
 
-#### Get Service Overview
+#### Get service overview
 
 ```bash
 GET /api/v1/services/{name}/overview
@@ -1209,9 +1204,9 @@ curl "http://localhost:8080/api/v1/services/api-server/overview"
 
 ---
 
-## Useful jq Patterns
+## Useful jq patterns
 
-### Extract Specific Fields
+### Extract specific fields
 
 **Metrics:**
 ```bash
@@ -1253,7 +1248,7 @@ curl -s "http://localhost:8080/api/v1/logs" | \
 
 ---
 
-### Filter and Sort
+### Filter and sort
 
 **Metrics:**
 ```bash
@@ -1298,7 +1293,7 @@ curl -s "http://localhost:8080/api/v1/logs" | \
 
 ---
 
-### Create Reports
+### Create reports
 
 **Metrics Cardinality Report:**
 ```bash
@@ -1374,7 +1369,7 @@ cache: metrics=15 spans=5 logs=2
 
 ## Troubleshooting
 
-### No Data Showing Up
+### No data showing up
 
 **Check OTLP endpoint:**
 ```bash
@@ -1395,7 +1390,7 @@ exporters:
     # NOT localhost:4317 (that's gRPC, not yet implemented)
 ```
 
-### High Memory Usage
+### High memory usage
 
 **Check metrics count:**
 ```bash
@@ -1412,7 +1407,7 @@ curl -s "http://localhost:8080/api/v1/metrics" | jq '.total'
 - Check if many metrics have 4+ labels
 - Consider cleaning up unused metrics
 
-### Slow API Responses
+### Slow API responses
 
 **Use pagination:**
 ```bash
@@ -1431,9 +1426,9 @@ curl "http://localhost:8080/api/v1/metrics?service=my-service"
 
 ---
 
-## Integration Examples
+## Integration examples
 
-### CI/CD Pipeline Check
+### CI/CD pipeline check
 
 ```bash
 #!/bin/bash
@@ -1452,7 +1447,7 @@ else
 fi
 ```
 
-### Prometheus Alert
+### Prometheus alert
 
 ```yaml
 # Alert on high cardinality (if you export metrics from this tool)
@@ -1462,7 +1457,7 @@ fi
     summary: "High cardinality detected in {{ $labels.metric }}.{{ $labels.label }}"
 ```
 
-### Grafana Dashboard Query
+### Grafana dashboard query
 
 ```bash
 # Export data for Grafana
@@ -1476,9 +1471,9 @@ curl -s "http://localhost:8080/api/v1/metrics?service=my-service" | \
 
 ---
 
-## Best Practices
+## Best practices
 
-### 1. Regular Monitoring
+### 1. Regular monitoring
 
 Run cardinality checks daily:
 ```bash
@@ -1492,21 +1487,21 @@ jq '.data[].name' metrics_20251022.json > yesterday.txt
 diff yesterday.txt today.txt
 ```
 
-### 2. Set Cardinality Budgets
+### 2. Set cardinality budgets
 
 Define limits per team/service:
 - **Low cardinality** (<10): status codes, methods, regions
 - **Medium cardinality** (10-100): endpoints, services, hosts  
 - **High cardinality** (>100): ⚠️ Requires approval (user IDs, request IDs)
 
-### 3. Use Service Filtering
+### 3. Use service filtering
 
 Always filter by service to reduce noise:
 ```bash
 curl "http://localhost:8080/api/v1/metrics?service=my-service&limit=100"
 ```
 
-### 4. Document Your Metrics
+### 4. Document your metrics
 
 When you find a metric with high cardinality:
 1. Check if it's intentional (e.g., `http.target` for URLs)
@@ -1515,9 +1510,9 @@ When you find a metric with high cardinality:
 
 ---
 
-## Advanced Queries
+## Advanced queries
 
-### Find Metrics Without a Specific Label
+### Find metrics without a specific label
 
 ```bash
 # Find metrics missing 'service.name' resource attribute
@@ -1527,7 +1522,7 @@ curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
 
 ---
 
-### Find Spans Without Expected Attributes
+### Find spans without expected attributes
 
 ```bash
 # Find spans missing 'http.status_code' attribute
@@ -1537,7 +1532,7 @@ curl -s "http://localhost:8080/api/v1/spans?limit=1000" | \
 
 ---
 
-### Find Logs Without Trace Context
+### Find logs without trace context
 
 ```bash
 # Find log severities where trace_id is rarely present
@@ -1547,7 +1542,7 @@ curl -s "http://localhost:8080/api/v1/logs?limit=1000" | \
 
 ---
 
-### Calculate Total Cardinality
+### Calculate total cardinality
 
 **For Metrics:**
 ```bash
@@ -1598,7 +1593,7 @@ curl -s "http://localhost:8080/api/v1/logs?limit=10000" | \
 
 ---
 
-### Compare Signal Types by Cardinality
+### Compare signal types by cardinality
 
 ```bash
 # Get highest cardinality attribute from each signal type
@@ -1633,13 +1628,13 @@ For comprehensive K6 load testing examples, see [scripts/README.md](scripts/READ
 
 ---
 
-## 📸 Working with Sessions
+## Working with sessions
 
 Sessions allow you to save snapshots of metadata state, compare versions, and analyze changes over time. This is essential for pre/post deployment comparisons and incremental telemetry analysis.
 
-### Session Basics
+### Session basics
 
-#### Save Current State as Session
+#### Save current state as a session
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/sessions \
@@ -1670,7 +1665,7 @@ curl -X POST http://localhost:8080/api/v1/sessions \
 
 ---
 
-#### List All Sessions
+#### List all sessions
 
 ```bash
 curl http://localhost:8080/api/v1/sessions
@@ -1697,7 +1692,7 @@ curl http://localhost:8080/api/v1/sessions
 
 ---
 
-#### Load a Session (Replace Current Data)
+#### Load a session (replaces current data)
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/load
@@ -1707,7 +1702,7 @@ This **clears** the current in-memory state and loads the session data.
 
 ---
 
-#### Merge a Session (Additive)
+#### Merge a session (additive)
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/merge
@@ -1717,7 +1712,7 @@ This **combines** the session data with the current state (HyperLogLog union for
 
 ---
 
-#### Compare Two Sessions (Diff)
+#### Compare two sessions (diff)
 
 ```bash
 curl "http://localhost:8080/api/v1/sessions/diff?from=baseline-2026-01-25&to=post-deploy-v2"
@@ -1763,9 +1758,9 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=baseline-2026-01-25&to=pos
 
 ---
 
-### Session Filters
+### Session filters
 
-#### Save Only Specific Signal Types
+#### Save only specific signal types
 
 ```bash
 # Save only metrics and traces
@@ -1773,14 +1768,14 @@ curl -X POST http://localhost:8080/api/v1/sessions \
   -d '{"name": "metrics-only", "signals": ["metrics"]}'
 ```
 
-#### Load Only Specific Signals
+#### Load only specific signals
 
 ```bash
 # Load only traces from a session
 curl -X POST "http://localhost:8080/api/v1/sessions/full-session/load?signals=traces"
 ```
 
-#### Filter by Service
+#### Filter by service
 
 ```bash
 # Save only one service's data
@@ -1790,15 +1785,15 @@ curl -X POST http://localhost:8080/api/v1/sessions \
 
 ---
 
-### Session Export/Import
+### Session export/import
 
-#### Export Session to JSON
+#### Export session to JSON
 
 ```bash
 curl http://localhost:8080/api/v1/sessions/baseline-2026-01-25/export > backup.json
 ```
 
-#### Import Session from JSON
+#### Import session from JSON
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/sessions/import \
@@ -1808,7 +1803,7 @@ curl -X POST http://localhost:8080/api/v1/sessions/import \
 
 ---
 
-### Session Configuration
+### Session configuration
 
 By default, sessions are stored as gzip-compressed JSON files in `data/sessions/`.
 
@@ -1820,9 +1815,9 @@ By default, sessions are stored as gzip-compressed JSON files in `data/sessions/
 
 ---
 
-### Real-World Session Workflows
+### Real-world session workflows
 
-#### Pre/Post Deploy Comparison
+#### Pre/post deploy comparison
 
 ```bash
 #!/bin/bash
@@ -1870,7 +1865,7 @@ curl -s "http://localhost:8080/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post
 
 ---
 
-#### Multi-Day Signal Collection
+#### Multi-day signal collection
 
 Collect different signal types on different days, then merge them:
 
@@ -1895,7 +1890,7 @@ curl http://localhost:8080/api/v1/services
 
 ---
 
-#### Service-Specific Analysis
+#### Service-specific analysis
 
 ```bash
 # Save each service separately
@@ -1911,7 +1906,7 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=api-server-snapshot&to=wor
 
 ---
 
-#### Cardinality Growth Tracking
+#### Cardinality growth tracking
 
 ```bash
 #!/bin/bash
@@ -1935,7 +1930,7 @@ curl -s "http://localhost:8080/api/v1/sessions/diff?from=day-1&to=day-7&min_seve
 
 ---
 
-#### CI/CD Integration with Sessions
+#### CI/CD integration with sessions
 
 ```bash
 #!/bin/bash
@@ -1964,7 +1959,7 @@ fi
 
 ---
 
-#### Delete Old Sessions
+#### Delete old sessions
 
 ```bash
 # Delete a specific session
@@ -1981,9 +1976,9 @@ curl -s http://localhost:8080/api/v1/sessions | \
 
 ---
 
-### Session Diff Filters
+### Session diff filters
 
-#### Filter by Signal Type
+#### Filter by signal type
 
 ```bash
 # Show only metric changes
@@ -1993,21 +1988,21 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric"
 curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=span"
 ```
 
-#### Filter by Service
+#### Filter by service
 
 ```bash
 # Show only changes affecting payment-service
 curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&service=payment-service"
 ```
 
-#### Filter by Severity
+#### Filter by severity
 
 ```bash
 # Show only critical and warning changes
 curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&min_severity=warning"
 ```
 
-#### Combine Filters
+#### Combine filters
 
 ```bash
 # Critical metric changes for payment-service only
@@ -2016,9 +2011,9 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric&
 
 ---
 
-### Session Best Practices
+### Session best practices
 
-#### Use Descriptive Names
+#### Use descriptive names
 
 ```bash
 # Good names are timestamped and specific
@@ -2032,7 +2027,7 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric&
 "session"
 ```
 
-#### Add Descriptions
+#### Add descriptions
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/sessions \
@@ -2042,7 +2037,7 @@ curl -X POST http://localhost:8080/api/v1/sessions \
   }'
 ```
 
-#### Filter by Signal When You Can
+#### Filter by signal when you can
 
 Smaller sessions load faster:
 ```bash
@@ -2051,7 +2046,7 @@ curl -X POST -d '{"name": "metrics-only", "signals": ["metrics"]}' \
   http://localhost:8080/api/v1/sessions
 ```
 
-#### Clean Up Old Sessions
+#### Clean up old sessions
 
 Set up a cron job to delete old sessions:
 ```bash
@@ -2059,7 +2054,7 @@ Set up a cron job to delete old sessions:
 0 2 * * * /usr/local/bin/cleanup-old-sessions.sh
 ```
 
-#### Back Up Important Baselines
+#### Back up important baselines
 
 ```bash
 # Export production baselines regularly
@@ -2069,9 +2064,9 @@ curl http://localhost:8080/api/v1/sessions/production-baseline/export > \
 
 ---
 
-### Troubleshooting Sessions
+### Troubleshooting sessions
 
-#### Session Creation Fails
+#### Session creation fails
 
 **Error: "Session already exists"**
 ```bash
@@ -2093,7 +2088,7 @@ curl -X POST -d '{"name": "large-session", "services": ["api-server"]}' \
   http://localhost:8080/api/v1/sessions
 ```
 
-#### Session Load/Merge Fails
+#### Session load/merge fails
 
 **Check session exists:**
 ```bash
@@ -2105,7 +2100,7 @@ curl http://localhost:8080/api/v1/sessions/my-session
 curl http://localhost:8080/api/v1/sessions/my-session/export | jq .
 ```
 
-#### Diff Shows Unexpected Changes
+#### Diff shows unexpected changes
 
 **Verify both sessions exist:**
 ```bash
@@ -2120,7 +2115,7 @@ curl http://localhost:8080/api/v1/sessions/session-b | jq '.created_at'
 
 ---
 
-## Next Steps
+## Next steps
 
 - **Production Deployment**: See [../k8s/README.md](../k8s/README.md) for Kubernetes deployment guide
 - **API Documentation**: See [API.md](API.md)

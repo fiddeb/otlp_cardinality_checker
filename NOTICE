@@ -51,6 +51,5 @@ This project uses OpenSpec for change management and specification-driven
 development. Proposals, designs, and task tracking are maintained in the
 openspec/ directory.
 
-Portions of this codebase were developed with AI coding assistants
-(GitHub Copilot, Claude). All AI-generated code has been reviewed,
-tested, and approved by the project maintainers.
+Codebase were developed with AI coding assistants
+(GitHub Copilot, Claude)
