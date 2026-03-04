@@ -287,17 +287,7 @@ Phases 1-3 can be developed in parallel with Phase 4.
 Phase 5 can start once Phase 2 is complete.
 Phase 6 can start once Phases 1-5 are feature-complete.
 
-## Estimated Effort
-- Phase 1: 2-3 days
-- Phase 2: 3-4 days
-- Phase 3: 3-4 days
-- Phase 4: 4-5 days
-- Phase 5: 1-2 days
-- Phase 6: 2-3 days
-- Phase 7: 3-4 days
-- Phase 8: 1 day (writing specs)
 
-**Total**: ~20-30 days (one engineer)
 
 ## Definition of Done
 - [ ] All tasks completed and validated
