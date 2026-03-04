@@ -955,14 +955,26 @@ func (s *Store) WatchAttribute(ctx context.Context, key string) error {
 	}
 
 	if len(s.watched) >= s.maxWatchedFields {
-		return fmt.Errorf("maximum watched fields limit (%d) reached", s.maxWatchedFields)
+		// Count only active watches toward the limit so that deactivated
+		// entries (with preserved values) do not block re-activation.
+		activeCount := 0
+		for _, w := range s.watched {
+			_, _, _, _, active, _, _ := w.Snapshot()
+			if active {
+				activeCount++
+			}
+		}
+		if activeCount >= s.maxWatchedFields {
+			return fmt.Errorf("maximum watched fields limit (%d) reached", s.maxWatchedFields)
+		}
 	}
 
 	s.watched[key] = models.NewWatchedAttribute(key, 10000)
 	return nil
 }
 
-// UnwatchAttribute deactivates deep watch and discards collected values for the key.
+// UnwatchAttribute deactivates deep watch for the key, preserving all
+// collected values so they remain visible in the Value Explorer.
 func (s *Store) UnwatchAttribute(ctx context.Context, key string) error {
 	if key == "" {
 		return errors.New("attribute key cannot be empty")
@@ -971,11 +983,12 @@ func (s *Store) UnwatchAttribute(ctx context.Context, key string) error {
 	s.watchedmu.Lock()
 	defer s.watchedmu.Unlock()
 
-	if _, ok := s.watched[key]; !ok {
+	existing, ok := s.watched[key]
+	if !ok {
 		return fmt.Errorf("attribute %q: %w", key, models.ErrNotFound)
 	}
 
-	delete(s.watched, key)
+	existing.SetActive(false)
 	return nil
 }
 

@@ -993,11 +993,14 @@ func (s *Server) listAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build watched-key set for O(1) lookup.
+	// Build watched-key set for O(1) lookup. Only active watches are "watched".
 	watchedKeys := make(map[string]bool)
 	if watched, err := s.store.ListWatchedAttributes(ctx); err == nil {
 		for _, wa := range watched {
-			watchedKeys[wa.Key] = true
+			_, _, _, _, active, _, _ := wa.Snapshot()
+			if active {
+				watchedKeys[wa.Key] = true
+			}
 		}
 	}
 
@@ -1050,8 +1053,11 @@ func (s *Server) getAttribute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, watchErr := s.store.GetWatchedAttribute(ctx, decodedKey)
-	watched := watchErr == nil
+	watched := false
+	if wa, err := s.store.GetWatchedAttribute(ctx, decodedKey); err == nil {
+		_, _, _, _, active, _, _ := wa.Snapshot()
+		watched = active
+	}
 
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{
 		"data":    attribute,

@@ -71,16 +71,28 @@ func TestWatchAttribute_LimitEnforced(t *testing.T) {
 // UnwatchAttribute
 // ---------------------------------------------------------------------------
 
-func TestUnwatchAttribute_RemovesKey(t *testing.T) {
+func TestUnwatchAttribute_DeactivatesButPreservesEntry(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(5)
 	_ = s.WatchAttribute(ctx, "k1")
+	_ = s.StoreAttributeValue(ctx, "k1", "v1", "metrics", "")
 	if err := s.UnwatchAttribute(ctx, "k1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	list, _ := s.ListWatchedAttributes(ctx)
-	if len(list) != 0 {
-		t.Errorf("expected 0 after unwatch, got %d", len(list))
+	// Entry must still exist.
+	w, err := s.GetWatchedAttribute(ctx, "k1")
+	if err != nil {
+		t.Fatalf("entry removed after unwatch: %v", err)
+	}
+	// Must be inactive.
+	_, _, _, _, active, _, _ := w.Snapshot()
+	if active {
+		t.Error("expected inactive after unwatch")
+	}
+	// Values must be preserved.
+	_, vals, _, _, _, _, _ := w.Snapshot()
+	if len(vals) == 0 {
+		t.Error("values must be preserved after unwatch")
 	}
 }
 
@@ -101,6 +113,41 @@ func TestUnwatchAttribute_EmptyKey(t *testing.T) {
 	s := newTestStore(5)
 	if err := s.UnwatchAttribute(ctx, ""); err == nil {
 		t.Fatal("expected error for empty key")
+	}
+}
+
+func TestWatchAttribute_RewatchPreservesValues(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(5)
+	_ = s.WatchAttribute(ctx, "env")
+	_ = s.StoreAttributeValue(ctx, "env", "prod", "metrics", "")
+	_ = s.StoreAttributeValue(ctx, "env", "staging", "metrics", "")
+	_ = s.UnwatchAttribute(ctx, "env")
+
+	// Re-watch must succeed and values must still be there.
+	if err := s.WatchAttribute(ctx, "env"); err != nil {
+		t.Fatalf("re-watch failed: %v", err)
+	}
+	w, _ := s.GetWatchedAttribute(ctx, "env")
+	_, _, uniqueCount, totalObs, active, _, _ := w.Snapshot()
+	if !active {
+		t.Error("expected active after re-watch")
+	}
+	if uniqueCount != 2 || totalObs != 2 {
+		t.Errorf("expected 2 unique / 2 total, got %d / %d", uniqueCount, totalObs)
+	}
+}
+
+func TestWatchAttribute_InactiveDoesNotCountTowardLimit(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(2)
+	_ = s.WatchAttribute(ctx, "k1")
+	_ = s.WatchAttribute(ctx, "k2")
+	_ = s.UnwatchAttribute(ctx, "k1") // k1 inactive, frees active slot
+
+	// Adding a new key must succeed because only 1 active watch exists.
+	if err := s.WatchAttribute(ctx, "k3"); err != nil {
+		t.Errorf("expected success when inactive entry frees slot: %v", err)
 	}
 }
 
