@@ -16,10 +16,17 @@ import (
 	"github.com/fidde/otlp_cardinality_checker/internal/api"
 	"github.com/fidde/otlp_cardinality_checker/internal/receiver"
 	"github.com/fidde/otlp_cardinality_checker/internal/storage"
+	"github.com/fidde/otlp_cardinality_checker/internal/version"
 )
 
 func main() {
-	log.Println("Starting OTLP Cardinality Checker...")
+	// Handle --version / -version flag before anything else.
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "version") {
+		fmt.Printf("occ %s (commit: %s, built: %s)\n", version.Version, version.Commit, version.BuildDate)
+		os.Exit(0)
+	}
+
+	log.Printf("Starting OTLP Cardinality Checker %s (commit: %s, built: %s)", version.Version, version.Commit, version.BuildDate)
 
 	// Configure storage from environment
 	useAutoTemplate := getEnvBool("USE_AUTOTEMPLATE", true)

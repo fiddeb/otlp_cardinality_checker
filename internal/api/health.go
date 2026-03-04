@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"runtime"
 	"time"
+
+	"github.com/fidde/otlp_cardinality_checker/internal/version"
 )
 
 // HealthResponse represents the health check response
@@ -34,7 +36,7 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	response := HealthResponse{
 		Status:    "ok",
 		Timestamp: time.Now(),
-		Version:   "1.0.0",
+		Version:   version.Version,
 		Uptime:    time.Since(startTime).String(),
 		Memory: &MemoryStats{
 			AllocMB:      m.Alloc / 1024 / 1024,
@@ -47,4 +49,22 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// VersionResponse holds build-time version information.
+type VersionResponse struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildDate string `json:"build_date"`
+}
+
+// HandleVersion returns build-time version information.
+func (s *Server) HandleVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(VersionResponse{
+		Version:   version.Version,
+		Commit:    version.Commit,
+		BuildDate: version.BuildDate,
+	})
 }

@@ -155,6 +155,9 @@ func NewServer(addr string, store storage.Storage) *Server {
 		// Health endpoint
 		r.Get("/health", s.HandleHealth)
 
+		// Version endpoint
+		r.Get("/version", s.HandleVersion)
+
 		// Metrics endpoints
 		r.Get("/metrics", s.listMetrics)
 		r.Get("/metrics/{name}", s.getMetric)

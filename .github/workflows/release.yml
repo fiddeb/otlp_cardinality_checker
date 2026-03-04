@@ -45,7 +45,7 @@ jobs:
 
       - name: Build release binaries
         if: steps.tag_version.outputs.new_tag
-        run: make dist
+        run: make dist VERSION=${{ steps.tag_version.outputs.new_tag }}
 
       - name: Create Release
         if: steps.tag_version.outputs.new_tag
