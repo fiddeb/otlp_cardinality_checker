@@ -91,6 +91,18 @@ h1 {
   font-size: 14px;
 }
 
+.version-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  letter-spacing: 0.02em;
+}
+
 .header-actions {
   display: flex;
   gap: 12px;
