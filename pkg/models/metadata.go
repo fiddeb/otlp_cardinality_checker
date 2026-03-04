@@ -135,8 +135,6 @@ type SpanMetadata struct {
 
 	// Services maps service names to span counts
 	Services map[string]int64 `json:"services"`
-
-	mu sync.RWMutex `json:"-"`
 }
 
 // LogMetadata contains metadata about observed log records.
@@ -182,8 +180,6 @@ type LogMetadata struct {
 
 	// Services maps service names to record counts
 	Services map[string]int64 `json:"services"`
-
-	mu sync.RWMutex `json:"-"`
 }
 
 // DroppedAttributesStats tracks statistics about dropped attributes in log records

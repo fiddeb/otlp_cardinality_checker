@@ -33,31 +33,36 @@ type Store struct {
 	// Services tracks all service names seen
 	services map[string]struct{}
 	servicesmu sync.RWMutex
-	
+
+	// Deep watch: key -> watched attribute
+	watched       map[string]*models.WatchedAttribute
+	watchedmu     sync.RWMutex
+	maxWatchedFields int
+
 	// Autotemplate configuration
 	useAutoTemplate bool
 	autoTemplateCfg autotemplate.Config
 }
 
-// New creates a new in-memory store.
-func New() *Store {
-	return NewWithAutoTemplate(false)
-}
-
 // NewWithAutoTemplate creates a store with optional autotemplate support.
-func NewWithAutoTemplate(useAutoTemplate bool) *Store {
+func NewWithAutoTemplate(useAutoTemplate bool, maxWatchedFields int) *Store {
+	if maxWatchedFields <= 0 {
+		maxWatchedFields = 10
+	}
 	cfg := autotemplate.DefaultConfig()
 	cfg.Shards = 4
 	cfg.SimThreshold = 0.7 // Increased from 0.5 for stricter matching
-	
+
 	return &Store{
-		metrics:         make(map[string]*models.MetricMetadata),
-		spans:           make(map[string]*models.SpanMetadata),
-		logs:            make(map[string]*models.LogMetadata),
-		attributes:      make(map[string]*models.AttributeMetadata),
-		services:        make(map[string]struct{}),
-		useAutoTemplate: useAutoTemplate,
-		autoTemplateCfg: cfg,
+		metrics:          make(map[string]*models.MetricMetadata),
+		spans:            make(map[string]*models.SpanMetadata),
+		logs:             make(map[string]*models.LogMetadata),
+		attributes:       make(map[string]*models.AttributeMetadata),
+		services:         make(map[string]struct{}),
+		watched:          make(map[string]*models.WatchedAttribute),
+		maxWatchedFields: maxWatchedFields,
+		useAutoTemplate:  useAutoTemplate,
+		autoTemplateCfg:  cfg,
 	}
 }
 
@@ -774,17 +779,20 @@ func (s *Store) Clear(ctx context.Context) error {
 	s.logsmu.Lock()
 	s.attributesmu.Lock()
 	s.servicesmu.Lock()
+	s.watchedmu.Lock()
 	defer s.metricsmu.Unlock()
 	defer s.spansmu.Unlock()
 	defer s.logsmu.Unlock()
 	defer s.attributesmu.Unlock()
 	defer s.servicesmu.Unlock()
+	defer s.watchedmu.Unlock()
 
 	s.metrics = make(map[string]*models.MetricMetadata)
 	s.spans = make(map[string]*models.SpanMetadata)
 	s.logs = make(map[string]*models.LogMetadata)
 	s.attributes = make(map[string]*models.AttributeMetadata)
 	s.services = make(map[string]struct{})
+	s.watched = make(map[string]*models.WatchedAttribute)
 
 	return nil
 }
@@ -807,6 +815,15 @@ func (s *Store) StoreAttributeValue(ctx context.Context, key, value, signalType,
 
 	// Add value observation
 	attr.AddValue(value, signalType, scope)
+
+	// Deep watch: if this key is actively watched, record value frequency.
+	s.watchedmu.RLock()
+	w, watched := s.watched[key]
+	s.watchedmu.RUnlock()
+	if watched {
+		w.AddValue(value)
+	}
+
 	return nil
 }
 
@@ -918,6 +935,112 @@ func (s *Store) ListAttributes(ctx context.Context, filter *models.AttributeFilt
 	}
 
 	return attrs, nil
+}
+
+// WatchAttribute activates deep watch for an attribute key.
+// Returns an error if the maximum number of watched fields is already reached.
+// Idempotent: activating an already-watched key re-activates it without resetting its data.
+func (s *Store) WatchAttribute(ctx context.Context, key string) error {
+	if key == "" {
+		return errors.New("attribute key cannot be empty")
+	}
+
+	s.watchedmu.Lock()
+	defer s.watchedmu.Unlock()
+
+	if existing, ok := s.watched[key]; ok {
+		// Already tracked: just re-activate if it was inactive.
+		existing.SetActive(true)
+		return nil
+	}
+
+	if len(s.watched) >= s.maxWatchedFields {
+		// Count only active watches toward the limit so that deactivated
+		// entries (with preserved values) do not block re-activation.
+		activeCount := 0
+		for _, w := range s.watched {
+			_, _, _, _, active, _, _ := w.Snapshot()
+			if active {
+				activeCount++
+			}
+		}
+		if activeCount >= s.maxWatchedFields {
+			return fmt.Errorf("maximum watched fields limit (%d) reached", s.maxWatchedFields)
+		}
+	}
+
+	s.watched[key] = models.NewWatchedAttribute(key, 10000)
+	return nil
+}
+
+// UnwatchAttribute deactivates deep watch for the key, preserving all
+// collected values so they remain visible in the Value Explorer.
+func (s *Store) UnwatchAttribute(ctx context.Context, key string) error {
+	if key == "" {
+		return errors.New("attribute key cannot be empty")
+	}
+
+	s.watchedmu.Lock()
+	defer s.watchedmu.Unlock()
+
+	existing, ok := s.watched[key]
+	if !ok {
+		return fmt.Errorf("attribute %q: %w", key, models.ErrNotFound)
+	}
+
+	existing.SetActive(false)
+	return nil
+}
+
+// GetWatchedAttribute returns the WatchedAttribute for a specific key.
+func (s *Store) GetWatchedAttribute(ctx context.Context, key string) (*models.WatchedAttribute, error) {
+	if key == "" {
+		return nil, errors.New("attribute key cannot be empty")
+	}
+
+	s.watchedmu.RLock()
+	w, ok := s.watched[key]
+	s.watchedmu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("attribute %q: %w", key, models.ErrNotFound)
+	}
+
+	return w, nil
+}
+
+// ListWatchedAttributes returns all currently watched attributes.
+func (s *Store) ListWatchedAttributes(ctx context.Context) ([]*models.WatchedAttribute, error) {
+	s.watchedmu.RLock()
+	defer s.watchedmu.RUnlock()
+
+	result := make([]*models.WatchedAttribute, 0, len(s.watched))
+	for _, w := range s.watched {
+		result = append(result, w)
+	}
+	return result, nil
+}
+
+// MergeWatchedAttribute inserts or merges a WatchedAttribute from a session restore.
+// The restored entry is always set to Active=false (read-only historical data).
+// Implements api.StoreAccessor extended interface.
+func (s *Store) MergeWatchedAttribute(ctx context.Context, w *models.WatchedAttribute) error {
+	if w == nil {
+		return nil
+	}
+	w.SetActive(false)
+
+	s.watchedmu.Lock()
+	defer s.watchedmu.Unlock()
+
+	s.watched[w.Key] = w
+	return nil
+}
+
+// GetWatchedAll returns all watched attributes for session saving.
+// Implements api.StoreAccessor extended interface.
+func (s *Store) GetWatchedAll(ctx context.Context) ([]*models.WatchedAttribute, error) {
+	return s.ListWatchedAttributes(ctx)
 }
 
 // trackServices adds services to the global service set.

@@ -25,29 +25,6 @@ type LogsAnalyzer struct {
 	catalog          AttributeCatalog                    // Attribute catalog for global tracking
 }
 
-// NewLogsAnalyzer creates a new logs analyzer with regex-based template extraction.
-func NewLogsAnalyzer() *LogsAnalyzer {
-	return &LogsAnalyzer{
-		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
-		useAutoTemplate: false,
-	}
-}
-
-// NewLogsAnalyzerWithAutoTemplate creates a logs analyzer using autotemplate extraction.
-func NewLogsAnalyzerWithAutoTemplate(cfg autotemplate.Config) *LogsAnalyzer {
-	return NewLogsAnalyzerWithAutoTemplateAndPatterns(cfg, nil)
-}
-
-// NewLogsAnalyzerWithAutoTemplateAndPatterns creates a logs analyzer with patterns.
-func NewLogsAnalyzerWithAutoTemplateAndPatterns(cfg autotemplate.Config, pats []patterns.CompiledPattern) *LogsAnalyzer {
-	return &LogsAnalyzer{
-		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
-		useAutoTemplate: true,
-		autoTemplateCfg: cfg,
-		patterns:        pats,
-	}
-}
-
 // NewLogsAnalyzerWithCatalog creates a logs analyzer with attribute catalog.
 func NewLogsAnalyzerWithCatalog(catalog AttributeCatalog) *LogsAnalyzer {
 	return &LogsAnalyzer{

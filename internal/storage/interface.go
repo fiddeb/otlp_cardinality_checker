@@ -43,6 +43,12 @@ type Storage interface {
 	GetAttribute(ctx context.Context, key string) (*models.AttributeMetadata, error)
 	ListAttributes(ctx context.Context, filter *models.AttributeFilter) ([]*models.AttributeMetadata, error)
 
+	// Deep watch operations
+	WatchAttribute(ctx context.Context, key string) error
+	UnwatchAttribute(ctx context.Context, key string) error
+	GetWatchedAttribute(ctx context.Context, key string) (*models.WatchedAttribute, error)
+	ListWatchedAttributes(ctx context.Context) ([]*models.WatchedAttribute, error)
+
 	// Service operations
 	ListServices(ctx context.Context) ([]string, error)
 	GetServiceOverview(ctx context.Context, serviceName string) (*models.ServiceOverview, error)
