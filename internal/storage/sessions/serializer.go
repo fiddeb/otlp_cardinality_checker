@@ -68,6 +68,16 @@ func (s *Serializer) marshalMetric(m *models.MetricMetadata) (*models.Serialized
 		sm.ResourceKeys[name] = sk
 	}
 
+	// Serialize histogram-specific data (buckets/scales needed for series estimation)
+	if m.Data != nil {
+		switch d := m.Data.(type) {
+		case *models.HistogramMetric:
+			sm.ExplicitBounds = d.ExplicitBounds
+		case *models.ExponentialHistogramMetric:
+			sm.Scales = d.Scales
+		}
+	}
+
 	// Serialize series HLL if present
 	seriesHLL := m.GetSeriesHLL()
 	if seriesHLL != nil {
@@ -100,7 +110,7 @@ func (s *Serializer) UnmarshalMetrics(metrics []*models.SerializedMetric) ([]*mo
 
 // unmarshalMetric converts a single SerializedMetric to MetricMetadata.
 func (s *Serializer) unmarshalMetric(sm *models.SerializedMetric) (*models.MetricMetadata, error) {
-	// Create basic metric - we don't restore the full MetricData since we only need Type string
+	// Restore MetricData including histogram bucket/scale info needed for series estimation.
 	var metricData models.MetricData
 
 	switch sm.Type {
@@ -109,9 +119,13 @@ func (s *Serializer) unmarshalMetric(sm *models.SerializedMetric) (*models.Metri
 	case "Sum":
 		metricData = &models.SumMetric{}
 	case "Histogram":
-		metricData = &models.HistogramMetric{}
+		metricData = &models.HistogramMetric{
+			ExplicitBounds: sm.ExplicitBounds,
+		}
 	case "ExponentialHistogram":
-		metricData = &models.ExponentialHistogramMetric{}
+		metricData = &models.ExponentialHistogramMetric{
+			Scales: sm.Scales,
+		}
 	case "Summary":
 		metricData = &models.SummaryMetric{}
 	default:
@@ -121,7 +135,6 @@ func (s *Serializer) unmarshalMetric(sm *models.SerializedMetric) (*models.Metri
 	m := models.NewMetricMetadata(sm.Name, metricData)
 	m.Description = sm.Description
 	m.Unit = sm.Unit
-	// Note: Type is stored in sm.Type but we don't need to restore MetricData for sessions
 	m.SampleCount = sm.SampleCount
 	m.Services = sm.Services
 	m.ActiveSeries = sm.ActiveSeries
@@ -152,7 +165,6 @@ func (s *Serializer) unmarshalMetric(sm *models.SerializedMetric) (*models.Metri
 		}
 		m.SetSeriesHLL(hll)
 	}
-
 	return m, nil
 }
 

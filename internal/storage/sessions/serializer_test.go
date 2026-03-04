@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -91,6 +92,98 @@ func TestSerializer_MarshalUnmarshalMetrics_RoundTrip(t *testing.T) {
 	restoredCount := restoredHLL.Count()
 	if restoredCount != originalCount {
 		t.Errorf("HLL count mismatch: %d vs %d", restoredCount, originalCount)
+	}
+}
+
+func TestSerializer_HistogramBucketsPreservedOnRoundTrip(t *testing.T) {
+	serializer := NewSerializer()
+
+	explicitBounds := []float64{0.1, 0.5, 1.0, 5.0, 10.0}
+	hist := models.NewMetricMetadata("request_duration_seconds", &models.HistogramMetric{
+		DataPointCount: 200,
+		ExplicitBounds: explicitBounds,
+	})
+	hist.SampleCount = 200
+	// Add 4 unique series fingerprints (consistent HLL state)
+	for i := 0; i < 4; i++ {
+		hist.AddSeriesFingerprint(fmt.Sprintf("method=%d", i))
+	}
+
+	serialized, err := serializer.MarshalMetrics([]*models.MetricMetadata{hist})
+	if err != nil {
+		t.Fatalf("MarshalMetrics failed: %v", err)
+	}
+	if len(serialized[0].ExplicitBounds) != len(explicitBounds) {
+		t.Fatalf("ExplicitBounds not serialized: got %v, want %v", serialized[0].ExplicitBounds, explicitBounds)
+	}
+
+	restored, err := serializer.UnmarshalMetrics(serialized)
+	if err != nil {
+		t.Fatalf("UnmarshalMetrics failed: %v", err)
+	}
+	rm := restored[0]
+	histData, ok := rm.Data.(*models.HistogramMetric)
+	if !ok {
+		t.Fatalf("Expected *HistogramMetric, got %T", rm.Data)
+	}
+	if len(histData.ExplicitBounds) != len(explicitBounds) {
+		t.Fatalf("ExplicitBounds lost after round-trip: got %v, want %v", histData.ExplicitBounds, explicitBounds)
+	}
+	for i, b := range explicitBounds {
+		if histData.ExplicitBounds[i] != b {
+			t.Errorf("ExplicitBounds[%d]: got %f, want %f", i, histData.ExplicitBounds[i], b)
+		}
+	}
+
+	// Verify active_series_prometheus would be correctly computed
+	otlpSeries := rm.GetActiveSeries()
+	promSeries := models.EstimatePrometheusActiveSeries(otlpSeries, rm.Data)
+	// 5 bounds → 6 buckets; 4 OTLP series × (6+2) = 32
+	if promSeries != 32 {
+		t.Errorf("EstimatePrometheusActiveSeries after round-trip: got %d, want 32", promSeries)
+	}
+}
+
+func TestSerializer_ExponentialHistogramScalesPreservedOnRoundTrip(t *testing.T) {
+	serializer := NewSerializer()
+
+	scales := []int32{0, 1, 2}
+	expHist := models.NewMetricMetadata("latency_seconds", &models.ExponentialHistogramMetric{
+		DataPointCount: 60,
+		Scales:         scales,
+	})
+	expHist.SampleCount = 60
+	// Add 3 unique series fingerprints (consistent HLL state)
+	for i := 0; i < 3; i++ {
+		expHist.AddSeriesFingerprint(fmt.Sprintf("operation=%d", i))
+	}
+
+	serialized, err := serializer.MarshalMetrics([]*models.MetricMetadata{expHist})
+	if err != nil {
+		t.Fatalf("MarshalMetrics failed: %v", err)
+	}
+	if len(serialized[0].Scales) != len(scales) {
+		t.Fatalf("Scales not serialized: got %v, want %v", serialized[0].Scales, scales)
+	}
+
+	restored, err := serializer.UnmarshalMetrics(serialized)
+	if err != nil {
+		t.Fatalf("UnmarshalMetrics failed: %v", err)
+	}
+	rm := restored[0]
+	expData, ok := rm.Data.(*models.ExponentialHistogramMetric)
+	if !ok {
+		t.Fatalf("Expected *ExponentialHistogramMetric, got %T", rm.Data)
+	}
+	if len(expData.Scales) != len(scales) {
+		t.Fatalf("Scales lost after round-trip: got %v, want %v", expData.Scales, scales)
+	}
+
+	// 3 scales × 10 = 30 buckets; 3 OTLP series × (30+2) = 96
+	otlpSeries2 := rm.GetActiveSeries()
+	promSeries2 := models.EstimatePrometheusActiveSeries(otlpSeries2, rm.Data)
+	if promSeries2 != 96 {
+		t.Errorf("EstimatePrometheusActiveSeries after round-trip: got %d, want 96", promSeries2)
 	}
 }
 
