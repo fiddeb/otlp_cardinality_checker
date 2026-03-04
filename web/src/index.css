@@ -989,7 +989,9 @@ body.dark-mode .high-warning {
 .sample-values {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .sample-value {
@@ -1000,9 +1002,14 @@ body.dark-mode .high-warning {
   font-size: 11px;
   font-family: 'Courier New', monospace;
   color: var(--text-secondary);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
 }
 
-.more-values {
+.more-indicator, .more-values {
   padding: 3px 8px;
   font-size: 11px;
   color: var(--text-secondary);

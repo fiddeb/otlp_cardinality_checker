@@ -203,7 +203,7 @@ function AttributesView() {
               <th onClick={() => handleSort('count')} style={{cursor: 'pointer'}}>
                 Count {sortField === 'count' && (sortDirection === 'asc' ? '↑' : '↓')}
               </th>
-              <th>Sample Values</th>
+              <th style={{maxWidth: 340, width: 340}}>Sample Values</th>
               <th>Signal Types</th>
               <th>Scope</th>
               <th>Watch</th>
@@ -235,8 +235,8 @@ function AttributesView() {
                   </span>
                 </td>
                 <td>{attr.count?.toLocaleString() || 0}</td>
-                <td>
-                  <div className="value-samples">
+                <td style={{maxWidth: 340}}>
+                  <div className="sample-values">
                     {(attr.value_samples || []).slice(0, 5).map((val, i) => (
                       <code key={i} className="sample-value">{val}</code>
                     ))}
