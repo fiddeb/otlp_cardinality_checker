@@ -18,6 +18,7 @@ function AttributesView() {
   const [sortDirection, setSortDirection] = useState('desc')
   const [explorerKey, setExplorerKey] = useState(null) // key for ValueExplorer panel
   const [watchToggling, setWatchToggling] = useState({}) // key -> bool (loading)
+  const [expandedSamples, setExpandedSamples] = useState({}) // key -> bool
 
   const itemsPerPage = 100
 
@@ -237,11 +238,29 @@ function AttributesView() {
                 <td>{attr.count?.toLocaleString() || 0}</td>
                 <td style={{maxWidth: 340}}>
                   <div className="sample-values">
-                    {(attr.value_samples || []).slice(0, 5).map((val, i) => (
-                      <code key={i} className="sample-value">{val}</code>
-                    ))}
-                    {(attr.value_samples?.length || 0) > 5 && (
-                      <span className="more-indicator">+{attr.value_samples.length - 5} more</span>
+                    {(attr.value_samples || [])
+                      .slice(0, expandedSamples[attr.key] ? undefined : 5)
+                      .map((val, i) => (
+                        <code key={i} className="sample-value">{val}</code>
+                      ))
+                    }
+                    {!expandedSamples[attr.key] && (attr.value_samples?.length || 0) > 5 && (
+                      <button
+                        className="more-indicator"
+                        onClick={() => setExpandedSamples(prev => ({ ...prev, [attr.key]: true }))}
+                        title="Show all sample values"
+                      >
+                        +{attr.value_samples.length - 5} more
+                      </button>
+                    )}
+                    {expandedSamples[attr.key] && (
+                      <button
+                        className="more-indicator"
+                        onClick={() => setExpandedSamples(prev => ({ ...prev, [attr.key]: false }))}
+                        title="Show fewer"
+                      >
+                        show less
+                      </button>
                     )}
                   </div>
                 </td>

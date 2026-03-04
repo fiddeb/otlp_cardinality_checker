@@ -1014,6 +1014,11 @@ body.dark-mode .high-warning {
   font-size: 11px;
   color: var(--text-secondary);
   font-style: italic;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  font-family: inherit;
 }
 
 /* CrossSignalCardinality Component */
