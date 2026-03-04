@@ -1,7 +1,7 @@
 # OTLP Cardinality Checker - Build Makefile
 # Ensures consistent builds for both backend and frontend
 
-.PHONY: all build clean dev run test help ui backend install-deps
+.PHONY: all build dist clean dev run test help ui backend install-deps
 
 # Default target
 all: build
@@ -10,6 +10,7 @@ all: build
 help:
 	@echo "Available targets:"
 	@echo "  make build        - Build both backend and frontend (production)"
+	@echo "  make dist         - Cross-compile release binaries for all platforms"
 	@echo "  make backend      - Build only the Go backend"
 	@echo "  make ui           - Build only the React frontend"
 	@echo "  make dev          - Start development servers (backend + frontend)"
@@ -69,6 +70,7 @@ test:
 clean:
 	@echo "🧹 Cleaning build artifacts..."
 	rm -rf bin/
+	rm -rf dist/
 	rm -rf web/dist/
 	rm -rf web/node_modules/.vite/
 	@echo "✅ Clean complete"
@@ -78,6 +80,17 @@ docker-build:
 	@echo "🐳 Building Docker image..."
 	docker build -t occ:latest .
 	@echo "✅ Docker image built: occ:latest"
+
+# Cross-compile release binaries for all platforms
+dist: ui
+	@echo "🔨 Building release binaries..."
+	@mkdir -p dist
+	GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-linux-amd64   ./cmd/server
+	GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-linux-arm64   ./cmd/server
+	GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-darwin-amd64  ./cmd/server
+	GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-darwin-arm64  ./cmd/server
+	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-windows-amd64.exe ./cmd/server
+	@echo "✅ Release binaries built: dist/"
 
 # Quick rebuild (no clean)
 rebuild: build

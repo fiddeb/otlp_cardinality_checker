@@ -43,32 +43,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Build React UI
+      - name: Build release binaries
         if: steps.tag_version.outputs.new_tag
-        run: |
-          cd web
-          npm ci
-          npm run build
-
-      - name: Build binaries
-        if: steps.tag_version.outputs.new_tag
-        run: |
-          mkdir -p dist
-          
-          # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-linux-amd64 ./cmd/server
-          
-          # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-linux-arm64 ./cmd/server
-          
-          # macOS AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-darwin-amd64 ./cmd/server
-          
-          # macOS ARM64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-darwin-arm64 ./cmd/server
-          
-          # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-windows-amd64.exe ./cmd/server
+        run: make dist
 
       - name: Create Release
         if: steps.tag_version.outputs.new_tag
