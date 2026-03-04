@@ -32,6 +32,10 @@ type StoreAccessor interface {
 	MergeLog(ctx context.Context, log *models.LogMetadata) error
 	// MergeAttribute merges an attribute into the store
 	MergeAttribute(ctx context.Context, attr *models.AttributeMetadata) error
+	// GetWatchedAll returns all watched attributes for session saving
+	GetWatchedAll(ctx context.Context) ([]*models.WatchedAttribute, error)
+	// MergeWatchedAttribute restores a watched attribute as read-only
+	MergeWatchedAttribute(ctx context.Context, watched *models.WatchedAttribute) error
 	// Clear removes all data from the store
 	Clear(ctx context.Context) error
 }
@@ -157,6 +161,14 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get watched attributes when full store access is available.
+	var watchedAttrs []*models.WatchedAttribute
+	if h.storeAccess != nil {
+		if wa, werr := h.storeAccess.GetWatchedAll(ctx); werr == nil {
+			watchedAttrs = wa
+		}
+	}
+
 	// Create session
 	session, err := h.serializer.CreateSession(
 		ctx,
@@ -166,7 +178,7 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 			Signals:     opts.Signals,
 			Services:    opts.Services,
 		},
-		metrics, spans, logs, attrs, services,
+		metrics, spans, logs, attrs, services, watchedAttrs,
 	)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create session: "+err.Error())
@@ -345,10 +357,11 @@ func (h *SessionHandler) MergeSession(w http.ResponseWriter, r *http.Request) {
 // performMerge merges session data into the main store.
 func (h *SessionHandler) performMerge(ctx context.Context, session *models.Session) (map[string]int, error) {
 	counts := map[string]int{
-		"metrics":    0,
-		"spans":      0,
-		"logs":       0,
-		"attributes": 0,
+		"metrics":            0,
+		"spans":              0,
+		"logs":               0,
+		"attributes":         0,
+		"watched_attributes": 0,
 	}
 
 	// Merge metrics
@@ -404,6 +417,20 @@ func (h *SessionHandler) performMerge(ctx context.Context, session *models.Sessi
 				return nil, err
 			}
 			counts["attributes"]++
+		}
+	}
+
+	// Restore watched attributes as read-only.
+	if len(session.Data.WatchedAttributes) > 0 {
+		watchedAttrs, err := h.serializer.UnmarshalWatchedAttributes(session.Data.WatchedAttributes)
+		if err != nil {
+			return nil, err
+		}
+		for _, wa := range watchedAttrs {
+			if err := h.storeAccess.MergeWatchedAttribute(ctx, wa); err != nil {
+				return nil, err
+			}
+			counts["watched_attributes"]++
 		}
 	}
 

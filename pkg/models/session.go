@@ -94,10 +94,21 @@ type Session struct {
 
 // SessionData contains the serializable telemetry metadata.
 type SessionData struct {
-	Metrics    []*SerializedMetric    `json:"metrics,omitempty"`
-	Spans      []*SerializedSpan      `json:"spans,omitempty"`
-	Logs       []*SerializedLog       `json:"logs,omitempty"`
-	Attributes []*SerializedAttribute `json:"attributes,omitempty"`
+	Metrics           []*SerializedMetric            `json:"metrics,omitempty"`
+	Spans             []*SerializedSpan               `json:"spans,omitempty"`
+	Logs              []*SerializedLog                `json:"logs,omitempty"`
+	Attributes        []*SerializedAttribute          `json:"attributes,omitempty"`
+	WatchedAttributes []*SerializedWatchedAttribute   `json:"watched_attributes,omitempty"`
+}
+
+// SerializedWatchedAttribute is a JSON-serializable version of WatchedAttribute.
+type SerializedWatchedAttribute struct {
+	Key               string           `json:"key"`
+	Values            map[string]int64 `json:"values"`
+	UniqueCount       int64            `json:"unique_count"`
+	TotalObservations int64            `json:"total_observations"`
+	Overflow          bool             `json:"overflow"`
+	WatchingSince     time.Time        `json:"watching_since"`
 }
 
 // SerializedMetric is a JSON-serializable version of MetricMetadata.

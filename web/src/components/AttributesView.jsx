@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import ValueExplorer from './ValueExplorer'
+
+const MAX_WATCHED_FIELDS = 10
 
 function AttributesView() {
   const [attributes, setAttributes] = useState([])
@@ -13,26 +16,19 @@ function AttributesView() {
   })
   const [sortField, setSortField] = useState('cardinality')
   const [sortDirection, setSortDirection] = useState('desc')
+  const [explorerKey, setExplorerKey] = useState(null) // key for ValueExplorer panel
+  const [watchToggling, setWatchToggling] = useState({}) // key -> bool (loading)
 
   const itemsPerPage = 100
 
-  useEffect(() => {
+  const fetchAttributes = () => {
     let url = '/api/v1/attributes?limit=1000'
-    
-    // Add filters
-    if (filter.signalType !== 'all') {
-      url += `&signal_type=${filter.signalType}`
-    }
-    if (filter.scope !== 'all') {
-      url += `&scope=${filter.scope}`
-    }
-    if (filter.minCardinality > 0) {
-      url += `&min_cardinality=${filter.minCardinality}`
-    }
-    
-    // Add sorting
+
+    if (filter.signalType !== 'all') url += `&signal_type=${filter.signalType}`
+    if (filter.scope !== 'all') url += `&scope=${filter.scope}`
+    if (filter.minCardinality > 0) url += `&min_cardinality=${filter.minCardinality}`
     url += `&sort_by=${sortField}&sort_order=${sortDirection}`
-    
+
     fetch(url)
       .then(r => r.json())
       .then(result => {
@@ -43,6 +39,11 @@ function AttributesView() {
         setError(err.message)
         setLoading(false)
       })
+  }
+
+  useEffect(() => {
+    fetchAttributes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, sortField, sortDirection])
 
   const filteredAttributes = (attributes || []).filter(attr => {
@@ -50,12 +51,14 @@ function AttributesView() {
     return true
   })
 
+  const watchedCount = filteredAttributes.filter(a => a.watched).length
+  const limitReached = watchedCount >= MAX_WATCHED_FIELDS
+
   const totalPages = Math.ceil(filteredAttributes.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const currentAttributes = filteredAttributes.slice(startIndex, endIndex)
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
   }, [filter])
@@ -84,16 +87,30 @@ function AttributesView() {
     }
   }
 
-  if (loading) {
-    return <div className="loading">Loading attributes...</div>
+  const handleWatchToggle = async (attr) => {
+    const key = attr.key
+    setWatchToggling(prev => ({ ...prev, [key]: true }))
+    try {
+      if (attr.watched) {
+        await fetch(`/api/v1/attributes/${encodeURIComponent(key)}/watch`, { method: 'DELETE' })
+        if (explorerKey === key) setExplorerKey(null)
+      } else {
+        const res = await fetch(`/api/v1/attributes/${encodeURIComponent(key)}/watch`, { method: 'POST' })
+        if (res.ok) setExplorerKey(key)
+      }
+      fetchAttributes()
+    } catch (_) {
+      // ignore
+    } finally {
+      setWatchToggling(prev => ({ ...prev, [key]: false }))
+    }
   }
 
-  if (error) {
-    return <div className="error">Error: {error}</div>
-  }
+  if (loading) return <div className="loading">Loading attributes...</div>
+  if (error) return <div className="error">Error: {error}</div>
 
   return (
-    <div className="view-container">
+    <div className="view-container" style={{ marginRight: explorerKey ? '540px' : 0 }}>
       <div className="view-header">
         <h2>Attribute Catalog</h2>
         <p className="view-description">
@@ -104,8 +121,8 @@ function AttributesView() {
       <div className="filters">
         <div className="filter-group">
           <label>Signal Type:</label>
-          <select 
-            value={filter.signalType} 
+          <select
+            value={filter.signalType}
             onChange={e => setFilter({...filter, signalType: e.target.value})}
           >
             <option value="all">All Signals</option>
@@ -117,8 +134,8 @@ function AttributesView() {
 
         <div className="filter-group">
           <label>Scope:</label>
-          <select 
-            value={filter.scope} 
+          <select
+            value={filter.scope}
             onChange={e => setFilter({...filter, scope: e.target.value})}
           >
             <option value="all">All Scopes</option>
@@ -167,6 +184,10 @@ function AttributesView() {
             {filteredAttributes.filter(a => a.scope === 'resource' || a.scope === 'both').length}
           </span>
         </div>
+        <div className="stat">
+          <span className="stat-label">Watching:</span>
+          <span className="stat-value">{watchedCount} / {MAX_WATCHED_FIELDS}</span>
+        </div>
       </div>
 
       <div className="table-container">
@@ -185,13 +206,28 @@ function AttributesView() {
               <th>Sample Values</th>
               <th>Signal Types</th>
               <th>Scope</th>
+              <th>Watch</th>
             </tr>
           </thead>
           <tbody>
             {currentAttributes.map((attr, idx) => (
               <tr key={idx}>
                 <td>
-                  <code className="attribute-key">{attr.key}</code>
+                  {attr.watched ? (
+                    <button
+                      onClick={() => setExplorerKey(explorerKey === attr.key ? null : attr.key)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#1976d2', textDecoration: 'underline', padding: 0,
+                        fontFamily: 'monospace', fontSize: 'inherit',
+                      }}
+                      title="Open Value Explorer"
+                    >
+                      {attr.key}
+                    </button>
+                  ) : (
+                    <code className="attribute-key">{attr.key}</code>
+                  )}
                 </td>
                 <td>
                   <span className={`cardinality-badge ${getCardinalityBadge(attr.estimated_cardinality)}`}>
@@ -217,12 +253,40 @@ function AttributesView() {
                   </div>
                 </td>
                 <td>
-                  <span 
-                    className="scope-badge" 
+                  <span
+                    className="scope-badge"
                     style={{backgroundColor: getScopeColor(attr.scope)}}
                   >
                     {attr.scope}
                   </span>
+                </td>
+                <td>
+                  <button
+                    onClick={() => handleWatchToggle(attr)}
+                    disabled={watchToggling[attr.key] || (!attr.watched && limitReached)}
+                    title={
+                      !attr.watched && limitReached
+                        ? `Limit of ${MAX_WATCHED_FIELDS} watched fields reached`
+                        : attr.watched
+                          ? 'Stop watching'
+                          : 'Start deep watch'
+                    }
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: 4,
+                      border: '1px solid',
+                      cursor: (watchToggling[attr.key] || (!attr.watched && limitReached)) ? 'not-allowed' : 'pointer',
+                      opacity: (!attr.watched && limitReached) ? 0.4 : 1,
+                      background: attr.watched ? '#e3f2fd' : 'transparent',
+                      borderColor: attr.watched ? '#1976d2' : '#ccc',
+                      color: attr.watched ? '#1976d2' : '#666',
+                      fontSize: 12,
+                      fontWeight: attr.watched ? 600 : 400,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {watchToggling[attr.key] ? '…' : attr.watched ? 'Watching' : 'Watch'}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -232,14 +296,14 @@ function AttributesView() {
 
       {totalPages > 1 && (
         <div className="pagination">
-          <button 
+          <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
           >
             Previous
           </button>
           <span>Page {currentPage} of {totalPages}</span>
-          <button 
+          <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
           >
@@ -247,8 +311,17 @@ function AttributesView() {
           </button>
         </div>
       )}
+
+      {/* Value Explorer side panel */}
+      {explorerKey && (
+        <ValueExplorer
+          attributeKey={explorerKey}
+          onClose={() => setExplorerKey(null)}
+        />
+      )}
     </div>
   )
 }
 
 export default AttributesView
+
