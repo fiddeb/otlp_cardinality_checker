@@ -16,11 +16,6 @@ type MetricsAnalyzer struct {
 	catalog AttributeCatalog
 }
 
-// NewMetricsAnalyzer creates a new metrics analyzer.
-func NewMetricsAnalyzer() *MetricsAnalyzer {
-	return &MetricsAnalyzer{}
-}
-
 // NewMetricsAnalyzerWithCatalog creates a new metrics analyzer with attribute catalog.
 func NewMetricsAnalyzerWithCatalog(catalog AttributeCatalog) *MetricsAnalyzer {
 	return &MetricsAnalyzer{

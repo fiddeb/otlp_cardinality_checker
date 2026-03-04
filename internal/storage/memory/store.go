@@ -44,11 +44,6 @@ type Store struct {
 	autoTemplateCfg autotemplate.Config
 }
 
-// New creates a new in-memory store with default settings.
-func New() *Store {
-	return NewWithAutoTemplate(false, 10)
-}
-
 // NewWithAutoTemplate creates a store with optional autotemplate support.
 func NewWithAutoTemplate(useAutoTemplate bool, maxWatchedFields int) *Store {
 	if maxWatchedFields <= 0 {

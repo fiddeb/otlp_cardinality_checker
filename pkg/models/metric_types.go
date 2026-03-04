@@ -1,10 +1,5 @@
 package models
 
-import (
-	"encoding/json"
-	"fmt"
-)
-
 // MetricData is an interface that represents the different types of metric data.
 // This matches the OTLP proto oneof structure for metric data types.
 type MetricData interface {
@@ -13,83 +8,6 @@ type MetricData interface {
 
 	// GetDataPointCount returns the number of data points
 	GetDataPointCount() int64
-}
-
-// metricDataJSON is used for JSON marshaling/unmarshaling
-type metricDataJSON struct {
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data"`
-}
-
-// MarshalMetricData marshals a MetricData to JSON
-func MarshalMetricData(md MetricData) ([]byte, error) {
-	if md == nil {
-		return json.Marshal(nil)
-	}
-
-	dataBytes, err := json.Marshal(md)
-	if err != nil {
-		return nil, err
-	}
-
-	wrapper := metricDataJSON{
-		Type: md.GetType(),
-		Data: dataBytes,
-	}
-
-	return json.Marshal(wrapper)
-}
-
-// UnmarshalMetricData unmarshals JSON to a MetricData
-func UnmarshalMetricData(data []byte) (MetricData, error) {
-	if len(data) == 0 || string(data) == "null" {
-		return nil, nil
-	}
-
-	var wrapper metricDataJSON
-	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return nil, err
-	}
-
-	switch wrapper.Type {
-	case "Gauge":
-		var gauge GaugeMetric
-		if err := json.Unmarshal(wrapper.Data, &gauge); err != nil {
-			return nil, err
-		}
-		return &gauge, nil
-
-	case "Sum":
-		var sum SumMetric
-		if err := json.Unmarshal(wrapper.Data, &sum); err != nil {
-			return nil, err
-		}
-		return &sum, nil
-
-	case "Histogram":
-		var hist HistogramMetric
-		if err := json.Unmarshal(wrapper.Data, &hist); err != nil {
-			return nil, err
-		}
-		return &hist, nil
-
-	case "ExponentialHistogram":
-		var expHist ExponentialHistogramMetric
-		if err := json.Unmarshal(wrapper.Data, &expHist); err != nil {
-			return nil, err
-		}
-		return &expHist, nil
-
-	case "Summary":
-		var summary SummaryMetric
-		if err := json.Unmarshal(wrapper.Data, &summary); err != nil {
-			return nil, err
-		}
-		return &summary, nil
-
-	default:
-		return nil, fmt.Errorf("unknown metric type: %s", wrapper.Type)
-	}
 }
 
 // AggregationTemporality defines how a metric aggregator reports aggregated values.
