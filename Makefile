@@ -3,6 +3,16 @@
 
 .PHONY: all build dist clean dev run test help ui backend install-deps
 
+# Version info — override via: make dist VERSION=v1.2.3
+VERSION    ?= dev
+COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+PKG        := github.com/fidde/otlp_cardinality_checker/internal/version
+LDFLAGS    := -s -w \
+              -X $(PKG).Version=$(VERSION) \
+              -X $(PKG).Commit=$(COMMIT) \
+              -X $(PKG).BuildDate=$(BUILD_DATE)
+
 # Default target
 all: build
 
@@ -30,13 +40,13 @@ install-deps:
 # Build backend
 backend:
 	@echo "🔨 Building Go backend..."
-	go build -o bin/occ ./cmd/server
+	go build -ldflags="$(LDFLAGS)" -o bin/occ ./cmd/server
 	@echo "✅ Backend built: bin/occ"
 
 # Build frontend
 ui:
 	@echo "🔨 Building React frontend..."
-	cd web && npm run build
+	cd web && npm ci && npm run build
 	@echo "✅ Frontend built: web/dist/"
 
 # Build both (production) - UI must be built first so Go can embed it
@@ -85,11 +95,11 @@ docker-build:
 dist: ui
 	@echo "🔨 Building release binaries..."
 	@mkdir -p dist
-	GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-linux-amd64   ./cmd/server
-	GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-linux-arm64   ./cmd/server
-	GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-darwin-amd64  ./cmd/server
-	GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-darwin-arm64  ./cmd/server
-	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/otlp_cardinality_checker-windows-amd64.exe ./cmd/server
+	GOOS=linux   GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/otlp_cardinality_checker-linux-amd64   ./cmd/server
+	GOOS=linux   GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/otlp_cardinality_checker-linux-arm64   ./cmd/server
+	GOOS=darwin  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/otlp_cardinality_checker-darwin-amd64  ./cmd/server
+	GOOS=darwin  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/otlp_cardinality_checker-darwin-arm64  ./cmd/server
+	GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/otlp_cardinality_checker-windows-amd64.exe ./cmd/server
 	@echo "✅ Release binaries built: dist/"
 
 # Quick rebuild (no clean)
