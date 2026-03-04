@@ -84,6 +84,7 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
 - Span name pattern detection for high-cardinality naming
 - Cardinality estimation with HyperLogLog
 - Global attribute catalog across all signals
+- Attribute deep watch — collect every distinct value seen for a specific attribute key, with Value Explorer UI
 - In-memory storage (ephemeral by design)
 - REST API with pagination and filtering
 - Embedded React Web UI (built into the binary)

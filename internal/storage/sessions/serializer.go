@@ -513,6 +513,50 @@ func (s *Serializer) unmarshalAttribute(sa *models.SerializedAttribute) (*models
 	return a, nil
 }
 
+// MarshalWatchedAttributes converts WatchedAttribute slice to SerializedWatchedAttribute slice.
+func (s *Serializer) MarshalWatchedAttributes(watched []*models.WatchedAttribute) ([]*models.SerializedWatchedAttribute, error) {
+	if len(watched) == 0 {
+		return nil, nil
+	}
+
+	result := make([]*models.SerializedWatchedAttribute, 0, len(watched))
+	for _, w := range watched {
+		key, vals, unique, total, _, overflow, since := w.Snapshot()
+		result = append(result, &models.SerializedWatchedAttribute{
+			Key:               key,
+			Values:            vals,
+			UniqueCount:       unique,
+			TotalObservations: total,
+			Overflow:          overflow,
+			WatchingSince:     since,
+		})
+	}
+	return result, nil
+}
+
+// UnmarshalWatchedAttributes converts SerializedWatchedAttribute slice to WatchedAttribute slice.
+// All restored entries have Active = false (read-only historical data).
+func (s *Serializer) UnmarshalWatchedAttributes(watched []*models.SerializedWatchedAttribute) ([]*models.WatchedAttribute, error) {
+	if len(watched) == 0 {
+		return nil, nil
+	}
+
+	result := make([]*models.WatchedAttribute, 0, len(watched))
+	for _, sw := range watched {
+		w := models.NewWatchedAttribute(sw.Key, 10000)
+		w.SetActive(false) // restored as read-only
+		w.Overflow = sw.Overflow
+		w.WatchingSince = sw.WatchingSince
+		w.UniqueCount = sw.UniqueCount
+		w.TotalObservations = sw.TotalObservations
+		if sw.Values != nil {
+			w.Values = sw.Values
+		}
+		result = append(result, w)
+	}
+	return result, nil
+}
+
 // CreateSessionOptions defines what to include when creating a session.
 type CreateSessionOptions struct {
 	Name        string
@@ -531,6 +575,7 @@ func (s *Serializer) CreateSession(
 	logs []*models.LogMetadata,
 	attributes []*models.AttributeMetadata,
 	services []string,
+	watched []*models.WatchedAttribute,
 ) (*models.Session, error) {
 	session := &models.Session{
 		Version:     CurrentVersion,
@@ -615,6 +660,15 @@ func (s *Serializer) CreateSession(
 		}
 		session.Data.Attributes = serialized
 		session.Stats.AttributesCount = len(serialized)
+	}
+
+	// Always serialize watched attributes (independent of signals filter).
+	if len(watched) > 0 {
+		serializedWatched, err := s.MarshalWatchedAttributes(watched)
+		if err != nil {
+			return nil, fmt.Errorf("marshaling watched attributes: %w", err)
+		}
+		session.Data.WatchedAttributes = serializedWatched
 	}
 
 	return session, nil

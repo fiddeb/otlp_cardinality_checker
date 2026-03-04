@@ -204,6 +204,99 @@ func MergeAttributeMetadata(a1, a2 *AttributeMetadata) *AttributeMetadata {
 	return a1
 }
 
+// WatchedAttribute holds full value-frequency data for a deep-watched attribute key.
+// It is separate from AttributeMetadata to avoid touching the hot path for all attributes.
+type WatchedAttribute struct {
+	mu sync.RWMutex
+
+	// Key is the attribute key being watched.
+	Key string `json:"key"`
+
+	// Values maps unique observed values to their occurrence count.
+	Values map[string]int64 `json:"values"`
+
+	// UniqueCount is len(Values), cached to avoid lock on read.
+	UniqueCount int64 `json:"unique_count"`
+
+	// TotalObservations is the total number of AddValue calls since watching started.
+	TotalObservations int64 `json:"total_observations"`
+
+	// Active is true when the watch is collecting new values.
+	// False when restored from a session (read-only view of historical data).
+	Active bool `json:"active"`
+
+	// Overflow is true when the unique value cap was reached; new unique values are ignored.
+	Overflow bool `json:"overflow"`
+
+	// WatchingSince is when deep watch was first activated for this key.
+	WatchingSince time.Time `json:"watching_since"`
+
+	// MaxValues is the unique-value cap (default 10,000).
+	MaxValues int `json:"-"`
+}
+
+// NewWatchedAttribute creates a new WatchedAttribute ready for collection.
+func NewWatchedAttribute(key string, maxValues int) *WatchedAttribute {
+	if maxValues <= 0 {
+		maxValues = 10000
+	}
+	return &WatchedAttribute{
+		Key:           key,
+		Values:        make(map[string]int64),
+		Active:        true,
+		WatchingSince: time.Now(),
+		MaxValues:     maxValues,
+	}
+}
+
+// AddValue records a value observation. It is safe for concurrent use.
+// When the watch is not Active (restored session) observations are ignored.
+func (w *WatchedAttribute) AddValue(value string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if !w.Active {
+		return
+	}
+
+	w.TotalObservations++
+
+	if existing, ok := w.Values[value]; ok {
+		// Value already tracked: increment its count.
+		w.Values[value] = existing + 1
+		return
+	}
+
+	// New unique value.
+	if w.Overflow || int(w.UniqueCount) >= w.MaxValues {
+		w.Overflow = true
+		return
+	}
+
+	w.Values[value] = 1
+	w.UniqueCount++
+}
+
+// Snapshot returns a consistent read of the watched attribute's current state.
+// The returned Values map is a copy safe to read without holding the lock.
+func (w *WatchedAttribute) Snapshot() (key string, values map[string]int64, uniqueCount, totalObs int64, active, overflow bool, since time.Time) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	valCopy := make(map[string]int64, len(w.Values))
+	for k, v := range w.Values {
+		valCopy[k] = v
+	}
+	return w.Key, valCopy, w.UniqueCount, w.TotalObservations, w.Active, w.Overflow, w.WatchingSince
+}
+
+// SetActive safely sets the Active flag under the lock.
+func (w *WatchedAttribute) SetActive(active bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Active = active
+}
+
 // AttributeFilter defines filtering options for listing attributes.
 type AttributeFilter struct {
 	// SignalType filters by signal type (metric, span, log)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,6 +27,23 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Parse --watch-fields=key1,key2 flag (additive at startup for Kafka replay).
+	var watchFieldsRaw string
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--watch-fields=") {
+			watchFieldsRaw = strings.TrimPrefix(arg, "--watch-fields=")
+		}
+	}
+	var watchFields []string
+	if watchFieldsRaw != "" {
+		for _, k := range strings.Split(watchFieldsRaw, ",") {
+			k = strings.TrimSpace(k)
+			if k != "" {
+				watchFields = append(watchFields, k)
+			}
+		}
+	}
+
 	log.Printf("Starting OTLP Cardinality Checker %s (commit: %s, built: %s)", version.Version, version.Commit, version.BuildDate)
 
 	// Configure storage from environment
@@ -40,6 +58,11 @@ func main() {
 		log.Println("Using regex-based template extraction")
 	}
 
+	// Validate --watch-fields count against configured limit.
+	if len(watchFields) > storageCfg.MaxWatchedFields {
+		log.Fatalf("--watch-fields specifies %d keys but MaxWatchedFields limit is %d", len(watchFields), storageCfg.MaxWatchedFields)
+	}
+
 	// Create storage (always in-memory)
 	store := storage.NewStorage(storageCfg)
 	defer func() {
@@ -47,6 +70,17 @@ func main() {
 			log.Printf("Error closing storage: %v", err)
 		}
 	}()
+
+	// Activate deep watch for any startup fields.
+	if len(watchFields) > 0 {
+		ctx := context.Background()
+		for _, key := range watchFields {
+			if err := store.WatchAttribute(ctx, key); err != nil {
+				log.Fatalf("Failed to watch attribute %q: %v", key, err)
+			}
+			log.Printf("Deep watch activated for attribute key %q", key)
+		}
+	}
 
 	// Create OTLP receivers
 	otlpHTTPAddr := getEnv("OTLP_HTTP_ADDR", "0.0.0.0:4318")

@@ -75,6 +75,14 @@ func (m *mockStoreAccessor) Clear(ctx context.Context) error {
 	return nil
 }
 
+func (m *mockStoreAccessor) GetWatchedAll(ctx context.Context) ([]*models.WatchedAttribute, error) {
+	return nil, nil
+}
+
+func (m *mockStoreAccessor) MergeWatchedAttribute(ctx context.Context, watched *models.WatchedAttribute) error {
+	return nil
+}
+
 func setupTestSessionHandler(t *testing.T) (*SessionHandler, string, func()) {
 	t.Helper()
 

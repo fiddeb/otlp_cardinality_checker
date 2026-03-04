@@ -10,7 +10,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/storage"
@@ -187,6 +189,11 @@ func NewServer(addr string, store storage.Storage) *Server {
 		// Attribute catalog endpoints
 		r.Get("/attributes", s.listAttributes)
 		r.Get("/attributes/{key}", s.getAttribute)
+
+		// Deep watch endpoints — more specific routes before generic {key}
+		r.Post("/attributes/{key}/watch", s.handleWatchAttribute)
+		r.Delete("/attributes/{key}/watch", s.handleUnwatchAttribute)
+		r.Get("/attributes/{key}/watch", s.handleGetWatchedAttribute)
 
 		// Admin endpoints
 		r.Post("/admin/clear", s.clearAllData)
@@ -422,6 +429,18 @@ func (s *Server) getSpanPatterns(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, patterns)
 }
 
+// logsListResponse extends PaginatedResponse with total_sample_count so the
+// dashboard can display the real number of ingested log records (not just the
+// count of unique severity types).
+type logsListResponse struct {
+	Data             []*models.LogMetadata `json:"data"`
+	Total            int                   `json:"total"`
+	Limit            int                   `json:"limit"`
+	Offset           int                   `json:"offset"`
+	HasMore          bool                  `json:"has_more"`
+	TotalSampleCount int64                 `json:"total_sample_count"`
+}
+
 // listLogs returns all log metadata, optionally filtered by service.
 // Supports pagination via ?limit=N&offset=M query parameters.
 func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
@@ -435,9 +454,22 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sum total log records observed across all severity buckets (before pagination).
+	var totalSampleCount int64
+	for _, l := range logs {
+		totalSampleCount += l.SampleCount
+	}
+
 	// Apply pagination
-	_, response := paginateSlice(logs, params)
-	s.respondJSON(w, http.StatusOK, response)
+	page, paginated := paginateSlice(logs, params)
+	s.respondJSON(w, http.StatusOK, logsListResponse{
+		Data:             page,
+		Total:            paginated.Total,
+		Limit:            paginated.Limit,
+		Offset:           paginated.Offset,
+		HasMore:          paginated.HasMore,
+		TotalSampleCount: totalSampleCount,
+	})
 }
 
 // getLog returns a specific log metadata by severity.
@@ -935,13 +967,6 @@ func (s *Server) getMetadataComplexity(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, response)
 }
 
-// health returns the health status of the API.
-func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	s.respondJSON(w, http.StatusOK, map[string]string{
-		"status": "ok",
-	})
-}
-
 // respondJSON writes a JSON response.
 func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -993,11 +1018,35 @@ func (s *Server) listAttributes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Build watched-key set for O(1) lookup. Only active watches are "watched".
+	watchedKeys := make(map[string]bool)
+	if watched, err := s.store.ListWatchedAttributes(ctx); err == nil {
+		for _, wa := range watched {
+			_, _, _, _, active, _, _ := wa.Snapshot()
+			if active {
+				watchedKeys[wa.Key] = true
+			}
+		}
+	}
+
+	type attributeWithWatch struct {
+		*models.AttributeMetadata
+		Watched bool `json:"watched"`
+	}
+
+	data := make([]attributeWithWatch, len(attributes))
+	for i, a := range attributes {
+		data[i] = attributeWithWatch{
+			AttributeMetadata: a,
+			Watched:           watchedKeys[a.Key],
+		}
+	}
+
 	total := len(allAttributes)
 	hasMore := filter.Offset+len(attributes) < total
 
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{
-		"data":     attributes,
+		"data":     data,
 		"total":    total,
 		"limit":    filter.Limit,
 		"offset":   filter.Offset,
@@ -1016,14 +1065,181 @@ func (s *Server) getAttribute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	attribute, err := s.store.GetAttribute(ctx, key)
+	// URL decode the key for dot-separated names.
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid key encoding")
+		return
+	}
+
+	attribute, err := s.store.GetAttribute(ctx, decodedKey)
 	if err != nil {
 		s.respondError(w, http.StatusNotFound, fmt.Sprintf("Attribute not found: %v", err))
 		return
 	}
 
+	watched := false
+	if wa, err := s.store.GetWatchedAttribute(ctx, decodedKey); err == nil {
+		_, _, _, _, active, _, _ := wa.Snapshot()
+		watched = active
+	}
+
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{
-		"data": attribute,
+		"data":    attribute,
+		"watched": watched,
+	})
+}
+
+// handleWatchAttribute enables deep watch for a specific attribute key.
+// POST /api/v1/attributes/{key}/watch
+// Returns 200 (already watching), 201 (newly activated), 409 (conflict), 429 (limit).
+func (s *Server) handleWatchAttribute(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil || decodedKey == "" {
+		s.respondError(w, http.StatusBadRequest, "invalid attribute key")
+		return
+	}
+
+	if err := s.store.WatchAttribute(ctx, decodedKey); err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			s.respondError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		// Limit exceeded — treat as 429 Too Many Requests.
+		s.respondError(w, http.StatusTooManyRequests, err.Error())
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("deep watch activated for %q", decodedKey),
+		"key":     decodedKey,
+	})
+}
+
+// handleUnwatchAttribute disables deep watch for a specific attribute key.
+// DELETE /api/v1/attributes/{key}/watch
+// Returns 204 on success, 404 if key not watched.
+func (s *Server) handleUnwatchAttribute(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil || decodedKey == "" {
+		s.respondError(w, http.StatusBadRequest, "invalid attribute key")
+		return
+	}
+
+	if err := s.store.UnwatchAttribute(ctx, decodedKey); err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			s.respondError(w, http.StatusNotFound, "attribute not watched")
+			return
+		}
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleGetWatchedAttribute returns deep-watch data (Value Explorer) for a key.
+// GET /api/v1/attributes/{key}/watch?sort_by=count&sort_direction=desc&page=1&page_size=100&q=prefix
+func (s *Server) handleGetWatchedAttribute(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil || decodedKey == "" {
+		s.respondError(w, http.StatusBadRequest, "invalid attribute key")
+		return
+	}
+
+	wa, err := s.store.GetWatchedAttribute(ctx, decodedKey)
+	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			s.respondError(w, http.StatusNotFound, "attribute not watched")
+			return
+		}
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Read query params.
+	sortBy := r.URL.Query().Get("sort_by") // count | value
+	if sortBy == "" {
+		sortBy = "count"
+	}
+	sortDir := r.URL.Query().Get("sort_direction") // asc | desc
+	if sortDir == "" {
+		sortDir = "desc"
+	}
+	q := r.URL.Query().Get("q") // prefix filter
+	page := parseInt(r.URL.Query().Get("page"), 1)
+	pageSize := parseInt(r.URL.Query().Get("page_size"), 100)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 10000 {
+		pageSize = 100
+	}
+
+	// Snapshot under lock.
+	waKey, valsCopy, uniqueCount, totalObs, active, overflow, since := wa.Snapshot()
+
+	// Build and filter value pairs.
+	type ValueEntry struct {
+		Value string `json:"value"`
+		Count int64  `json:"count"`
+	}
+	entries := make([]ValueEntry, 0, len(valsCopy))
+	for v, c := range valsCopy {
+		if q != "" && !strings.HasPrefix(v, q) {
+			continue
+		}
+		entries = append(entries, ValueEntry{Value: v, Count: c})
+	}
+
+	// Sort.
+	sort.Slice(entries, func(i, j int) bool {
+		switch sortBy {
+		case "value":
+			if sortDir == "asc" {
+				return entries[i].Value < entries[j].Value
+			}
+			return entries[i].Value > entries[j].Value
+		default: // count
+			if sortDir == "asc" {
+				return entries[i].Count < entries[j].Count
+			}
+			return entries[i].Count > entries[j].Count
+		}
+	})
+
+	// Paginate.
+	total := len(entries)
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+	pageEntries := entries[start:end]
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"key":                waKey,
+		"watching_since":     since,
+		"unique_count":       uniqueCount,
+		"total_observations": totalObs,
+		"active":             active,
+		"overflow":           overflow,
+		"values":             pageEntries,
+		"total_values":       total,
+		"page":               page,
+		"page_size":          pageSize,
 	})
 }
 

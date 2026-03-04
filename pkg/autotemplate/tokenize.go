@@ -2,7 +2,6 @@ package autotemplate
 
 import (
 	"strings"
-	"sync"
 	"unicode"
 )
 
@@ -40,9 +39,3 @@ func tokenize(message string, extraDelimiters []rune) []string {
 	return tokens
 }
 
-// tokenizerPool reduces allocations for tokenization
-var tokenizerPool = sync.Pool{
-	New: func() interface{} {
-		return &strings.Builder{}
-	},
-}

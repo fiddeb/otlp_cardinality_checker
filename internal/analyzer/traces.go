@@ -17,13 +17,6 @@ type TracesAnalyzer struct {
 	mu                sync.RWMutex                 // protects spanNameAnalyzers
 }
 
-// NewTracesAnalyzer creates a new traces analyzer.
-func NewTracesAnalyzer() *TracesAnalyzer {
-	return &TracesAnalyzer{
-		spanNameAnalyzers: make(map[string]*SpanNameAnalyzer),
-	}
-}
-
 // NewTracesAnalyzerWithCatalog creates a new traces analyzer with attribute catalog.
 func NewTracesAnalyzerWithCatalog(catalog AttributeCatalog) *TracesAnalyzer {
 	return &TracesAnalyzer{

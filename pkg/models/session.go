@@ -94,10 +94,21 @@ type Session struct {
 
 // SessionData contains the serializable telemetry metadata.
 type SessionData struct {
-	Metrics    []*SerializedMetric    `json:"metrics,omitempty"`
-	Spans      []*SerializedSpan      `json:"spans,omitempty"`
-	Logs       []*SerializedLog       `json:"logs,omitempty"`
-	Attributes []*SerializedAttribute `json:"attributes,omitempty"`
+	Metrics           []*SerializedMetric            `json:"metrics,omitempty"`
+	Spans             []*SerializedSpan               `json:"spans,omitempty"`
+	Logs              []*SerializedLog                `json:"logs,omitempty"`
+	Attributes        []*SerializedAttribute          `json:"attributes,omitempty"`
+	WatchedAttributes []*SerializedWatchedAttribute   `json:"watched_attributes,omitempty"`
+}
+
+// SerializedWatchedAttribute is a JSON-serializable version of WatchedAttribute.
+type SerializedWatchedAttribute struct {
+	Key               string           `json:"key"`
+	Values            map[string]int64 `json:"values"`
+	UniqueCount       int64            `json:"unique_count"`
+	TotalObservations int64            `json:"total_observations"`
+	Overflow          bool             `json:"overflow"`
+	WatchingSince     time.Time        `json:"watching_since"`
 }
 
 // SerializedMetric is a JSON-serializable version of MetricMetadata.
@@ -330,32 +341,6 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 	}{
 		Alias: (*Alias)(s),
 	})
-}
-
-// containsSignal checks if a signal type is in the list.
-func containsSignal(signals []string, signal string) bool {
-	if len(signals) == 0 {
-		return true // empty = all signals
-	}
-	for _, s := range signals {
-		if s == signal {
-			return true
-		}
-	}
-	return false
-}
-
-// containsService checks if a service is in the list.
-func containsService(services []string, service string) bool {
-	if len(services) == 0 {
-		return true // empty = all services
-	}
-	for _, s := range services {
-		if s == service {
-			return true
-		}
-	}
-	return false
 }
 
 // FilterByService checks if metadata has any of the specified services.

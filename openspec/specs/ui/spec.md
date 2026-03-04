@@ -163,3 +163,41 @@ The system SHALL display user-friendly error messages.
 - **THEN** "No attributes found" message is displayed
 - **AND** suggests adjusting filters
 
+### Requirement: Value Explorer Panel
+The system SHALL provide a Value Explorer panel that opens when a user clicks on a watched attribute key, showing all collected values with counts.
+
+#### Description
+The Value Explorer MUST be accessible by clicking on the attribute key name in the Attribute Catalog when Deep Watch is active for that key. It MUST provide search and sort capabilities. The panel MUST fetch data from `GET /api/v1/attributes/:key/watch`.
+
+#### Requirements
+1. Clicking a watched attribute key MUST open the Value Explorer
+2. The Value Explorer MUST display: `key`, `watching since`, `unique_count`, `total_observations`, and a message if `overflow = true`
+3. The Value Explorer MUST render a table with columns **Value** and **Count**
+4. The table MUST be sorted by count descending by default
+5. The Value Explorer MUST include a search input that filters rows by value prefix (client-side)
+6. The Value Explorer MUST include a **Refresh** button that re-fetches data from the API
+7. The Value Explorer MUST display a message if no values have been collected yet (`"No values collected yet. Watching since HH:MM."`)
+8. Clicking a watched attribute key when `overflow = true` MUST display a prominent warning banner
+
+#### Scenario: Open Value Explorer
+**GIVEN** `workflow.folder` is watched with 847 unique values  
+**WHEN** user clicks on `workflow.folder` in the Attribute Catalog  
+**THEN** the Value Explorer opens  
+**AND** shows `unique_count: 847`  
+**AND** renders the value table sorted by count descending
+
+#### Scenario: Search filters table
+**GIVEN** the Value Explorer is open for `workflow.folder`  
+**WHEN** user types `reports` in the search input  
+**THEN** only rows where the value starts with `reports` are visible
+
+#### Scenario: Empty state
+**GIVEN** `workflow.folder` was just activated (no telemetry received yet)  
+**WHEN** user clicks on `workflow.folder`  
+**THEN** the Value Explorer shows `"No values collected yet. Watching since HH:MM."`
+
+#### Scenario: Overflow banner
+**GIVEN** `workflow.folder` has `overflow = true`  
+**WHEN** Value Explorer is opened  
+**THEN** a warning banner reads `"Value cap of 10,000 reached. Some values may not appear."`
+

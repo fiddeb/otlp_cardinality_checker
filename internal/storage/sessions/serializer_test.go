@@ -364,7 +364,7 @@ func TestSerializer_CreateSession(t *testing.T) {
 	session, err := serializer.CreateSession(ctx, CreateSessionOptions{
 		Name:        "test-session",
 		Description: "Test session",
-	}, metrics, spans, logs, attributes, services)
+	}, metrics, spans, logs, attributes, services, nil)
 
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
@@ -400,8 +400,7 @@ func TestSerializer_CreateSession_FilterBySignal(t *testing.T) {
 	session, err := serializer.CreateSession(ctx, CreateSessionOptions{
 		Name:    "metrics-only",
 		Signals: []string{"metrics"},
-	}, metrics, spans, nil, nil, nil)
-
+	}, metrics, spans, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
@@ -429,7 +428,7 @@ func TestSerializer_CreateSession_FilterByService(t *testing.T) {
 	session, err := serializer.CreateSession(ctx, CreateSessionOptions{
 		Name:     "svc-a-only",
 		Services: []string{"svc-a"},
-	}, metrics, nil, nil, nil, nil)
+	}, metrics, nil, nil, nil, nil, nil)
 
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
@@ -485,7 +484,7 @@ func TestSerializer_LargeSession(t *testing.T) {
 	session, err := serializer.CreateSession(ctx, CreateSessionOptions{
 		Name:        "large-session",
 		Description: "Performance test session",
-	}, metrics, nil, nil, nil, nil)
+	}, metrics, nil, nil, nil, nil, nil)
 	createDuration := time.Since(start)
 
 	if err != nil {

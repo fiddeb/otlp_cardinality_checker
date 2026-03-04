@@ -16,11 +16,6 @@ type MetricsAnalyzer struct {
 	catalog AttributeCatalog
 }
 
-// NewMetricsAnalyzer creates a new metrics analyzer.
-func NewMetricsAnalyzer() *MetricsAnalyzer {
-	return &MetricsAnalyzer{}
-}
-
 // NewMetricsAnalyzerWithCatalog creates a new metrics analyzer with attribute catalog.
 func NewMetricsAnalyzerWithCatalog(catalog AttributeCatalog) *MetricsAnalyzer {
 	return &MetricsAnalyzer{
@@ -65,16 +60,6 @@ func (a *MetricsAnalyzer) AnalyzeWithContext(ctx context.Context, req *colmetric
 	}
 
 	return results, nil
-}
-
-// analyzeMetric extracts metadata from a single metric (backward compatibility).
-func (a *MetricsAnalyzer) analyzeMetric(
-	metric *metricspb.Metric,
-	resourceAttrs map[string]string,
-	serviceName string,
-	scopeInfo *models.ScopeMetadata,
-) *models.MetricMetadata {
-	return a.analyzeMetricWithContext(context.Background(), metric, resourceAttrs, serviceName, scopeInfo)
 }
 
 // analyzeMetricWithContext extracts metadata from a single metric with context.
@@ -341,24 +326,6 @@ func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, summary *metri
 	// Resource keys already have Count set by AddValue() in analyzeMetric()
 	for _, keyMeta := range metadata.ResourceKeys {
 		keyMeta.UpdatePercentage(metadata.SampleCount)
-	}
-}
-
-// getMetricType returns the metric type as a string.
-func getMetricType(metric *metricspb.Metric) string {
-	switch metric.Data.(type) {
-	case *metricspb.Metric_Gauge:
-		return "Gauge"
-	case *metricspb.Metric_Sum:
-		return "Sum"
-	case *metricspb.Metric_Histogram:
-		return "Histogram"
-	case *metricspb.Metric_ExponentialHistogram:
-		return "ExponentialHistogram"
-	case *metricspb.Metric_Summary:
-		return "Summary"
-	default:
-		return "Unknown"
 	}
 }
 
