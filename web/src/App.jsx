@@ -29,6 +29,7 @@ function App() {
   const [isClearing, setIsClearing] = useState(false)
   const [currentSessionName, setCurrentSessionName] = useState(null)
   const [diffFromSession, setDiffFromSession] = useState(null)
+  const [appVersion, setAppVersion] = useState(null)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode')
@@ -37,6 +38,13 @@ function App() {
     }
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
+
+  useEffect(() => {
+    fetch('/api/v1/version')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setAppVersion(data.version) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Apply dark mode class to body
@@ -182,6 +190,7 @@ function App() {
           <p className="subtitle">Analyze metadata structure from OpenTelemetry signals</p>
         </div>
         <div className="header-actions">
+          {appVersion && <span className="version-badge">{appVersion}</span>}
           {currentSessionName && (
             <span className="header-session-badge" title="Active session">
               {currentSessionName}
