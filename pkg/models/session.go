@@ -343,32 +343,6 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// containsSignal checks if a signal type is in the list.
-func containsSignal(signals []string, signal string) bool {
-	if len(signals) == 0 {
-		return true // empty = all signals
-	}
-	for _, s := range signals {
-		if s == signal {
-			return true
-		}
-	}
-	return false
-}
-
-// containsService checks if a service is in the list.
-func containsService(services []string, service string) bool {
-	if len(services) == 0 {
-		return true // empty = all services
-	}
-	for _, s := range services {
-		if s == service {
-			return true
-		}
-	}
-	return false
-}
-
 // FilterByService checks if metadata has any of the specified services.
 func FilterByService(metadataServices map[string]int64, filterServices []string) bool {
 	if len(filterServices) == 0 {

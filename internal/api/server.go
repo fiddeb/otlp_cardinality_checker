@@ -942,13 +942,6 @@ func (s *Server) getMetadataComplexity(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, response)
 }
 
-// health returns the health status of the API.
-func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	s.respondJSON(w, http.StatusOK, map[string]string{
-		"status": "ok",
-	})
-}
-
 // respondJSON writes a JSON response.
 func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
