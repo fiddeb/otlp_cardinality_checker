@@ -102,16 +102,20 @@ type SessionData struct {
 
 // SerializedMetric is a JSON-serializable version of MetricMetadata.
 type SerializedMetric struct {
-	Name         string                       `json:"name"`
-	Description  string                       `json:"description,omitempty"`
-	Unit         string                       `json:"unit,omitempty"`
-	Type         string                       `json:"type"`
-	LabelKeys    map[string]*SerializedKey    `json:"label_keys"`
-	ResourceKeys map[string]*SerializedKey    `json:"resource_keys"`
-	SampleCount  int64                        `json:"sample_count"`
-	Services     map[string]int64             `json:"services"`
-	ActiveSeries int64                        `json:"active_series"`
-	SeriesHLL    *SerializedHLL               `json:"series_hll,omitempty"`
+	Name           string                       `json:"name"`
+	Description    string                       `json:"description,omitempty"`
+	Unit           string                       `json:"unit,omitempty"`
+	Type           string                       `json:"type"`
+	LabelKeys      map[string]*SerializedKey    `json:"label_keys"`
+	ResourceKeys   map[string]*SerializedKey    `json:"resource_keys"`
+	SampleCount    int64                        `json:"sample_count"`
+	Services       map[string]int64             `json:"services"`
+	ActiveSeries   int64                        `json:"active_series"`
+	SeriesHLL      *SerializedHLL               `json:"series_hll,omitempty"`
+	// ExplicitBounds stores histogram bucket boundaries (HistogramMetric only)
+	ExplicitBounds []float64                    `json:"explicit_bounds,omitempty"`
+	// Scales stores observed histogram scales (ExponentialHistogramMetric only)
+	Scales         []int32                      `json:"scales,omitempty"`
 }
 
 // SerializedSpan is a JSON-serializable version of SpanMetadata.
