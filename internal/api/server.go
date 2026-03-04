@@ -429,6 +429,18 @@ func (s *Server) getSpanPatterns(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, patterns)
 }
 
+// logsListResponse extends PaginatedResponse with total_sample_count so the
+// dashboard can display the real number of ingested log records (not just the
+// count of unique severity types).
+type logsListResponse struct {
+	Data             []*models.LogMetadata `json:"data"`
+	Total            int                   `json:"total"`
+	Limit            int                   `json:"limit"`
+	Offset           int                   `json:"offset"`
+	HasMore          bool                  `json:"has_more"`
+	TotalSampleCount int64                 `json:"total_sample_count"`
+}
+
 // listLogs returns all log metadata, optionally filtered by service.
 // Supports pagination via ?limit=N&offset=M query parameters.
 func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
@@ -442,9 +454,22 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sum total log records observed across all severity buckets (before pagination).
+	var totalSampleCount int64
+	for _, l := range logs {
+		totalSampleCount += l.SampleCount
+	}
+
 	// Apply pagination
-	_, response := paginateSlice(logs, params)
-	s.respondJSON(w, http.StatusOK, response)
+	page, paginated := paginateSlice(logs, params)
+	s.respondJSON(w, http.StatusOK, logsListResponse{
+		Data:             page,
+		Total:            paginated.Total,
+		Limit:            paginated.Limit,
+		Offset:           paginated.Offset,
+		HasMore:          paginated.HasMore,
+		TotalSampleCount: totalSampleCount,
+	})
 }
 
 // getLog returns a specific log metadata by severity.
