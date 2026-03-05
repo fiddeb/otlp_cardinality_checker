@@ -6,6 +6,8 @@ function Details({ type, name, onBack }) {
   const [error, setError] = useState(null)
   const [showTemplates, setShowTemplates] = useState(true)
   const [showSeriesExplanation, setShowSeriesExplanation] = useState(false)
+  const [watchedKeys, setWatchedKeys] = useState({})
+  const [watchLoading, setWatchLoading] = useState({})
 
   useEffect(() => {
     console.log('Details useEffect - type:', type, 'name:', name)
@@ -43,6 +45,18 @@ function Details({ type, name, onBack }) {
     if (card > 200) return 'high'
     if (card > 50) return 'medium'
     return 'low'
+  }
+
+  const handleWatch = async (key) => {
+    setWatchLoading(prev => ({ ...prev, [key]: true }))
+    try {
+      await fetch(`/api/v1/attributes/${encodeURIComponent(key)}/watch`, { method: 'POST' })
+      setWatchedKeys(prev => ({ ...prev, [key]: true }))
+    } catch (e) {
+      console.error('watch failed', e)
+    } finally {
+      setWatchLoading(prev => ({ ...prev, [key]: false }))
+    }
   }
 
   return (
@@ -336,15 +350,50 @@ function Details({ type, name, onBack }) {
           </thead>
           <tbody>
             {Object.entries(keys).map(([key, metadata]) => (
-              <tr key={key}>
-                <td><code>{key}</code></td>
+              <tr key={key} style={metadata.has_invalid_utf8 ? { backgroundColor: 'rgba(220, 38, 38, 0.07)' } : undefined}>
+                <td>
+                  <code style={metadata.has_invalid_utf8 ? { color: 'var(--danger)' } : undefined}>{key}</code>
+                  {metadata.has_invalid_utf8 && (
+                    <span
+                      title="One or more observed values for this key contained invalid UTF-8 bytes (e.g. binary data from Kafka). The bytes were replaced with \uFFFD. Consider a deep watch to inspect the sanitised values."
+                      style={{ marginLeft: '6px', cursor: 'default' }}
+                    >
+                      ⚠
+                    </span>
+                  )}
+                </td>
                 <td>
                   <span className={`badge ${getCardinalityBadge(metadata.estimated_cardinality)}`}>
                     {metadata.estimated_cardinality}
                   </span>
                 </td>
                 <td>{metadata.percentage.toFixed(1)}%</td>
-                <td className="samples">{metadata.value_samples.slice(0, 5).join(', ')}</td>
+                <td className="samples">
+                  {metadata.value_samples.slice(0, 5).join(', ')}
+                  {metadata.has_invalid_utf8 && !watchedKeys[key] && (
+                    <button
+                      onClick={() => handleWatch(key)}
+                      disabled={watchLoading[key]}
+                      title="Start deep watch to capture incoming values for this key"
+                      style={{
+                        marginLeft: '8px',
+                        padding: '2px 8px',
+                        fontSize: '0.75em',
+                        border: '1px solid var(--danger)',
+                        borderRadius: '4px',
+                        backgroundColor: 'transparent',
+                        color: 'var(--danger)',
+                        cursor: watchLoading[key] ? 'not-allowed' : 'pointer',
+                        opacity: watchLoading[key] ? 0.6 : 1,
+                      }}
+                    >
+                      {watchLoading[key] ? '...' : 'Watch'}
+                    </button>
+                  )}
+                  {watchedKeys[key] && (
+                    <span style={{ marginLeft: '8px', fontSize: '0.75em', color: 'var(--success)' }}>Watching</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

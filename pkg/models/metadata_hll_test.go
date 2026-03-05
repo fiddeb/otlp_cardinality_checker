@@ -108,3 +108,31 @@ func BenchmarkKeyMetadata_AddValue(b *testing.B) {
 		km.AddValue(values[i%1000])
 	}
 }
+
+func TestKeyMetadata_HasInvalidUTF8(t *testing.T) {
+	t.Run("clean values do not set flag", func(t *testing.T) {
+		km := NewKeyMetadata()
+		km.AddValue("prod")
+		km.AddValue("staging")
+		if km.HasInvalidUTF8 {
+			t.Fatal("HasInvalidUTF8 should be false for clean values")
+		}
+	})
+
+	t.Run("value with replacement char sets flag", func(t *testing.T) {
+		km := NewKeyMetadata()
+		km.AddValue("prod\uFFFD") // sanitizeUTF8 inserts U+FFFD for bad bytes
+		if !km.HasInvalidUTF8 {
+			t.Fatal("HasInvalidUTF8 should be true when value contains U+FFFD")
+		}
+	})
+
+	t.Run("flag is sticky across subsequent clean values", func(t *testing.T) {
+		km := NewKeyMetadata()
+		km.AddValue("prod\uFFFD")
+		km.AddValue("staging") // clean value after tainted one
+		if !km.HasInvalidUTF8 {
+			t.Fatal("HasInvalidUTF8 should remain true once set")
+		}
+	})
+}

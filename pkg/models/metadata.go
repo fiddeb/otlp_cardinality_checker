@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/hyperloglog"
@@ -261,6 +262,12 @@ type KeyMetadata struct {
 	// Limited to MaxSamples to prevent memory issues
 	ValueSamples []string `json:"value_samples,omitempty"`
 
+	// HasInvalidUTF8 is true when at least one observed value for this key
+	// contained invalid UTF-8 bytes. The bytes were replaced with the Unicode
+	// replacement character (U+FFFD) before storage. The attribute key is valid;
+	// only the value data from the source system (e.g. Kafka) was malformed.
+	HasInvalidUTF8 bool `json:"has_invalid_utf8,omitempty"`
+
 	// hll is the HyperLogLog sketch for cardinality estimation
 	// Uses fixed ~16KB memory regardless of cardinality
 	hll *hyperloglog.HyperLogLog `json:"-"`
@@ -395,6 +402,12 @@ func (k *KeyMetadata) AddValue(value string) {
 
 	// Update estimated cardinality from HLL
 	k.EstimatedCardinality = int64(k.hll.Count())
+
+	// Flag the key when a value contains the Unicode replacement character,
+	// which our sanitizeUTF8 receiver helper inserts in place of invalid bytes.
+	if strings.ContainsRune(value, '\uFFFD') {
+		k.HasInvalidUTF8 = true
+	}
 }
 
 // GetSortedSamples returns the value samples in sorted order.
@@ -455,6 +468,11 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 			existing.hll.Merge(otherKeyMeta.hll)
 			existing.EstimatedCardinality = int64(existing.hll.Count())
 
+			// Propagate invalid-UTF-8 flag (sticky: once tainted, stays tainted)
+			if otherKeyMeta.HasInvalidUTF8 {
+				existing.HasInvalidUTF8 = true
+			}
+
 			// Merge value samples (keep first N unique)
 			for _, sample := range otherKeyMeta.ValueSamples {
 				if len(existing.ValueSamples) >= existing.MaxSamples {
@@ -487,6 +505,11 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 			// Merge HLL sketches for accurate cardinality
 			existing.hll.Merge(otherKeyMeta.hll)
 			existing.EstimatedCardinality = int64(existing.hll.Count())
+
+			// Propagate invalid-UTF-8 flag
+			if otherKeyMeta.HasInvalidUTF8 {
+				existing.HasInvalidUTF8 = true
+			}
 
 			// Merge value samples (keep first N unique)
 			for _, sample := range otherKeyMeta.ValueSamples {
