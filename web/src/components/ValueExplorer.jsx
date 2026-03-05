@@ -82,7 +82,15 @@ function ValueExplorer({ attributeKey, onClose }) {
               background: '#1976d2', color: '#fff', fontSize: 11,
               padding: '2px 8px', borderRadius: 10, fontWeight: 600,
             }}>WATCHING</span>
-            <code style={{ fontSize: 14, fontWeight: 700 }}>{attributeKey}</code>
+            {data?.has_invalid_utf8 && (
+              <span style={{
+                background: 'rgba(220,38,38,0.12)', color: 'var(--danger, #dc2626)',
+                fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 600,
+              }}
+                title="One or more values for this key contained invalid UTF-8 bytes (replaced with \uFFFD). The source system (e.g. Kafka) is emitting binary data in this attribute."
+              >⚠ INVALID UTF-8</span>
+            )}
+            <code style={{ fontSize: 14, fontWeight: 700, color: data?.has_invalid_utf8 ? 'var(--danger, #dc2626)' : undefined }}>{attributeKey}</code>
           </div>
           {data && (
             <div style={{ fontSize: 12, color: 'var(--text-secondary, #666)', display: 'flex', gap: 16 }}>

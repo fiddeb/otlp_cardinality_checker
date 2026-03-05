@@ -301,15 +301,15 @@ function AttributesView() {
                       border: '1px solid',
                       cursor: (watchToggling[attr.key] || (!attr.watched && limitReached)) ? 'not-allowed' : 'pointer',
                       opacity: (!attr.watched && limitReached) ? 0.4 : 1,
-                      background: attr.watched ? '#e3f2fd' : 'transparent',
-                      borderColor: attr.watched ? '#1976d2' : '#ccc',
-                      color: attr.watched ? '#1976d2' : '#666',
+                      background: attr.watched ? (attr.has_invalid_utf8 ? 'rgba(220,38,38,0.10)' : '#e3f2fd') : 'transparent',
+                      borderColor: attr.watched ? (attr.has_invalid_utf8 ? 'var(--danger, #dc2626)' : '#1976d2') : '#ccc',
+                      color: attr.watched ? (attr.has_invalid_utf8 ? 'var(--danger, #dc2626)' : '#1976d2') : '#666',
                       fontSize: 12,
                       fontWeight: attr.watched ? 600 : 400,
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {watchToggling[attr.key] ? '…' : attr.watched ? 'Watching' : 'Watch'}
+                    {watchToggling[attr.key] ? '…' : attr.watched ? (attr.has_invalid_utf8 ? '⚠ Watching' : 'Watching') : 'Watch'}
                   </button>
                 </td>
               </tr>
