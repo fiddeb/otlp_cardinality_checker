@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +40,11 @@ type AttributeMetadata struct {
 
 	// LastSeen is when this attribute key was last observed
 	LastSeen time.Time `json:"last_seen"`
+
+	// HasInvalidUTF8 is true when at least one observed value for this key
+	// contained invalid UTF-8 bytes that were replaced with U+FFFD by the
+	// receiver's sanitizeUTF8 helper. Sticky: once set it stays set.
+	HasInvalidUTF8 bool `json:"has_invalid_utf8,omitempty"`
 }
 
 // NewAttributeMetadata creates a new AttributeMetadata with initialized HLL.
@@ -106,6 +112,12 @@ func (a *AttributeMetadata) AddValue(value, signalType, scope string) {
 
 	// Update timestamp
 	a.LastSeen = time.Now()
+
+	// Flag if the value contains the Unicode replacement character, which our
+	// sanitizeUTF8 receiver helper inserts in place of invalid UTF-8 bytes.
+	if strings.ContainsRune(value, '\uFFFD') {
+		a.HasInvalidUTF8 = true
+	}
 }
 
 // MarshalHLL serializes the HLL sketch for persistence.
@@ -199,6 +211,11 @@ func MergeAttributeMetadata(a1, a2 *AttributeMetadata) *AttributeMetadata {
 	}
 	if a2.LastSeen.After(a1.LastSeen) {
 		a1.LastSeen = a2.LastSeen
+	}
+
+	// Propagate invalid-UTF-8 flag (sticky)
+	if a2.HasInvalidUTF8 {
+		a1.HasInvalidUTF8 = true
 	}
 
 	return a1
