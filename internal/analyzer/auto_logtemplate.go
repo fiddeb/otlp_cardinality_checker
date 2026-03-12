@@ -84,26 +84,49 @@ func (a *AutoLogBodyAnalyzer) preMask(body string) string {
 	return result
 }
 
-// GetTemplates returns all templates sorted by count
+// GetTemplates returns all templates sorted by count.
+// Templates and counts are read directly from drain's cluster state so that
+// generalized templates (e.g. "Received <*>" from multiple "Received X" variants)
+// are reported with the correct aggregated count, not split across stale entries.
 func (a *AutoLogBodyAnalyzer) GetTemplates() []*LogTemplate {
+	clusters := a.miner.GetClusters()
+
+	// Sum total across all clusters for percentage calculation
+	var total int64
+	for _, c := range clusters {
+		total += c.Count
+	}
+
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	
-	templates := make([]*LogTemplate, 0, len(a.templates))
-	for _, tmpl := range a.templates {
-		// Calculate percentage
-		if a.total > 0 {
-			tmpl.Percentage = float64(tmpl.Count) / float64(a.total) * 100.0
+
+	result := make([]*LogTemplate, 0, len(clusters))
+	for _, c := range clusters {
+		pct := 0.0
+		if total > 0 {
+			pct = float64(c.Count) / float64(total) * 100.0
 		}
-		templates = append(templates, tmpl)
+		// Prefer original (unmasked) example body from our cache when available.
+		// After generalization the key in a.templates may not match c.Template,
+		// so fall back to drain's stored (masked) example body.
+		exampleBody := c.ExampleBody
+		if tmpl, exists := a.templates[c.Template]; exists && tmpl.ExampleBody != "" {
+			exampleBody = tmpl.ExampleBody
+		}
+		result = append(result, &LogTemplate{
+			Template:    c.Template,
+			Hash:        hashString(c.Template),
+			Count:       c.Count,
+			Percentage:  pct,
+			ExampleBody: exampleBody,
+		})
 	}
-	
-	// Sort by count descending
-	sort.Slice(templates, func(i, j int) bool {
-		return templates[i].Count > templates[j].Count
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Count > result[j].Count
 	})
-	
-	return templates
+
+	return result
 }
 
 // GetStats returns statistics about the analyzer

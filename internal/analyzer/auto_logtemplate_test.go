@@ -58,6 +58,54 @@ func TestAutoLogBodyAnalyzer(t *testing.T) {
 	}
 }
 
+// TestBatchThenGeneralize reproduces the bug where many identical messages arrive
+// before drain sees a second variant: all counts should merge into the generalized
+// template rather than staying as a fossil stale entry.
+func TestBatchThenGeneralize(t *testing.T) {
+	cfg := autotemplate.Config{
+		Shards:       1, // single shard so behaviour is deterministic
+		MaxDepth:     4,
+		MaxChildren:  100,
+		MaxClusters:  1000,
+		SimThreshold: 0.7, // matches production value set in store.NewWithConfig
+		Training:     true,
+	}
+	analyzer := NewAutoLogBodyAnalyzer(cfg)
+
+	// Simulate what happens in production: many identical messages arrive first,
+	// then a second variant triggers generalization.
+	for i := 0; i < 1715; i++ {
+		analyzer.ProcessMessage("Received ItsDrawCancelClosed")
+	}
+	for i := 0; i < 1714; i++ {
+		analyzer.ProcessMessage("Received ItsDrawFinalized")
+	}
+	for i := 0; i < 1705; i++ {
+		analyzer.ProcessMessage("Received ItsDrawResultEntered")
+	}
+
+	templates := analyzer.GetTemplates()
+
+	t.Logf("Got %d templates:", len(templates))
+	for _, tmpl := range templates {
+		t.Logf("  %q count=%d", tmpl.Template, tmpl.Count)
+	}
+
+	// All three variants must be collapsed into a single generalised template.
+	if len(templates) != 1 {
+		t.Errorf("expected 1 generalised template, got %d (drain stale-entry bug?)", len(templates))
+	}
+
+	total := int64(1715 + 1714 + 1705)
+	if templates[0].Count != total {
+		t.Errorf("expected count %d, got %d", total, templates[0].Count)
+	}
+
+	if !strings.Contains(templates[0].Template, "<*>") {
+		t.Errorf("expected wildcard in generalised template, got %q", templates[0].Template)
+	}
+}
+
 func TestAutoLogBodyAnalyzerWithPreMasking(t *testing.T) {
 	cfg := autotemplate.DefaultConfig()
 	cfg.SimThreshold = 0.5
