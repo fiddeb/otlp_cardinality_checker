@@ -108,6 +108,9 @@ func NewHTTPReceiver(addr string, store storage.Storage) *HTTPReceiver {
 	} else {
 		logsAnalyzer = analyzer.NewLogsAnalyzerWithCatalog(store)
 	}
+	if store.PodLogEnrichment() {
+		logsAnalyzer.SetPodLogEnrichment(true, store.PodLogServiceLabels())
+	}
 	
 	r := &HTTPReceiver{
 		store:           store,

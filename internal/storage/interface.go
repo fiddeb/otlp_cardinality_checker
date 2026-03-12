@@ -57,6 +57,10 @@ type Storage interface {
 	UseAutoTemplate() bool
 	AutoTemplateCfg() autotemplate.Config
 
+	// Configuration (for pod log enrichment)
+	PodLogEnrichment() bool
+	PodLogServiceLabels() []string
+
 	// Clear all data
 	Clear(ctx context.Context) error
 
