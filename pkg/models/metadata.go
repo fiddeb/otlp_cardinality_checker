@@ -382,12 +382,15 @@ func (k *KeyMetadata) AddValue(value string) {
 
 	k.Count++
 
-	// Add to HyperLogLog for cardinality estimation
+	// Add to HyperLogLog for cardinality estimation.
+	// EstimatedCardinality is NOT updated here — it is computed lazily in
+	// MarshalJSON, which is the only place the value is ever read. Calling
+	// hll.Count() on every write iterated 16 384 registers per call and was
+	// the dominant CPU cost under load.
 	k.hll.Add(value)
 
 	// Add to sample list if not full and value is new
 	if len(k.ValueSamples) < k.MaxSamples {
-		// Check if value already exists in samples
 		exists := false
 		for _, sample := range k.ValueSamples {
 			if sample == value {
@@ -399,9 +402,6 @@ func (k *KeyMetadata) AddValue(value string) {
 			k.ValueSamples = append(k.ValueSamples, value)
 		}
 	}
-
-	// Update estimated cardinality from HLL
-	k.EstimatedCardinality = int64(k.hll.Count())
 
 	// Flag the key when a value contains the Unicode replacement character,
 	// which our sanitizeUTF8 receiver helper inserts in place of invalid bytes.
@@ -422,20 +422,48 @@ func (k *KeyMetadata) GetSortedSamples() []string {
 	return samples
 }
 
+// Cardinality returns the current estimated unique-value count from the HLL
+// sketch. It is intentionally NOT cached on every AddValue — the caller is
+// responsible for invoking this when an up-to-date estimate is needed (e.g.
+// when serialising or responding to API requests).
+func (k *KeyMetadata) Cardinality() int64 {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	if k.hll == nil {
+		return 0
+	}
+	return int64(k.hll.Count())
+}
+
 // MarshalJSON implements custom JSON marshaling for KeyMetadata.
-// This ensures value_samples are sorted in the output without affecting internal state.
+// Cardinality is computed here (lazily) rather than on every AddValue call,
+// which eliminates 16 384-register HLL iterations from the hot ingest path.
 func (k *KeyMetadata) MarshalJSON() ([]byte, error) {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
-	// Create a temporary struct with sorted samples
-	type Alias KeyMetadata
-	return json.Marshal(&struct {
-		ValueSamples []string `json:"value_samples,omitempty"`
-		*Alias
-	}{
-		ValueSamples: k.GetSortedSamples(),
-		Alias:        (*Alias)(k),
+	samples := make([]string, len(k.ValueSamples))
+	copy(samples, k.ValueSamples)
+	sort.Strings(samples)
+
+	var estCardinality int64
+	if k.hll != nil {
+		estCardinality = int64(k.hll.Count())
+	}
+
+	type wire struct {
+		Count                int64    `json:"count"`
+		Percentage           float64  `json:"percentage"`
+		EstimatedCardinality int64    `json:"estimated_cardinality"`
+		ValueSamples         []string `json:"value_samples,omitempty"`
+		HasInvalidUTF8       bool     `json:"has_invalid_utf8,omitempty"`
+	}
+	return json.Marshal(wire{
+		Count:                k.Count,
+		Percentage:           k.Percentage,
+		EstimatedCardinality: estCardinality,
+		ValueSamples:         samples,
+		HasInvalidUTF8:       k.HasInvalidUTF8,
 	})
 }
 
