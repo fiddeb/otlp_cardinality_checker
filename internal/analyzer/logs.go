@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
 	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
@@ -19,7 +20,8 @@ type LogBodyAnalyzerInterface interface {
 
 // LogsAnalyzer extracts metadata from OTLP logs.
 type LogsAnalyzer struct {
-	bodyAnalyzers       map[string]LogBodyAnalyzerInterface // One analyzer per severity level
+	mu                  sync.RWMutex                        // Protects bodyAnalyzers map
+	bodyAnalyzers       map[string]LogBodyAnalyzerInterface // One analyzer per service+severity combination
 	useAutoTemplate     bool                                // Whether to use autotemplate
 	autoTemplateCfg     autotemplate.Config                 // Config for autotemplate
 	patterns            []patterns.CompiledPattern          // Pre-masking patterns
@@ -177,13 +179,21 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				}
 				serviceSeverities[serviceName][severityText] = true
 				
-				// Extract body template (create analyzer per severity if needed)
+				// Extract body template (create analyzer per service+severity if needed)
 				body := logRecord.GetBody().GetStringValue()
 				if body != "" {
-					if _, exists := a.bodyAnalyzers[severityText]; !exists {
-						a.bodyAnalyzers[severityText] = a.createBodyAnalyzer()
+					analyzerKey := key // Use same key as logMap (service+severity)
+					
+					// Thread-safe check and create
+					a.mu.Lock()
+					analyzer, exists := a.bodyAnalyzers[analyzerKey]
+					if !exists {
+						analyzer = a.createBodyAnalyzer()
+						a.bodyAnalyzers[analyzerKey] = analyzer
 					}
-					a.bodyAnalyzers[severityText].AddMessage(body)
+					a.mu.Unlock()
+					
+					analyzer.AddMessage(body)
 				}
 
 				// Extract log record attributes
@@ -214,9 +224,11 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				}
 			}
 		}
-	}	// Convert map to slice and calculate percentages
+	}
+
+	// Convert map to slice and calculate percentages
 	results := make([]*models.LogMetadata, 0, len(logMap))
-	for _, metadata := range logMap {
+	for key, metadata := range logMap {
 		// Calculate percentages for attribute keys
 		for _, keyMeta := range metadata.AttributeKeys {
 			if metadata.SampleCount > 0 {
@@ -231,9 +243,12 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 			}
 		}
 		
-		// Add body templates for this severity level (shared across services)
-		severityText := metadata.Severity
-		if analyzer, exists := a.bodyAnalyzers[severityText]; exists {
+		// Add body templates for this service+severity combination
+		a.mu.RLock()
+		analyzer, exists := a.bodyAnalyzers[key]
+		a.mu.RUnlock()
+		
+		if exists {
 			templates := analyzer.GetTemplates()
 			metadata.BodyTemplates = make([]*models.BodyTemplate, 0, len(templates))
 			for _, tmpl := range templates {

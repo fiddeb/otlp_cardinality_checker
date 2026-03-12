@@ -260,10 +260,20 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 	// Track services
 	s.trackServices(log.Services)
 
-	key := log.Severity
-	if key == "" {
-		key = "UNSET"
+	// Extract service name from Services map (should have exactly one after analyzer change)
+	var serviceName string
+	for svc := range log.Services {
+		serviceName = svc
+		break
 	}
+	
+	severity := log.Severity
+	if severity == "" {
+		severity = "UNSET"
+	}
+	
+	// Use service|severity as key to match analyzer grouping
+	key := serviceName + "|" + severity
 
 	// If log exists, merge with existing
 	if existing, exists := s.logs[key]; exists {
@@ -315,9 +325,92 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 		severityText = "UNSET"
 	}
 
-	log, exists := s.logs[severityText]
-	if !exists {
+	// Aggregate all service+severity combinations for this severity
+	var aggregated *models.LogMetadata
+	for _, log := range s.logs {
+		if log.Severity == severityText {
+			if aggregated == nil {
+				// First match - clone it
+				aggregated = &models.LogMetadata{
+					Severity:       log.Severity,
+					SeverityNumber: log.SeverityNumber,
+					AttributeKeys:  make(map[string]*models.KeyMetadata),
+					ResourceKeys:   make(map[string]*models.KeyMetadata),
+					Services:       make(map[string]int64),
+					EventNames:     []string{},
+					BodyTemplates:  []*models.BodyTemplate{},
+				}
+			}
+			
+			// Merge counts
+			aggregated.SampleCount += log.SampleCount
+			
+			// Merge services
+			for svc, count := range log.Services {
+				aggregated.Services[svc] += count
+			}
+			
+			// Merge attribute keys
+			for attrKey, keyMeta := range log.AttributeKeys {
+				if existing, exists := aggregated.AttributeKeys[attrKey]; exists {
+					existing.Count += keyMeta.Count
+				} else {
+					aggregated.AttributeKeys[attrKey] = keyMeta
+				}
+			}
+			
+			// Merge resource keys
+			for resKey, keyMeta := range log.ResourceKeys {
+				if existing, exists := aggregated.ResourceKeys[resKey]; exists {
+					existing.Count += keyMeta.Count
+				} else {
+					aggregated.ResourceKeys[resKey] = keyMeta
+				}
+			}
+			
+			// Collect all body templates
+			aggregated.BodyTemplates = append(aggregated.BodyTemplates, log.BodyTemplates...)
+			
+			// Merge other fields
+			if log.HasTraceContext {
+				aggregated.HasTraceContext = true
+			}
+			if log.HasSpanContext {
+				aggregated.HasSpanContext = true
+			}
+			if aggregated.ScopeInfo == nil && log.ScopeInfo != nil {
+				aggregated.ScopeInfo = log.ScopeInfo
+			}
+		}
+	}
+	
+	if aggregated == nil {
 		return nil, fmt.Errorf("log severity %s: %w", severityText, models.ErrNotFound)
+	}
+
+	// Sort body templates by count descending
+	if len(aggregated.BodyTemplates) > 0 {
+		sort.Slice(aggregated.BodyTemplates, func(i, j int) bool {
+			return aggregated.BodyTemplates[i].Count > aggregated.BodyTemplates[j].Count
+		})
+	}
+
+	return aggregated, nil
+}
+
+// GetLogByServiceAndSeverity retrieves log metadata for a specific service+severity combination.
+func (s *Store) GetLogByServiceAndSeverity(ctx context.Context, serviceName, severityText string) (*models.LogMetadata, error) {
+	s.logsmu.RLock()
+	defer s.logsmu.RUnlock()
+
+	if severityText == "" {
+		severityText = "UNSET"
+	}
+	
+	key := serviceName + "|" + severityText
+	log, exists := s.logs[key]
+	if !exists {
+		return nil, fmt.Errorf("log service=%s severity=%s: %w", serviceName, severityText, models.ErrNotFound)
 	}
 
 	// Sort body templates by count descending
@@ -371,7 +464,10 @@ func (s *Store) GetLogPatterns(ctx context.Context, minCount int64, minServices 
 	// Build pattern groups from in-memory data
 	patternMap := make(map[string]*models.PatternGroup)
 	
-	for severity, logMeta := range s.logs {
+	for _, logMeta := range s.logs {
+		// Get actual severity from metadata (map key is "service|severity")
+		severity := logMeta.Severity
+		
 		for _, template := range logMeta.BodyTemplates {
 			// Apply count filter
 			if template.Count < minCount {

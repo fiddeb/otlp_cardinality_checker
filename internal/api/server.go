@@ -615,45 +615,49 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 		db = dbProv.DB()
 	}
 
-	// If no SQL database available (memory backend), fallback to GetLog
+	// If no SQL database available (memory backend), use GetLogByServiceAndSeverity
 	if db == nil {
-		log, err := s.store.GetLog(ctx, decodedSeverity)
-		if err != nil {
-			if errors.Is(err, models.ErrNotFound) {
-				s.respondError(w, http.StatusNotFound, "log severity not found")
+		// Try to use GetLogByServiceAndSeverity if available (memory store has this now)
+		type serviceGetter interface {
+			GetLogByServiceAndSeverity(ctx context.Context, serviceName, severityText string) (*models.LogMetadata, error)
+		}
+		
+		if sg, ok := s.store.(serviceGetter); ok {
+			log, err := sg.GetLogByServiceAndSeverity(ctx, decodedService, decodedSeverity)
+			if err != nil {
+				if errors.Is(err, models.ErrNotFound) {
+					s.respondError(w, http.StatusNotFound, "no data found for this service and severity")
+					return
+				}
+				s.respondError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			s.respondError(w, http.StatusInternalServerError, err.Error())
+
+			// Build response from log data
+			type LogServiceData struct {
+				Severity      string                         `json:"severity"`
+				ServiceName   string                         `json:"service_name"`
+				SampleCount   int64                          `json:"sample_count"`
+				BodyTemplates []*models.BodyTemplate         `json:"body_templates,omitempty"`
+				AttributeKeys map[string]*models.KeyMetadata `json:"attribute_keys,omitempty"`
+				ResourceKeys  map[string]*models.KeyMetadata `json:"resource_keys,omitempty"`
+			}
+
+			data := LogServiceData{
+				Severity:      decodedSeverity,
+				ServiceName:   decodedService,
+				SampleCount:   log.SampleCount,
+				BodyTemplates: log.BodyTemplates,
+				AttributeKeys: log.AttributeKeys,
+				ResourceKeys:  log.ResourceKeys,
+			}
+
+			s.respondJSON(w, http.StatusOK, data)
 			return
 		}
-
-		// Check if service exists in this severity
-		sampleCount, exists := log.Services[decodedService]
-		if !exists {
-			s.respondError(w, http.StatusNotFound, "no data found for this service and severity")
-			return
-		}
-
-		// Build response from log data
-		type LogServiceData struct {
-			Severity      string                         `json:"severity"`
-			ServiceName   string                         `json:"service_name"`
-			SampleCount   int64                          `json:"sample_count"`
-			BodyTemplates []*models.BodyTemplate         `json:"body_templates,omitempty"`
-			AttributeKeys map[string]*models.KeyMetadata `json:"attribute_keys,omitempty"`
-			ResourceKeys  map[string]*models.KeyMetadata `json:"resource_keys,omitempty"`
-		}
-
-		data := LogServiceData{
-			Severity:      decodedSeverity,
-			ServiceName:   decodedService,
-			SampleCount:   sampleCount,
-			BodyTemplates: log.BodyTemplates,
-			AttributeKeys: log.AttributeKeys,
-			ResourceKeys:  log.ResourceKeys,
-		}
-
-		s.respondJSON(w, http.StatusOK, data)
+		
+		// This shouldn't happen with new memory store, but keep as fallback
+		s.respondError(w, http.StatusInternalServerError, "memory backend does not support service-specific queries")
 		return
 	}
 
@@ -774,14 +778,14 @@ func (s *Server) getLogPatterns(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters with defaults
 	minCount := int64(10)
 	if minCountStr := r.URL.Query().Get("minCount"); minCountStr != "" {
-		if parsed, err := strconv.ParseInt(minCountStr, 10, 64); err == nil && parsed > 0 {
+		if parsed, err := strconv.ParseInt(minCountStr, 10, 64); err == nil && parsed >= 0 {
 			minCount = parsed
 		}
 	}
 
 	minServices := 1
 	if minServicesStr := r.URL.Query().Get("minServices"); minServicesStr != "" {
-		if parsed, err := strconv.Atoi(minServicesStr); err == nil && parsed > 0 {
+		if parsed, err := strconv.Atoi(minServicesStr); err == nil && parsed >= 0 {
 			minServices = parsed
 		}
 	}
