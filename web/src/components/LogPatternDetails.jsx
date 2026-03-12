@@ -9,8 +9,11 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
     setLoading(true)
     setError(null)
     
-    // Fetch template data with pattern-specific attributes
-    fetch(`/api/v1/logs/service/${encodeURIComponent(serviceName)}/severity/${encodeURIComponent(severity)}`)
+    // Fetch pattern-specific data (not service+severity aggregated data)
+    const encodedSeverity = encodeURIComponent(severity)
+    const encodedTemplate = encodeURIComponent(template)
+    
+    fetch(`/api/v1/logs/patterns/${encodedSeverity}/${encodedTemplate}`)
       .then(res => {
         if (!res.ok) {
           throw new Error(`HTTP error`)
@@ -18,21 +21,45 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
         return res.json()
       })
       .then(data => {
-        // Find the specific template
-        const templateData = data.body_templates?.find(t => t.template === template)
+        // Find the specific service in the pattern data
+        const serviceData = data.services?.find(s => s.service_name === serviceName)
         
-        if (!templateData) {
-          throw new Error('Template not found')
+        if (!serviceData) {
+          throw new Error('Service not found for this pattern')
         }
         
-        // Get attribute and resource keys from response (they are at top level, not per template)
-        const attributeKeys = Object.keys(data.attribute_keys || {})
-        const resourceKeys = Object.keys(data.resource_keys || {})
+        // Convert KeyInfo array to map with metadata for table rendering
+        const resourceKeysMap = {}
+        if (serviceData.resource_keys) {
+          serviceData.resource_keys.forEach(key => {
+            resourceKeysMap[key.name] = {
+              count: serviceData.sample_count, // Use service sample count
+              estimated_cardinality: key.cardinality,
+              value_samples: key.sample_values || []
+            }
+          })
+        }
+        
+        const attributeKeysMap = {}
+        if (serviceData.attribute_keys) {
+          serviceData.attribute_keys.forEach(key => {
+            attributeKeysMap[key.name] = {
+              count: serviceData.sample_count,
+              estimated_cardinality: key.cardinality,
+              value_samples: key.sample_values || []
+            }
+          })
+        }
         
         setAttributes({
-          template: templateData,
-          resource_keys: resourceKeys,
-          body_keys: attributeKeys
+          template: {
+            template: data.template,
+            example: data.example_body,
+            count: serviceData.sample_count,
+            percentage: 100 // Pattern-specific view, always 100% for this service
+          },
+          resource_keys: resourceKeysMap,
+          body_keys: attributeKeysMap
         })
         setLoading(false)
       })
@@ -58,6 +85,13 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
       'UNSET': '#999'
     }
     return colors[sev] || '#666'
+  }
+
+  const getCardinalityBadge = (cardinality) => {
+    if (cardinality === 1) return 'low'
+    if (cardinality <= 10) return 'medium'
+    if (cardinality <= 100) return 'high'
+    return 'very-high'
   }
 
   if (loading) return <div className="loading">Loading pattern details...</div>
@@ -132,67 +166,91 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
       </div>
 
       <div style={{ marginBottom: '30px' }}>
-        <h3>Attributes for Service: {serviceName}</h3>
+        <h3>Attributes for This Pattern (Service: {serviceName})</h3>
         
-        {attributes.resource_keys && attributes.resource_keys.length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
-            <h4 style={{ marginBottom: '10px', color: 'var(--text-secondary)' }}>
-              Resource Attributes ({attributes.resource_keys.length})
+        {Object.keys(attributes.resource_keys).length > 0 && (
+          <>
+            <h4 style={{ marginTop: '20px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
+              Resource Attributes
             </h4>
-            <div style={{ 
-              display: 'flex', 
-              flexWrap: 'wrap', 
-              gap: '8px'
-            }}>
-              {attributes.resource_keys.map((key, i) => (
-                <span 
-                  key={i}
-                  style={{
-                    background: 'var(--primary-color)',
-                    color: 'white',
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    fontFamily: 'monospace'
-                  }}
-                >
-                  {key}
-                </span>
-              ))}
-            </div>
-          </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Cardinality</th>
+                  <th>Usage</th>
+                  <th>Sample Values</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(attributes.resource_keys).map(([key, metadata]) => {
+                  const percentage = attributes.template.count > 0 
+                    ? (metadata.count / attributes.template.count * 100) 
+                    : 100
+                  return (
+                    <tr key={key}>
+                      <td><code>{key}</code></td>
+                      <td>
+                        <span className={`badge ${getCardinalityBadge(metadata.estimated_cardinality)}`}>
+                          {metadata.estimated_cardinality}
+                        </span>
+                      </td>
+                      <td>{percentage.toFixed(1)}%</td>
+                      <td className="samples">
+                        {metadata.value_samples && metadata.value_samples.length > 0 
+                          ? metadata.value_samples.slice(0, 5).join(', ')
+                          : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </>
         )}
 
-        {attributes.body_keys && attributes.body_keys.length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
-            <h4 style={{ marginBottom: '10px', color: 'var(--text-secondary)' }}>
-              Body Attributes ({attributes.body_keys.length})
+        {Object.keys(attributes.body_keys).length > 0 && (
+          <>
+            <h4 style={{ marginTop: '20px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
+              Body Attributes
             </h4>
-            <div style={{ 
-              display: 'flex', 
-              flexWrap: 'wrap', 
-              gap: '8px'
-            }}>
-              {attributes.body_keys.map((key, i) => (
-                <span 
-                  key={i}
-                  style={{
-                    background: '#2e7d32',
-                    color: 'white',
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    fontFamily: 'monospace'
-                  }}
-                >
-                  {key}
-                </span>
-              ))}
-            </div>
-          </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Cardinality</th>
+                  <th>Usage</th>
+                  <th>Sample Values</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(attributes.body_keys).map(([key, metadata]) => {
+                  const percentage = attributes.template.count > 0 
+                    ? (metadata.count / attributes.template.count * 100) 
+                    : 100
+                  return (
+                    <tr key={key}>
+                      <td><code>{key}</code></td>
+                      <td>
+                        <span className={`badge ${getCardinalityBadge(metadata.estimated_cardinality)}`}>
+                          {metadata.estimated_cardinality}
+                        </span>
+                      </td>
+                      <td>{percentage.toFixed(1)}%</td>
+                      <td className="samples">
+                        {metadata.value_samples && metadata.value_samples.length > 0 
+                          ? metadata.value_samples.slice(0, 5).join(', ')
+                          : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </>
         )}
 
-        {(!attributes.resource_keys?.length && !attributes.body_keys?.length) && (
+        {Object.keys(attributes.resource_keys).length === 0 && Object.keys(attributes.body_keys).length === 0 && (
           <p className="template-count-text">No attribute information available</p>
         )}
       </div>
