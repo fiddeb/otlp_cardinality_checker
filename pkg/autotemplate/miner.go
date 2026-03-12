@@ -23,6 +23,7 @@ package autotemplate
 
 import (
 	"hash/fnv"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -299,23 +300,39 @@ func (s *MinerShard) match(tokens []string) (string, bool) {
 	return "", false
 }
 
-// findBestCluster finds the cluster with highest similarity
+// findBestCluster finds the cluster with highest similarity.
+//
+// The minimum number of matching tokens is math.Round(SimThreshold * len) with a
+// floor of 1. Using Round rather than a straight >= comparison prevents the
+// implicit ceiling behaviour that makes generalization impossible for short
+// sequences: with SimThreshold=0.7 and 2 tokens, 0.7*2=1.4 rounds to 1, so a
+// single shared token (similarity=0.5) is enough to qualify.
 func (s *MinerShard) findBestCluster(clusters []*cluster, tokens []string) *cluster {
 	var best *cluster
 	bestScore := 0.0
-	
+	minMatches := int(math.Round(s.cfg.SimThreshold * float64(len(tokens))))
+	if minMatches < 1 {
+		minMatches = 1
+	}
+
 	for _, c := range clusters {
 		if len(c.tokens) != len(tokens) {
 			continue
 		}
-		
-		score := similarity(c.tokens, tokens)
-		if score >= s.cfg.SimThreshold && score > bestScore {
+
+		matched := 0
+		for i := range tokens {
+			if c.tokens[i] == tokens[i] || c.tokens[i] == "<*>" || tokens[i] == "<*>" {
+				matched++
+			}
+		}
+		score := float64(matched) / float64(len(tokens))
+		if matched >= minMatches && score > bestScore {
 			bestScore = score
 			best = c
 		}
 	}
-	
+
 	return best
 }
 

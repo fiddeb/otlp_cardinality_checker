@@ -67,7 +67,7 @@ func TestBatchThenGeneralize(t *testing.T) {
 		MaxDepth:     4,
 		MaxChildren:  100,
 		MaxClusters:  1000,
-		SimThreshold: 0.5,
+		SimThreshold: 0.7, // matches production value set in store.NewWithConfig
 		Training:     true,
 	}
 	analyzer := NewAutoLogBodyAnalyzer(cfg)
