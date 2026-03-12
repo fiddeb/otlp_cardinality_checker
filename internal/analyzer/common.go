@@ -12,14 +12,25 @@ type AttributeCatalog interface {
 }
 
 // getServiceName extracts service.name from resource attributes.
-// Returns "unknown" if service.name is not found.
-func getServiceName(attrs map[string]string) string {
-	// First try service.name
+// When labels are provided (pod log enrichment mode), the function also
+// checks the ordered label list and falls back to "unknown_service".
+// With no labels the behaviour is unchanged: falls back to "unknown".
+func getServiceName(attrs map[string]string, labels ...string) string {
+	// Always try service.name first.
 	if name, ok := attrs["service.name"]; ok && name != "" {
 		return name
 	}
 
-	// Default to unknown
+	// Enrichment mode: iterate the priority label list.
+	for _, label := range labels {
+		if v, ok := attrs[label]; ok && v != "" {
+			return v
+		}
+	}
+
+	if len(labels) > 0 {
+		return "unknown_service"
+	}
 	return "unknown"
 }
 

@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +41,11 @@ type AttributeMetadata struct {
 
 	// LastSeen is when this attribute key was last observed
 	LastSeen time.Time `json:"last_seen"`
+
+	// HasInvalidUTF8 is true when at least one observed value for this key
+	// contained invalid UTF-8 bytes that were replaced with U+FFFD by the
+	// receiver's sanitizeUTF8 helper. Sticky: once set it stays set.
+	HasInvalidUTF8 bool `json:"has_invalid_utf8,omitempty"`
 }
 
 // NewAttributeMetadata creates a new AttributeMetadata with initialized HLL.
@@ -64,9 +71,9 @@ func (a *AttributeMetadata) AddValue(value, signalType, scope string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// Update HLL sketch
+	// Add to HLL sketch. EstimatedCardinality is computed lazily in
+	// MarshalJSON to avoid the 16 384-register Count() scan on every write.
 	a.hll.Add(value)
-	a.EstimatedCardinality = int64(a.hll.Count())
 
 	// Update count
 	a.Count++
@@ -106,6 +113,12 @@ func (a *AttributeMetadata) AddValue(value, signalType, scope string) {
 
 	// Update timestamp
 	a.LastSeen = time.Now()
+
+	// Flag if the value contains the Unicode replacement character, which our
+	// sanitizeUTF8 receiver helper inserts in place of invalid UTF-8 bytes.
+	if strings.ContainsRune(value, '\uFFFD') {
+		a.HasInvalidUTF8 = true
+	}
 }
 
 // MarshalHLL serializes the HLL sketch for persistence.
@@ -118,6 +131,42 @@ func (a *AttributeMetadata) MarshalHLL() ([]byte, error) {
 	}
 
 	return a.hll.MarshalBinary()
+}
+
+// MarshalJSON implements custom JSON marshaling for AttributeMetadata.
+// EstimatedCardinality is computed lazily here rather than on every AddValue,
+// removing the expensive 16 384-register HLL scan from the hot ingest path.
+func (a *AttributeMetadata) MarshalJSON() ([]byte, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	var estCardinality int64
+	if a.hll != nil {
+		estCardinality = int64(a.hll.Count())
+	}
+
+	type wire struct {
+		Key                  string    `json:"key"`
+		Count                int64     `json:"count"`
+		EstimatedCardinality int64     `json:"estimated_cardinality"`
+		ValueSamples         []string  `json:"value_samples"`
+		SignalTypes          []string  `json:"signal_types"`
+		Scope                string    `json:"scope"`
+		FirstSeen            time.Time `json:"first_seen"`
+		LastSeen             time.Time `json:"last_seen"`
+		HasInvalidUTF8       bool      `json:"has_invalid_utf8,omitempty"`
+	}
+	return json.Marshal(wire{
+		Key:                  a.Key,
+		Count:                a.Count,
+		EstimatedCardinality: estCardinality,
+		ValueSamples:         a.ValueSamples,
+		SignalTypes:          a.SignalTypes,
+		Scope:                a.Scope,
+		FirstSeen:            a.FirstSeen,
+		LastSeen:             a.LastSeen,
+		HasInvalidUTF8:       a.HasInvalidUTF8,
+	})
 }
 
 // UnmarshalHLL deserializes the HLL sketch from storage.
@@ -199,6 +248,11 @@ func MergeAttributeMetadata(a1, a2 *AttributeMetadata) *AttributeMetadata {
 	}
 	if a2.LastSeen.After(a1.LastSeen) {
 		a1.LastSeen = a2.LastSeen
+	}
+
+	// Propagate invalid-UTF-8 flag (sticky)
+	if a2.HasInvalidUTF8 {
+		a1.HasInvalidUTF8 = true
 	}
 
 	return a1

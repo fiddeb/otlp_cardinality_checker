@@ -1240,6 +1240,12 @@ func (s *Server) handleGetWatchedAttribute(w http.ResponseWriter, r *http.Reques
 		"total_values":       total,
 		"page":               page,
 		"page_size":          pageSize,
+		"has_invalid_utf8":   func() bool {
+			if am, err := s.store.GetAttribute(ctx, waKey); err == nil {
+				return am.HasInvalidUTF8
+			}
+			return false
+		}(),
 	})
 }
 

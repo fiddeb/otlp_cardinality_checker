@@ -45,6 +45,9 @@ func NewGRPCReceiver(addr string, store storage.Storage) *GRPCReceiver {
 	} else {
 		logsAnalyzer = analyzer.NewLogsAnalyzerWithCatalog(store)
 	}
+	if store.PodLogEnrichment() {
+		logsAnalyzer.SetPodLogEnrichment(true, store.PodLogServiceLabels())
+	}
 	
 	return &GRPCReceiver{
 		store:           store,

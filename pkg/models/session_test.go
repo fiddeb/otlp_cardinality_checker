@@ -170,9 +170,9 @@ func TestSerializeKeyMetadata_RoundTrip(t *testing.T) {
 		t.Errorf("Count mismatch: original %d, restored %d", km.Count, restored.Count)
 	}
 
-	if restored.EstimatedCardinality != km.EstimatedCardinality {
+	if restored.Cardinality() != km.Cardinality() {
 		t.Errorf("Cardinality mismatch: original %d, restored %d", 
-			km.EstimatedCardinality, restored.EstimatedCardinality)
+			km.Cardinality(), restored.Cardinality())
 	}
 }
 

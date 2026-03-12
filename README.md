@@ -332,6 +332,16 @@ export API_ADDR="0.0.0.0:8080"
 # Enable automatic log template extraction with Drain algorithm (default: true)
 export USE_AUTOTEMPLATE=true
 
+# Enable pod log enrichment – resolves service name from Kubernetes resource
+# attributes and infers severity from the log body when SeverityText is empty.
+# Opt-in; defaults to false to preserve existing behaviour.
+export POD_LOG_ENRICHMENT=true
+
+# Override the ordered list of resource attribute keys used for service name
+# discovery (comma-separated, evaluated left-to-right before fallback).
+# Defaults to the Loki-compatible priority list when not set.
+export POD_LOG_SERVICE_LABELS="app,k8s.container.name,k8s.deployment.name"
+
 # Run the server
 ./bin/occ
 ```

@@ -361,11 +361,12 @@ func generalizeTokens(template, tokens []string) []string {
 	
 	result := make([]string, len(template))
 	for i := 0; i < len(template); i++ {
-		if template[i] == tokens[i] {
+		switch template[i] {
+		case tokens[i]:
 			result[i] = template[i]
-		} else if template[i] == "<*>" {
+		case "<*>":
 			result[i] = "<*>"
-		} else {
+		default:
 			result[i] = "<*>"
 		}
 	}

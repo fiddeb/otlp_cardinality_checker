@@ -42,10 +42,14 @@ type Store struct {
 	// Autotemplate configuration
 	useAutoTemplate bool
 	autoTemplateCfg autotemplate.Config
+
+	// Pod log enrichment
+	podLogEnrichment    bool
+	podLogServiceLabels []string
 }
 
-// NewWithAutoTemplate creates a store with optional autotemplate support.
-func NewWithAutoTemplate(useAutoTemplate bool, maxWatchedFields int) *Store {
+// NewWithConfig creates a store with all configuration options.
+func NewWithConfig(useAutoTemplate bool, maxWatchedFields int, podLogEnrichment bool, podLogServiceLabels []string) *Store {
 	if maxWatchedFields <= 0 {
 		maxWatchedFields = 10
 	}
@@ -54,16 +58,23 @@ func NewWithAutoTemplate(useAutoTemplate bool, maxWatchedFields int) *Store {
 	cfg.SimThreshold = 0.7 // Increased from 0.5 for stricter matching
 
 	return &Store{
-		metrics:          make(map[string]*models.MetricMetadata),
-		spans:            make(map[string]*models.SpanMetadata),
-		logs:             make(map[string]*models.LogMetadata),
-		attributes:       make(map[string]*models.AttributeMetadata),
-		services:         make(map[string]struct{}),
-		watched:          make(map[string]*models.WatchedAttribute),
-		maxWatchedFields: maxWatchedFields,
-		useAutoTemplate:  useAutoTemplate,
-		autoTemplateCfg:  cfg,
+		metrics:             make(map[string]*models.MetricMetadata),
+		spans:               make(map[string]*models.SpanMetadata),
+		logs:                make(map[string]*models.LogMetadata),
+		attributes:          make(map[string]*models.AttributeMetadata),
+		services:            make(map[string]struct{}),
+		watched:             make(map[string]*models.WatchedAttribute),
+		maxWatchedFields:    maxWatchedFields,
+		useAutoTemplate:     useAutoTemplate,
+		autoTemplateCfg:     cfg,
+		podLogEnrichment:    podLogEnrichment,
+		podLogServiceLabels: podLogServiceLabels,
 	}
+}
+
+// NewWithAutoTemplate creates a store with optional autotemplate support.
+func NewWithAutoTemplate(useAutoTemplate bool, maxWatchedFields int) *Store {
+	return NewWithConfig(useAutoTemplate, maxWatchedFields, false, nil)
 }
 
 // UseAutoTemplate returns whether autotemplate is enabled
@@ -74,6 +85,16 @@ func (s *Store) UseAutoTemplate() bool {
 // AutoTemplateCfg returns the autotemplate configuration
 func (s *Store) AutoTemplateCfg() autotemplate.Config {
 	return s.autoTemplateCfg
+}
+
+// PodLogEnrichment returns whether pod log enrichment is enabled.
+func (s *Store) PodLogEnrichment() bool {
+	return s.podLogEnrichment
+}
+
+// PodLogServiceLabels returns the ordered list of attribute keys for service name discovery.
+func (s *Store) PodLogServiceLabels() []string {
+	return s.podLogServiceLabels
 }
 
 // StoreMetric stores or updates metric metadata.
