@@ -4,6 +4,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
   const [templates, setTemplates] = useState([])
   const [attributeKeys, setAttributeKeys] = useState({})
   const [resourceKeys, setResourceKeys] = useState({})
+  const [sampleCount, setSampleCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState({
@@ -25,6 +26,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
         setTemplates(data.body_templates || [])
         setAttributeKeys(data.attribute_keys || {})
         setResourceKeys(data.resource_keys || {})
+        setSampleCount(data.sample_count || 0)
         setLoading(false)
       })
       .catch(err => {
