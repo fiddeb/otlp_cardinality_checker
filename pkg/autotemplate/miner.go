@@ -398,3 +398,30 @@ func (m *ShardedMiner) Stats() map[string]interface{} {
 		"training": m.cfg.Training,
 	}
 }
+
+// ClusterInfo holds information about a single log template cluster.
+type ClusterInfo struct {
+	Template    string
+	Count       int64
+	ExampleBody string // First log message that created this cluster (pre-masked)
+}
+
+// GetClusters returns all current template clusters with their authoritative counts.
+// This reflects the current state of drain's internal clusters, including any
+// generalization that has occurred (e.g. "Received ItsDrawCancelClosed" →
+// "Received <*>" after seeing multiple variants).
+func (m *ShardedMiner) GetClusters() []ClusterInfo {
+	var result []ClusterInfo
+	for _, shard := range m.shards {
+		shard.mu.RLock()
+		for _, c := range shard.clusters {
+			result = append(result, ClusterInfo{
+				Template:    tokensToString(c.tokens),
+				Count:       atomic.LoadInt64(&c.size),
+				ExampleBody: c.exampleBody,
+			})
+		}
+		shard.mu.RUnlock()
+	}
+	return result
+}
