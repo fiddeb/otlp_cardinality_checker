@@ -48,14 +48,32 @@ func main() {
 
 	// Configure storage from environment
 	useAutoTemplate := getEnvBool("USE_AUTOTEMPLATE", true)
+	podLogEnrichment := getEnvBool("POD_LOG_ENRICHMENT", false)
 
 	storageCfg := storage.DefaultConfig()
 	storageCfg.UseAutoTemplate = useAutoTemplate
+	storageCfg.PodLogEnrichment = podLogEnrichment
+
+	if rawLabels := os.Getenv("POD_LOG_SERVICE_LABELS"); rawLabels != "" {
+		var labels []string
+		for _, l := range strings.Split(rawLabels, ",") {
+			l = strings.TrimSpace(l)
+			if l != "" {
+				labels = append(labels, l)
+			}
+		}
+		if len(labels) > 0 {
+			storageCfg.PodLogServiceLabels = labels
+		}
+	}
 
 	if useAutoTemplate {
 		log.Println("Autotemplate mode enabled (Drain-style extraction)")
 	} else {
 		log.Println("Using regex-based template extraction")
+	}
+	if podLogEnrichment {
+		log.Printf("Pod log enrichment enabled (service_labels: %v)", storageCfg.PodLogServiceLabels)
 	}
 
 	// Validate --watch-fields count against configured limit.

@@ -15,8 +15,8 @@ func TestKeyMetadata_AddValue_Integration(t *testing.T) {
 	if km.Count != 5 {
 		t.Errorf("Count = %d, want 5", km.Count)
 	}
-	if km.EstimatedCardinality != 1 {
-		t.Errorf("EstimatedCardinality = %d, want 1 (same value)", km.EstimatedCardinality)
+	if km.Cardinality() != 1 {
+		t.Errorf("Cardinality() = %d, want 1 (same value)", km.Cardinality())
 	}
 	
 	// Add different values
@@ -27,12 +27,12 @@ func TestKeyMetadata_AddValue_Integration(t *testing.T) {
 	if km.Count != 8 {
 		t.Errorf("Count = %d, want 8", km.Count)
 	}
-	if km.EstimatedCardinality < 3 || km.EstimatedCardinality > 5 {
-		t.Errorf("EstimatedCardinality = %d, want 4 (±1)", km.EstimatedCardinality)
+	if got := km.Cardinality(); got < 3 || got > 5 {
+		t.Errorf("Cardinality() = %d, want 4 (±1)", got)
 	}
 	
 	t.Logf("After 8 AddValue calls (4 unique): Count=%d, Card=%d, Samples=%v",
-		km.Count, km.EstimatedCardinality, km.ValueSamples)
+		km.Count, km.Cardinality(), km.ValueSamples)
 }
 
 func TestKeyMetadata_Merge_HLL(t *testing.T) {

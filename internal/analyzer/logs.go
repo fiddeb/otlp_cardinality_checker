@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
 	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
@@ -18,11 +19,38 @@ type LogBodyAnalyzerInterface interface {
 
 // LogsAnalyzer extracts metadata from OTLP logs.
 type LogsAnalyzer struct {
-	bodyAnalyzers    map[string]LogBodyAnalyzerInterface // One analyzer per severity level
-	useAutoTemplate  bool                                // Whether to use autotemplate
-	autoTemplateCfg  autotemplate.Config                 // Config for autotemplate
-	patterns         []patterns.CompiledPattern          // Pre-masking patterns
-	catalog          AttributeCatalog                    // Attribute catalog for global tracking
+	bodyAnalyzers       map[string]LogBodyAnalyzerInterface // One analyzer per severity level
+	useAutoTemplate     bool                                // Whether to use autotemplate
+	autoTemplateCfg     autotemplate.Config                 // Config for autotemplate
+	patterns            []patterns.CompiledPattern          // Pre-masking patterns
+	catalog             AttributeCatalog                    // Attribute catalog for global tracking
+	podLogEnrichment    bool                                // Enrichment for pod logs
+	podLogServiceLabels []string                            // Ordered label priority list
+}
+
+// SetPodLogEnrichment configures pod log enrichment on an existing analyzer.
+func (a *LogsAnalyzer) SetPodLogEnrichment(enabled bool, labels []string) {
+	a.podLogEnrichment = enabled
+	a.podLogServiceLabels = labels
+}
+
+// inferSeverityFromBody scans a log body for level keywords and returns a
+// normalised severity string. Returns "UNSET" when no keyword is recognised.
+// Patterns are evaluated in priority order: ERROR > WARN > INFO > DEBUG.
+func inferSeverityFromBody(body string) string {
+	lower := strings.ToLower(body)
+	switch {
+	case strings.Contains(lower, "error"):
+		return "ERROR"
+	case strings.Contains(lower, "warn"):
+		return "WARN"
+	case strings.Contains(lower, "info"):
+		return "INFO"
+	case strings.Contains(lower, "debug"):
+		return "DEBUG"
+	default:
+		return "UNSET"
+	}
 }
 
 // NewLogsAnalyzerWithCatalog creates a logs analyzer with attribute catalog.
@@ -74,8 +102,14 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 	for _, resourceLogs := range req.ResourceLogs {
 		// Extract resource attributes
 		resourceAttrs := extractAttributes(resourceLogs.Resource.GetAttributes())
-		serviceName := getServiceName(resourceAttrs)
-		
+
+		var serviceName string
+		if a.podLogEnrichment {
+			serviceName = getServiceName(resourceAttrs, a.podLogServiceLabels...)
+		} else {
+			serviceName = getServiceName(resourceAttrs)
+		}
+
 		// Feed resource attributes to catalog
 		extractAttributesToCatalog(ctx, a.catalog, resourceAttrs, "log", "resource")
 
@@ -88,7 +122,12 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 			for _, logRecord := range scopeLogs.LogRecords {
 				severityText := logRecord.SeverityText
 				if severityText == "" {
-					severityText = "UNSET"
+					if a.podLogEnrichment {
+						body := logRecord.GetBody().GetStringValue()
+						severityText = inferSeverityFromBody(body)
+					} else {
+						severityText = "UNSET"
+					}
 				}
 
 				// Create unique key per service+severity

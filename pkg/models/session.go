@@ -234,7 +234,7 @@ func SerializeKeyMetadata(k *KeyMetadata) (*SerializedKey, error) {
 	sk := &SerializedKey{
 		Count:                k.Count,
 		Percentage:           k.Percentage,
-		EstimatedCardinality: k.EstimatedCardinality,
+		EstimatedCardinality: k.Cardinality(),
 		ValueSamples:         k.GetSortedSamples(),
 	}
 

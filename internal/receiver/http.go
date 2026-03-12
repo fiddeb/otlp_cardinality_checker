@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer"
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
@@ -34,9 +35,52 @@ func min(a, b int) int {
 	return b
 }
 
-// decompressGzip decompresses gzip-encoded data
-func decompressGzip(r io.Reader) (io.ReadCloser, error) {
-	return gzip.NewReader(r)
+// readAndDecompressBody reads the full request body and decompresses it if
+// needed. Decompression is triggered by an explicit "Content-Encoding: gzip"
+// header OR by the gzip magic bytes (0x1f 0x8b) at the start of the body.
+// The latter handles collectors that compress without advertising it, which
+// is the root cause of "cannot parse invalid wire-format data" errors.
+func readAndDecompressBody(req *http.Request) ([]byte, error) {
+	raw, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	isGzipHeader := strings.EqualFold(req.Header.Get("Content-Encoding"), "gzip")
+	hasMagicBytes := len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b
+
+	if isGzipHeader || hasMagicBytes {
+		gzr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return nil, fmt.Errorf("gzip reader: %w", err)
+		}
+		defer gzr.Close()
+		decompressed, err := io.ReadAll(gzr)
+		if err != nil {
+			return nil, fmt.Errorf("decompress: %w", err)
+		}
+		return decompressed, nil
+	}
+
+	return raw, nil
+}
+
+// sanitizeUTF8 replaces invalid UTF-8 byte sequences with the Unicode
+// replacement character before JSON parsing. protojson strictly validates UTF-8
+// in string fields; Kafka-sourced metrics may embed binary data in attribute
+// values, which OCC never stores. Allocates a copy only when invalid bytes are
+// found.
+func sanitizeUTF8(b []byte) []byte {
+	if utf8.Valid(b) {
+		return b
+	}
+	return []byte(strings.ToValidUTF8(string(b), string(utf8.RuneError)))
+}
+
+// isJSONContentType returns true when the Content-Type header indicates
+// JSON-encoded OTLP (e.g. "application/json").
+func isJSONContentType(contentType string) bool {
+	return strings.Contains(strings.ToLower(contentType), "json")
 }
 
 // HTTPReceiver handles OTLP HTTP requests.
@@ -63,6 +107,9 @@ func NewHTTPReceiver(addr string, store storage.Storage) *HTTPReceiver {
 		logsAnalyzer = analyzer.NewLogsAnalyzerWithAutoTemplateAndCatalog(store.AutoTemplateCfg(), pats, store)
 	} else {
 		logsAnalyzer = analyzer.NewLogsAnalyzerWithCatalog(store)
+	}
+	if store.PodLogEnrichment() {
+		logsAnalyzer.SetPodLogEnrichment(true, store.PodLogServiceLabels())
 	}
 	
 	r := &HTTPReceiver{
@@ -105,20 +152,7 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	// Handle compression
-	reader := req.Body
-	if req.Header.Get("Content-Encoding") == "gzip" {
-		var err error
-		reader, err = decompressGzip(req.Body)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to decompress: %v", err), http.StatusBadRequest)
-			return
-		}
-		defer reader.Close()
-	}
-
-	// Read request body
-	body, err := io.ReadAll(reader)
+	body, err := readAndDecompressBody(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
@@ -135,25 +169,41 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 			contentType, req.Header.Get("Content-Encoding"), len(body))
 	}
 
-	// Always try protobuf first (default for OTLP), then fallback to JSON
-	if err := proto.Unmarshal(body, &exportReq); err != nil {
-		// If protobuf fails, try JSON
-		unmarshaler := protojson.UnmarshalOptions{
-			DiscardUnknown: true,
-		}
-		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			log.Printf("Failed to parse metrics request: protobuf error: %v, json error: %v", err, jsonErr)
-			if verboseLogging {
-				fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+	unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+
+	if isJSONContentType(contentType) {
+		// Collector sent JSON (e.g. encoding: json). Sanitize invalid UTF-8
+		// that may be embedded in Kafka-sourced attribute values before parsing.
+		if jsonErr := unmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+			// Fall back to protobuf in case Content-Type was set incorrectly.
+			if protoErr := proto.Unmarshal(body, &exportReq); protoErr != nil {
+				log.Printf("Failed to parse metrics request: json error: %v, protobuf error: %v", jsonErr, protoErr)
+				http.Error(w, fmt.Sprintf("Failed to parse request: %v", jsonErr), http.StatusBadRequest)
+				return
 			}
-			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
-			return
+			if verboseLogging {
+				fmt.Println("Parsed metrics as protobuf (Content-Type mismatch)")
+			}
+		} else if verboseLogging {
+			fmt.Println("Parsed metrics as JSON")
 		}
-		if verboseLogging {
-			fmt.Println("Parsed as JSON")
+	} else {
+		// Default: try protobuf first, fall back to JSON.
+		if err := proto.Unmarshal(body, &exportReq); err != nil {
+			if jsonErr := unmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+				log.Printf("Failed to parse metrics request: protobuf error: %v, json error: %v", err, jsonErr)
+				if verboseLogging {
+					fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+				}
+				http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
+				return
+			}
+			if verboseLogging {
+				fmt.Println("Parsed metrics as JSON")
+			}
+		} else if verboseLogging {
+			fmt.Println("Parsed metrics as protobuf")
 		}
-	} else if verboseLogging {
-		fmt.Println("Parsed as protobuf")
 	}
 
 	// Analyze metrics
@@ -191,43 +241,43 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	// Handle compression
-	reader := req.Body
-	if req.Header.Get("Content-Encoding") == "gzip" {
-		var err error
-		reader, err = decompressGzip(req.Body)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to decompress: %v", err), http.StatusBadRequest)
-			return
-		}
-		defer reader.Close()
-	}
-
-	// Read request body
-	body, err := io.ReadAll(reader)
+	body, err := readAndDecompressBody(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}
 	defer req.Body.Close()
 
-	// Parse request - try protobuf first, then JSON
 	var exportReq coltracepb.ExportTraceServiceRequest
-	if err := proto.Unmarshal(body, &exportReq); err != nil {
-		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
-		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			log.Printf("Failed to parse traces request: protobuf error: %v, json error: %v", err, jsonErr)
-			if verboseLogging {
-				fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+	traceUnmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+	traceContentType := req.Header.Get("Content-Type")
+
+	if isJSONContentType(traceContentType) {
+		if jsonErr := traceUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+			if protoErr := proto.Unmarshal(body, &exportReq); protoErr != nil {
+				log.Printf("Failed to parse traces request: json error: %v, protobuf error: %v", jsonErr, protoErr)
+				http.Error(w, fmt.Sprintf("Failed to parse request: %v", jsonErr), http.StatusBadRequest)
+				return
 			}
-			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
-			return
-		}
-		if verboseLogging {
+		} else if verboseLogging {
 			fmt.Println("Parsed traces as JSON")
 		}
-	} else if verboseLogging {
-		fmt.Println("Parsed traces as protobuf")
+	} else {
+		if err := proto.Unmarshal(body, &exportReq); err != nil {
+			if jsonErr := traceUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+				log.Printf("Failed to parse traces request: protobuf error: %v, json error: %v", err, jsonErr)
+				if verboseLogging {
+					fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+				}
+				http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
+				return
+			}
+			if verboseLogging {
+				fmt.Println("Parsed traces as JSON")
+			}
+		} else if verboseLogging {
+			fmt.Println("Parsed traces as protobuf")
+		}
 	}
 
 	// Analyze traces
@@ -265,43 +315,41 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	// Handle compression
-	reader := req.Body
-	if req.Header.Get("Content-Encoding") == "gzip" {
-		var err error
-		reader, err = decompressGzip(req.Body)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to decompress: %v", err), http.StatusBadRequest)
-			return
-		}
-		defer reader.Close()
-	}
-
-	// Read request body
-	body, err := io.ReadAll(reader)
+	body, err := readAndDecompressBody(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}
 	defer req.Body.Close()
 
-	// Parse request - try protobuf first, then JSON
 	var exportReq collogspb.ExportLogsServiceRequest
-	if err := proto.Unmarshal(body, &exportReq); err != nil {
-		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
-		if jsonErr := unmarshaler.Unmarshal(body, &exportReq); jsonErr != nil {
-			log.Printf("Failed to parse logs as both protobuf and JSON\n")
-			log.Printf("Protobuf error: %v\n", err)
-			log.Printf("JSON error: %v\n", jsonErr)
-			log.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
-			http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
-			return
-		}
-		if verboseLogging {
+	logsUnmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+	logsContentType := req.Header.Get("Content-Type")
+
+	if isJSONContentType(logsContentType) {
+		if jsonErr := logsUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+			if protoErr := proto.Unmarshal(body, &exportReq); protoErr != nil {
+				log.Printf("Failed to parse logs request: json error: %v, protobuf error: %v", jsonErr, protoErr)
+				http.Error(w, fmt.Sprintf("Failed to parse request: %v", jsonErr), http.StatusBadRequest)
+				return
+			}
+		} else if verboseLogging {
 			fmt.Println("Parsed logs as JSON")
 		}
 	} else {
-		if verboseLogging {
+		if err := proto.Unmarshal(body, &exportReq); err != nil {
+			if jsonErr := logsUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+				log.Printf("Failed to parse logs request: protobuf error: %v, json error: %v", err, jsonErr)
+				if verboseLogging {
+					fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
+				}
+				http.Error(w, fmt.Sprintf("Failed to parse request: protobuf error: %v, json error: %v", err, jsonErr), http.StatusBadRequest)
+				return
+			}
+			if verboseLogging {
+				fmt.Println("Parsed logs as JSON")
+			}
+		} else if verboseLogging {
 			fmt.Println("Parsed logs as protobuf")
 		}
 	}

@@ -52,8 +52,8 @@ func TestKeyMetadata_HyperLogLog(t *testing.T) {
 			}
 
 			// Check cardinality (allow small HLL error)
-			if km.EstimatedCardinality < tt.wantCardinality-5 || km.EstimatedCardinality > tt.wantCardinality+5 {
-				t.Errorf("EstimatedCardinality = %d, want %d (±5)", km.EstimatedCardinality, tt.wantCardinality)
+			if got := km.Cardinality(); got < tt.wantCardinality-5 || got > tt.wantCardinality+5 {
+				t.Errorf("Cardinality() = %d, want %d (±5)", got, tt.wantCardinality)
 			}
 
 			// Check samples
@@ -80,9 +80,9 @@ func TestKeyMetadata_HyperLogLog_HighCardinality(t *testing.T) {
 
 	// Check cardinality (HLL standard error is ~0.81% at precision 14, allow 5% margin)
 	errorMargin := float64(numValues) * 0.05 // Allow 5% error
-	if float64(km.EstimatedCardinality) < float64(numValues)-errorMargin ||
-		float64(km.EstimatedCardinality) > float64(numValues)+errorMargin {
-		t.Errorf("EstimatedCardinality = %d, want %d (±%.0f)", km.EstimatedCardinality, numValues, errorMargin)
+	if got := km.Cardinality(); float64(got) < float64(numValues)-errorMargin ||
+		float64(got) > float64(numValues)+errorMargin {
+		t.Errorf("Cardinality() = %d, want %d (±%.0f)", got, numValues, errorMargin)
 	}
 
 	// Check that samples are capped at MaxSamples
@@ -91,8 +91,8 @@ func TestKeyMetadata_HyperLogLog_HighCardinality(t *testing.T) {
 	}
 
 	t.Logf("High cardinality test: Count=%d, EstimatedCardinality=%d (%.2f%% error), Samples=%d",
-		km.Count, km.EstimatedCardinality,
-		100*float64(numValues-int(km.EstimatedCardinality))/float64(numValues),
+		km.Count, km.Cardinality(),
+		100*float64(numValues-int(km.Cardinality()))/float64(numValues),
 		len(km.ValueSamples))
 }
 
@@ -107,4 +107,32 @@ func BenchmarkKeyMetadata_AddValue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		km.AddValue(values[i%1000])
 	}
+}
+
+func TestKeyMetadata_HasInvalidUTF8(t *testing.T) {
+	t.Run("clean values do not set flag", func(t *testing.T) {
+		km := NewKeyMetadata()
+		km.AddValue("prod")
+		km.AddValue("staging")
+		if km.HasInvalidUTF8 {
+			t.Fatal("HasInvalidUTF8 should be false for clean values")
+		}
+	})
+
+	t.Run("value with replacement char sets flag", func(t *testing.T) {
+		km := NewKeyMetadata()
+		km.AddValue("prod\uFFFD") // sanitizeUTF8 inserts U+FFFD for bad bytes
+		if !km.HasInvalidUTF8 {
+			t.Fatal("HasInvalidUTF8 should be true when value contains U+FFFD")
+		}
+	})
+
+	t.Run("flag is sticky across subsequent clean values", func(t *testing.T) {
+		km := NewKeyMetadata()
+		km.AddValue("prod\uFFFD")
+		km.AddValue("staging") // clean value after tainted one
+		if !km.HasInvalidUTF8 {
+			t.Fatal("HasInvalidUTF8 should remain true once set")
+		}
+	})
 }

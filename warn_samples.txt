@@ -1,0 +1,30 @@
+---
+Competition 1008 (Europamästaren), signupEndTime not set, using startTime
+---
+Registered wager missing bet properties!
+---
+Unhandled event Event{name='End', data=se.svenskaspel.game.coupon.eurojackpot.impl.EurojackpotSyndicateCoupon@127f2be8, type=0} in state: se.svenskaspel.state.states.SyndicateInformationState
+---
+HttpResponse has invalid 'StatusCode' and/or 'Content-Type'. StatusCode: 500, Content-Type: application/json;charset=utf-8 .
+---
+attempt to enter already active state: se.svenskaspel.state.states.ProcessingIdBusyState
+---
+Competition 1008 (Europamästaren), signupEndTime not set, using startTime
+---
+Registered wager missing bet properties!
+---
+Unhandled event Event{name='End', data=se.svenskaspel.game.coupon.eurojackpot.impl.EurojackpotSyndicateCoupon@127f2be8, type=0} in state: se.svenskaspel.state.states.SyndicateInformationState
+---
+HttpResponse has invalid 'StatusCode' and/or 'Content-Type'. StatusCode: 500, Content-Type: application/json;charset=utf-8 .
+---
+attempt to enter already active state: se.svenskaspel.state.states.ProcessingIdBusyState
+---
+Competition 1008 (Europamästaren), signupEndTime not set, using startTime
+---
+Registered wager missing bet properties!
+---
+Unhandled event Event{name='End', data=se.svenskaspel.game.coupon.eurojackpot.impl.EurojackpotSyndicateCoupon@127f2be8, type=0} in state: se.svenskaspel.state.states.SyndicateInformationState
+---
+HttpResponse has invalid 'StatusCode' and/or 'Content-Type'. StatusCode: 500, Content-Type: application/json;charset=utf-8 .
+---
+attempt to enter already active state: se.svenskaspel.state.states.ProcessingIdBusyState

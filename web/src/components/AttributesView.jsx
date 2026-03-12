@@ -212,22 +212,27 @@ function AttributesView() {
           </thead>
           <tbody>
             {currentAttributes.map((attr, idx) => (
-              <tr key={idx}>
+              <tr key={idx} style={attr.has_invalid_utf8 ? { backgroundColor: 'rgba(220, 38, 38, 0.07)' } : undefined}>
                 <td>
                   {attr.watched ? (
                     <button
                       onClick={() => setExplorerKey(explorerKey === attr.key ? null : attr.key)}
                       style={{
                         background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#1976d2', textDecoration: 'underline', padding: 0,
+                        color: attr.has_invalid_utf8 ? 'var(--danger)' : '#1976d2',
+                        textDecoration: 'underline', padding: 0,
                         fontFamily: 'monospace', fontSize: 'inherit',
                       }}
                       title="Open Value Explorer"
                     >
                       {attr.key}
+                      {attr.has_invalid_utf8 && <span style={{ marginLeft: '5px' }} title="One or more values contained invalid UTF-8 bytes (replaced with \uFFFD)">⚠</span>}
                     </button>
                   ) : (
-                    <code className="attribute-key">{attr.key}</code>
+                    <code className="attribute-key" style={attr.has_invalid_utf8 ? { color: 'var(--danger)' } : undefined}>
+                      {attr.key}
+                      {attr.has_invalid_utf8 && <span style={{ marginLeft: '5px' }} title="One or more values contained invalid UTF-8 bytes (replaced with \uFFFD)">⚠</span>}
+                    </code>
                   )}
                 </td>
                 <td>
@@ -296,15 +301,15 @@ function AttributesView() {
                       border: '1px solid',
                       cursor: (watchToggling[attr.key] || (!attr.watched && limitReached)) ? 'not-allowed' : 'pointer',
                       opacity: (!attr.watched && limitReached) ? 0.4 : 1,
-                      background: attr.watched ? '#e3f2fd' : 'transparent',
-                      borderColor: attr.watched ? '#1976d2' : '#ccc',
-                      color: attr.watched ? '#1976d2' : '#666',
+                      background: attr.watched ? (attr.has_invalid_utf8 ? 'rgba(220,38,38,0.10)' : '#e3f2fd') : 'transparent',
+                      borderColor: attr.watched ? (attr.has_invalid_utf8 ? 'var(--danger, #dc2626)' : '#1976d2') : '#ccc',
+                      color: attr.watched ? (attr.has_invalid_utf8 ? 'var(--danger, #dc2626)' : '#1976d2') : '#666',
                       fontSize: 12,
                       fontWeight: attr.watched ? 600 : 400,
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {watchToggling[attr.key] ? '…' : attr.watched ? 'Watching' : 'Watch'}
+                    {watchToggling[attr.key] ? '…' : attr.watched ? (attr.has_invalid_utf8 ? '⚠ Watching' : 'Watching') : 'Watch'}
                   </button>
                 </td>
               </tr>
