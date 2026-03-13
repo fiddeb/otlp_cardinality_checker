@@ -162,7 +162,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
           {filteredTemplates.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No patterns match the current filters</p>
           ) : (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-1/2">Pattern Template</TableHead>
