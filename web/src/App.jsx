@@ -47,11 +47,11 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // Apply dark mode class to body
+    // Apply dark mode class to html element (shadcn uses .dark on ancestor)
     if (darkMode) {
-      document.body.classList.add('dark-mode')
+      document.documentElement.classList.add('dark')
     } else {
-      document.body.classList.remove('dark-mode')
+      document.documentElement.classList.remove('dark')
     }
     // Save preference
     localStorage.setItem('darkMode', darkMode)
