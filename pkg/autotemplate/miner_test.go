@@ -28,6 +28,21 @@ func TestTokenize(t *testing.T) {
 			input: "user  john   logged",
 			want:  []string{"user", "john", "logged"},
 		},
+		{
+			name:  "long token collapsed to wildcard",
+			input: "received message value Ck0KCgjbstDNBhDAoAoQLRgCINAFKiQ5ZDMzMWY4",
+			want:  []string{"received", "message", "value", "<*>"},
+		},
+		{
+			name:  "consecutive long tokens collapsed to single wildcard",
+			input: "received value Ck0KCgjbstDNBhDAoAoQLRgCINAFKiQ5ZDMzABC MWY4NS0yNjRlLTRlYWMtYTVjYS0xMzABC done",
+			want:  []string{"received", "value", "<*>", "done"},
+		},
+		{
+			name:  "short tokens preserved",
+			input: "received message from txgeneric-prod-marketplace partition 0",
+			want:  []string{"received", "message", "from", "txgeneric-prod-marketplace", "partition", "0"},
+		},
 	}
 	
 	for _, tt := range tests {
@@ -222,5 +237,42 @@ func BenchmarkMinerMatch(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		msg := messages[i%len(messages)]
 		miner.Match(msg)
+	}
+}
+
+// TestLongPayloadClustering is a regression test for the bug where log messages
+// with the same structure but different-length base64/protobuf @value fields
+// (containing embedded spaces) land in different Drain length buckets and never
+// merge into the same template.
+func TestLongPayloadClustering(t *testing.T) {
+	cfg := Config{
+		Shards:       1,
+		MaxDepth:     4,
+		MaxChildren:  100,
+		MaxClusters:  1000,
+		SimThreshold: 0.7,
+		Training:     true,
+	}
+	miner := NewShardedMiner(cfg)
+
+	// Short base64 @value — will normalize to a single <*>
+	msg1 := "Received message from txgeneric-prod-marketplace partition 0 at offset 244486311 { @type type.googleapis.com marketplace.events.MemberAdded @value CkwKCgjNstDNBhCA2QwQCxgBINAFKiRkOGNiZGFlYi04NGM1LTQ2MjgtODI5MC0wYTVkNzMwZDU2MzkwzuScgLDmBjgPQAJIwOC1NlgC }"
+	// Longer base64 @value with embedded spaces — would previously produce more tokens
+	msg2 := "Received message from txgeneric-prod-marketplace partition 0 at offset 244486358 { @type type.googleapis.com marketplace.events.WagerCreated @value Ck0KCgjbstDNBhDAoAoQLRgCINAFKiQ5ZDMzMWY4NS0yNjRlLTRlYWMtYTVjYS0xMDM0Zjc2MTljYzYwk+icgLDmBjgPQAJIt6eTvgdYAxLFBwiLsAEQ JFIGPqvywQgt6eTvgcog5P8poiaqg4yQAjR7v0zEjkIgpP8poiaqg4SJ09QU01NTXJzcnYxMD }"
+
+	tmpl1, matched1 := miner.Add(msg1)
+	if matched1 {
+		t.Error("first message should create a new cluster, not match an existing one")
+	}
+	t.Logf("template after msg1: %s", tmpl1)
+
+	tmpl2, matched2 := miner.Add(msg2)
+	t.Logf("template after msg2: %s", tmpl2)
+	if !matched2 {
+		t.Errorf("second message should match the existing cluster; got a new template: %q (expected to merge with %q)", tmpl2, tmpl1)
+	}
+
+	if !strings.Contains(tmpl2, "<*>") {
+		t.Errorf("merged template should contain a wildcard; got %q", tmpl2)
 	}
 }
