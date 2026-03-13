@@ -105,6 +105,11 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 		return nil, fmt.Errorf("request cannot be nil")
 	}
 
+	// Batch catalog deduplicates writes: each unique (signalType,scope,key,value)
+	// tuple is forwarded to the real catalog exactly once per request. This
+	// collapses O(records×attrs) lock acquisitions to O(unique tuples).
+	batch := newBatchCatalog(a.catalog)
+
 	// Map: service+severity -> LogMetadata
 	// Key format: "service|severity"
 	logMap := make(map[string]*models.LogMetadata)
@@ -124,7 +129,7 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 		}
 
 		// Feed resource attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, resourceAttrs, "log", "resource")
+		extractAttributesToCatalog(ctx, batch, resourceAttrs, "log", "resource")
 
 		for _, scopeLogs := range resourceLogs.ScopeLogs {
 			scopeInfo := &models.ScopeMetadata{
@@ -194,16 +199,23 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				body := logRecord.GetBody().GetStringValue()
 				if body != "" {
 					analyzerKey := key // Use same key as logMap (service+severity)
-					
-					// Thread-safe check and create
-					a.mu.Lock()
+
+					// Double-checked locking: optimistic RLock for the common
+					// post-warmup path (key already exists), upgrade to write
+					// lock only when we need to create a new entry.
+					a.mu.RLock()
 					analyzer, exists := a.bodyAnalyzers[analyzerKey]
+					a.mu.RUnlock()
 					if !exists {
-						analyzer = a.createBodyAnalyzer()
-						a.bodyAnalyzers[analyzerKey] = analyzer
+						a.mu.Lock()
+						analyzer, exists = a.bodyAnalyzers[analyzerKey]
+						if !exists {
+							analyzer = a.createBodyAnalyzer()
+							a.bodyAnalyzers[analyzerKey] = analyzer
+						}
+						a.mu.Unlock()
 					}
-					a.mu.Unlock()
-					
+
 					analyzer.AddMessage(body)
 				}
 
@@ -211,7 +223,7 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				logAttrs := extractAttributes(logRecord.Attributes)
 				
 				// Feed log attributes to catalog
-				extractAttributesToCatalog(ctx, a.catalog, logAttrs, "log", "attribute")
+				extractAttributesToCatalog(ctx, batch, logAttrs, "log", "attribute")
 				
 				for attrKey, attrValue := range logAttrs {
 					// Track event.name separately

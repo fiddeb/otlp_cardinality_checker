@@ -54,7 +54,6 @@ func NewWithConfig(useAutoTemplate bool, maxWatchedFields int, podLogEnrichment 
 		maxWatchedFields = 10
 	}
 	cfg := autotemplate.DefaultConfig()
-	cfg.Shards = 4
 	cfg.SimThreshold = 0.7 // Increased from 0.5 for stricter matching
 
 	return &Store{
@@ -920,17 +919,26 @@ func (s *Store) StoreAttributeValue(ctx context.Context, key, value, signalType,
 		return errors.New("attribute key cannot be empty")
 	}
 
-	s.attributesmu.Lock()
-	defer s.attributesmu.Unlock()
+	// Fast path: key already exists — hold the read-lock only long enough to
+	// retrieve the pointer, then release before the per-key AddValue (which
+	// has its own mutex). This allows concurrent writes to different attribute
+	// keys without a global write-lock stall.
+	s.attributesmu.RLock()
+	attr := s.attributes[key]
+	s.attributesmu.RUnlock()
 
-	// Get or create attribute metadata
-	attr, exists := s.attributes[key]
-	if !exists {
-		attr = models.NewAttributeMetadata(key)
-		s.attributes[key] = attr
+	if attr == nil {
+		// Slow path: first time we see this key. Write-lock, re-check, create.
+		s.attributesmu.Lock()
+		attr = s.attributes[key]
+		if attr == nil {
+			attr = models.NewAttributeMetadata(key)
+			s.attributes[key] = attr
+		}
+		s.attributesmu.Unlock()
 	}
 
-	// Add value observation
+	// AddValue is safe to call without attributesmu: it uses its own lock.
 	attr.AddValue(value, signalType, scope)
 
 	// Deep watch: if this key is actively watched, record value frequency.
