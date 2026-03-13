@@ -178,7 +178,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
                     onClick={() => onViewPattern && onViewPattern(serviceName, severity, tmpl.template)}
                     className={onViewPattern ? 'cursor-pointer hover:bg-muted/50' : ''}
                   >
-                    <TableCell>
+                    <TableCell className="whitespace-normal">
                       <code className="block rounded bg-muted px-2 py-1 text-xs font-mono break-all">
                         {tmpl.template}
                       </code>
