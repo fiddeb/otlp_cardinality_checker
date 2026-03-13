@@ -7,11 +7,11 @@
 
 ### Requirement: Application Sidebar Navigation
 
+The application SHALL provide a collapsible sidebar navigation component that replaces the horizontal tab bar with a vertical navigation menu.
+
 **ID:** `LC-001`  
 **Priority:** High  
 **Category:** Navigation
-
-The application SHALL provide a collapsible sidebar navigation component that replaces the horizontal tab bar with a vertical navigation menu.
 
 #### Scenario: Rendering the sidebar with navigation items
 
@@ -55,11 +55,11 @@ The application SHALL provide a collapsible sidebar navigation component that re
 
 ### Requirement: Application Header
 
+The application SHALL provide a header component containing the app title, theme toggle, and admin actions.
+
 **ID:** `LC-002`  
 **Priority:** High  
 **Category:** Layout
-
-The application SHALL provide a header component containing the app title, theme toggle, and admin actions.
 
 #### Scenario: Rendering the header
 
@@ -89,11 +89,11 @@ The application SHALL provide a header component containing the app title, theme
 
 ### Requirement: Main Content Area Layout
 
+The application SHALL wrap view components in a consistent main content container with proper spacing and max-width constraints.
+
 **ID:** `LC-003`  
 **Priority:** Medium  
 **Category:** Layout
-
-The application SHALL wrap view components in a consistent main content container with proper spacing and max-width constraints.
 
 #### Scenario: Content container structure
 
@@ -117,11 +117,11 @@ The application SHALL wrap view components in a consistent main content containe
 
 ### Requirement: Breadcrumb Navigation
 
+The application SHALL display breadcrumb navigation when users navigate into detail views (Details, ServiceExplorer, TemplateDetails, etc.).
+
 **ID:** `LC-004`  
 **Priority:** Low  
 **Category:** Navigation
-
-The application SHALL display breadcrumb navigation when users navigate into detail views (Details, ServiceExplorer, TemplateDetails, etc.).
 
 #### Scenario: Showing breadcrumbs in detail views
 
@@ -144,11 +144,11 @@ The application SHALL display breadcrumb navigation when users navigate into det
 
 ### Requirement: SidebarProvider Context
 
+The application SHALL use a SidebarProvider context to manage sidebar open/collapsed state across components.
+
 **ID:** `LC-005`  
 **Priority:** High  
 **Category:** State Management
-
-The application SHALL use a SidebarProvider context to manage sidebar open/collapsed state across components.
 
 #### Scenario: Initializing sidebar state
 
@@ -173,16 +173,7 @@ The application SHALL use a SidebarProvider context to manage sidebar open/colla
 
 ## MODIFIED Requirements
 
-### Requirement: Tab Navigation (DEPRECATED)
-
-**ID:** `NAV-001` (from existing system)  
-**Status:** DEPRECATED  
-**Replacement:** `LC-001` (Sidebar Navigation)
-
-**Before:** Horizontal tab bar at top of page  
-**After:** Vertical sidebar navigation  
-
-**Migration:** The `.tabs` CSS class and tab state management SHALL be removed after sidebar is fully integrated. The `activeTab` state variable SHALL remain for routing logic but SHALL be controlled by sidebar clicks instead of tab clicks.
+None
 
 ---
 

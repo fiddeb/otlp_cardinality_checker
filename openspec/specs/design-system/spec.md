@@ -1,17 +1,15 @@
-# Spec: Design System Foundation
+# design-system Specification
 
-**Capability:** `design-system`  
-**Change:** `migrate-shadcn-ui`
-
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change migrate-shadcn-ui. Update Purpose after archive.
+## Requirements
 ### Requirement: UI Component Library Integration
+
+The web UI SHALL integrate the shadcn-ui component library built on Tailwind CSS v4 and RadixUI primitives to provide accessible, composable UI components.
 
 **ID:** `DS-001`  
 **Priority:** High  
 **Category:** Infrastructure
-
-The web UI SHALL integrate the shadcn-ui component library built on Tailwind CSS v4 and RadixUI primitives to provide accessible, composable UI components.
 
 #### Scenario: Installing shadcn-ui dependencies
 
@@ -55,11 +53,11 @@ The web UI SHALL integrate the shadcn-ui component library built on Tailwind CSS
 
 ### Requirement: Theme System with CSS Variables
 
+The application SHALL use CSS custom properties for theming, supporting both light and dark modes with consistent color tokens across all components.
+
 **ID:** `DS-002`  
 **Priority:** High  
 **Category:** Theming
-
-The application SHALL use CSS custom properties for theming, supporting both light and dark modes with consistent color tokens across all components.
 
 #### Scenario: Defining theme variables
 
@@ -94,11 +92,11 @@ The application SHALL use CSS custom properties for theming, supporting both lig
 
 ### Requirement: Utility Class Composition
 
+The project SHALL provide a `cn()` utility function for composing Tailwind classes with proper conflict resolution.
+
 **ID:** `DS-003`  
 **Priority:** Medium  
 **Category:** Developer Experience
-
-The project SHALL provide a `cn()` utility function for composing Tailwind classes with proper conflict resolution.
 
 #### Scenario: Creating the cn() utility
 
@@ -127,11 +125,11 @@ export function cn(...inputs) {
 
 ### Requirement: Path Alias Configuration
 
+The build system SHALL support the `@/` path alias for importing components and utilities from the `src/` directory.
+
 **ID:** `DS-004`  
 **Priority:** Medium  
 **Category:** Configuration
-
-The build system SHALL support the `@/` path alias for importing components and utilities from the `src/` directory.
 
 #### Scenario: Configuring Vite path aliases
 
@@ -167,11 +165,11 @@ The build system SHALL support the `@/` path alias for importing components and 
 
 ### Requirement: Base UI Components
 
+The project SHALL include foundational shadcn-ui components for buttons, cards, badges, and inputs in `src/components/ui/`.
+
 **ID:** `DS-005`  
 **Priority:** High  
 **Category:** Components
-
-The project SHALL include foundational shadcn-ui components for buttons, cards, badges, and inputs in `src/components/ui/`.
 
 #### Scenario: Adding the Button component
 
@@ -205,10 +203,3 @@ The project SHALL include foundational shadcn-ui components for buttons, cards, 
 
 ---
 
-## MODIFIED Requirements
-
-None (new capability)
-
-## REMOVED Requirements
-
-None

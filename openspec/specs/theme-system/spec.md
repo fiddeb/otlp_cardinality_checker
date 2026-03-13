@@ -1,17 +1,15 @@
-# Spec: Theme System
+# theme-system Specification
 
-**Capability:** `theme-system`  
-**Change:** `migrate-shadcn-ui`
-
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change migrate-shadcn-ui. Update Purpose after archive.
+## Requirements
 ### Requirement: ThemeProvider Context
+
+The application SHALL provide a ThemeProvider React context to manage theme state and apply theme classes to the document root.
 
 **ID:** `TS-001`  
 **Priority:** High  
 **Category:** Theming
-
-The application SHALL provide a ThemeProvider React context to manage theme state and apply theme classes to the document root.
 
 #### Scenario: Initializing theme on app load
 
@@ -43,11 +41,11 @@ The application SHALL provide a ThemeProvider React context to manage theme stat
 
 ### Requirement: Theme Toggle Component
 
+The application SHALL provide a theme toggle button that cycles between light, dark, and system modes.
+
 **ID:** `TS-002`  
 **Priority:** High  
 **Category:** UI Component
-
-The application SHALL provide a theme toggle button that cycles between light, dark, and system modes.
 
 #### Scenario: Rendering the theme toggle
 
@@ -82,11 +80,11 @@ The application SHALL provide a theme toggle button that cycles between light, d
 
 ### Requirement: CSS Variables for Colors
 
+The application SHALL define semantic color tokens as CSS custom properties, following the shadcn-ui color system.
+
 **ID:** `TS-003`  
 **Priority:** High  
 **Category:** Design Tokens
-
-The application SHALL define semantic color tokens as CSS custom properties, following the shadcn-ui color system.
 
 #### Scenario: Defining light mode colors
 
@@ -154,11 +152,11 @@ The application SHALL define semantic color tokens as CSS custom properties, fol
 
 ### Requirement: Smooth Theme Transitions
 
+The application SHALL provide smooth visual transitions when switching themes to avoid jarring flashes.
+
 **ID:** `TS-004`  
 **Priority:** Medium  
 **Category:** UX
-
-The application SHALL provide smooth visual transitions when switching themes to avoid jarring flashes.
 
 #### Scenario: Preventing flash of unstyled content (FOUC)
 
@@ -187,11 +185,11 @@ The application SHALL provide smooth visual transitions when switching themes to
 
 ### Requirement: Theme Persistence
 
+The application SHALL persist the user's theme preference across sessions using localStorage.
+
 **ID:** `TS-005`  
 **Priority:** High  
 **Category:** State Management
-
-The application SHALL persist the user's theme preference across sessions using localStorage.
 
 #### Scenario: Saving theme preference
 
@@ -217,25 +215,3 @@ The application SHALL persist the user's theme preference across sessions using 
 
 ---
 
-## MODIFIED Requirements
-
-### Requirement: Dark Mode Toggle (MIGRATED)
-
-**ID:** `UI-DARK-001` (from existing system)  
-**Status:** MIGRATED  
-**Replacement:** `TS-002` (Theme Toggle Component)
-
-**Before:** Custom dark mode toggle with emoji icons (☀️/🌙) and manual class toggling on `<body>`  
-**After:** shadcn-ui based theme toggle with Lucide React icons and context-based state management
-
-**Changes:**
-- Replace `body.dark-mode` class with `html.dark` class
-- Replace emoji icons with `<Sun />` and `<Moon />` from lucide-react
-- Move state management from component state to ThemeProvider context
-- Add system theme detection (new feature)
-
----
-
-## REMOVED Requirements
-
-None
