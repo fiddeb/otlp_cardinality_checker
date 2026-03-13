@@ -78,8 +78,8 @@ func TestKeyMetadata_HyperLogLog_HighCardinality(t *testing.T) {
 		t.Errorf("Count = %d, want %d", km.Count, numValues)
 	}
 
-	// Check cardinality (HLL standard error is ~0.81% at precision 14, allow 5% margin)
-	errorMargin := float64(numValues) * 0.05 // Allow 5% error
+	// Check cardinality (HLL standard error is ~3.25% at precision 10, allow 15% margin)
+	errorMargin := float64(numValues) * 0.15 // Allow 15% error
 	if got := km.Cardinality(); float64(got) < float64(numValues)-errorMargin ||
 		float64(got) > float64(numValues)+errorMargin {
 		t.Errorf("Cardinality() = %d, want %d (±%.0f)", got, numValues, errorMargin)

@@ -84,10 +84,11 @@ func TestReadAndDecompressBody_PlainProtobuf(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/metrics", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-protobuf")
 
-	got, err := readAndDecompressBody(req)
+	got, release, err := readAndDecompressBody(req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	defer release()
 	if !bytes.Equal(got, payload) {
 		t.Fatalf("body mismatch: got %d bytes, want %d bytes", len(got), len(payload))
 	}
@@ -100,10 +101,11 @@ func TestReadAndDecompressBody_GzipWithHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/metrics", bytes.NewReader(compressed))
 	req.Header.Set("Content-Encoding", "gzip")
 
-	got, err := readAndDecompressBody(req)
+	got, release, err := readAndDecompressBody(req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	defer release()
 	if !bytes.Equal(got, payload) {
 		t.Fatalf("decompressed body mismatch: got %d bytes, want %d bytes", len(got), len(payload))
 	}
@@ -119,10 +121,11 @@ func TestReadAndDecompressBody_GzipWithoutHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/metrics", bytes.NewReader(compressed))
 	// Intentionally omit Content-Encoding header.
 
-	got, err := readAndDecompressBody(req)
+	got, release, err := readAndDecompressBody(req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	defer release()
 	if !bytes.Equal(got, payload) {
 		t.Fatalf("decompressed body mismatch: got %d bytes, want %d bytes", len(got), len(payload))
 	}
@@ -130,10 +133,11 @@ func TestReadAndDecompressBody_GzipWithoutHeader(t *testing.T) {
 
 func TestReadAndDecompressBody_EmptyBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/metrics", bytes.NewReader(nil))
-	got, err := readAndDecompressBody(req)
+	got, release, err := readAndDecompressBody(req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	defer release()
 	if len(got) != 0 {
 		t.Fatalf("expected empty body, got %d bytes", len(got))
 	}
