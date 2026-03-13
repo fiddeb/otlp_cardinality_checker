@@ -50,7 +50,7 @@ function Details({ type, name, onBack }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="h-4 w-4" /> Back
         </Button>
@@ -61,7 +61,7 @@ function Details({ type, name, onBack }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="h-4 w-4" /> Back
         </Button>
@@ -84,7 +84,7 @@ function Details({ type, name, onBack }) {
       : null
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
         <ArrowLeftIcon className="h-4 w-4" /> Back
       </Button>

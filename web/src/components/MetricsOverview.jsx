@@ -103,7 +103,7 @@ function MetricsOverview({ onViewMetric }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Metrics Overview</h1>
           <p className="text-muted-foreground">All observed metrics and their cardinality</p>
@@ -115,7 +115,7 @@ function MetricsOverview({ onViewMetric }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Metrics Overview</h1>
           <p className="text-muted-foreground">All observed metrics and their cardinality</p>
@@ -138,7 +138,7 @@ function MetricsOverview({ onViewMetric }) {
   const SortIndicator = ({ field }) => sortField === field ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ''
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Metrics Overview</h1>
         <p className="text-muted-foreground">All observed metrics and their cardinality</p>
@@ -146,7 +146,7 @@ function MetricsOverview({ onViewMetric }) {
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Metrics</CardTitle>
           </CardHeader>
           <CardContent>
@@ -154,7 +154,7 @@ function MetricsOverview({ onViewMetric }) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Observations</CardTitle>
           </CardHeader>
           <CardContent>
@@ -162,7 +162,7 @@ function MetricsOverview({ onViewMetric }) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Metric Types</CardTitle>
           </CardHeader>
           <CardContent>

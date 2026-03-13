@@ -41,7 +41,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-32" />
         <Skeleton className="h-[400px] w-full" />
       </div>
@@ -50,7 +50,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
           Back
@@ -87,7 +87,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
         <ArrowLeftIcon className="mr-2 h-4 w-4" />
         Back
@@ -100,7 +100,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
 
       {/* Metrics */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             Metrics
             <Badge variant="secondary">{overview?.metrics?.length || 0}</Badge>
@@ -137,7 +137,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
 
       {/* Spans */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             Spans
             <Badge variant="secondary">{overview?.spans?.length || 0}</Badge>
@@ -174,7 +174,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
 
       {/* Logs */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             Logs
             <Badge variant="secondary">{overview?.logs?.length || 0}</Badge>

@@ -130,7 +130,7 @@ function NoisyNeighbors() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Noisy Neighbors</h1>
           <p className="text-muted-foreground">Identify services causing high cardinality or high volume</p>
@@ -142,7 +142,7 @@ function NoisyNeighbors() {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Noisy Neighbors</h1>
           <p className="text-muted-foreground">Identify services causing high cardinality or high volume</p>
@@ -159,7 +159,7 @@ function NoisyNeighbors() {
   const typeVariant = { metric: 'default', span: 'secondary', log: 'outline' }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Noisy Neighbors</h1>

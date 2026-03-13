@@ -38,7 +38,7 @@ export function AppHeader({ darkMode, onToggleDarkMode, appVersion, currentSessi
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-6">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
       <div className="flex flex-1 items-center gap-2">

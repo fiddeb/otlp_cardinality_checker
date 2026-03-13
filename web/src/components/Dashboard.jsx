@@ -86,7 +86,7 @@ function Dashboard({ onViewService }) {
   }
 
   if (loading) return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[...Array(4)].map((_, i) => (
           <Card key={i}><CardContent className="pt-6"><Skeleton className="h-8 w-16 mb-2" /><Skeleton className="h-4 w-24" /></CardContent></Card>
@@ -98,7 +98,7 @@ function Dashboard({ onViewService }) {
   if (error) return <p className="text-sm text-destructive">Error: {error}</p>
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
           { label: 'Metrics', value: stats?.metrics || 0 },
@@ -107,7 +107,7 @@ function Dashboard({ onViewService }) {
           { label: 'Services', value: services?.length || 0 },
         ].map(({ label, value }) => (
           <Card key={label}>
-            <CardHeader className="pb-2">
+            <CardHeader>
               <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
             </CardHeader>
             <CardContent>

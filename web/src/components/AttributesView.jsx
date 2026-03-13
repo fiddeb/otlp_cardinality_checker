@@ -120,7 +120,7 @@ function AttributesView() {
   if (error) return <p className="text-sm text-destructive">Error: {error}</p>
 
   return (
-    <div className="flex flex-col gap-4" style={{ marginRight: explorerKey ? '540px' : 0 }}>
+    <div className="flex flex-col gap-6" style={{ marginRight: explorerKey ? '540px' : 0 }}>
       <div>
         <h2 className="text-xl font-semibold">Attribute Catalog</h2>
         <p className="text-sm text-muted-foreground">

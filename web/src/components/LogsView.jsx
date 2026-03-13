@@ -85,7 +85,7 @@ function LogsView({ onViewServiceDetails }) {
   const currentServices = uniqueServices.slice(startIndex, endIndex)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold">Log Services</h2>
 
       <div className="flex flex-wrap items-end gap-2">

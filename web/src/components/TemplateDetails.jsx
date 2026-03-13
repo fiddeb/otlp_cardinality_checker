@@ -47,7 +47,7 @@ function TemplateDetails({ severity, template, onBack }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="h-4 w-4" /> Back
         </Button>
@@ -58,7 +58,7 @@ function TemplateDetails({ severity, template, onBack }) {
 
   if (error || !patternData) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="h-4 w-4" /> Back
         </Button>
@@ -72,7 +72,7 @@ function TemplateDetails({ severity, template, onBack }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
         <ArrowLeftIcon className="h-4 w-4" /> Back to Logs
       </Button>
@@ -131,7 +131,7 @@ function TemplateDetails({ severity, template, onBack }) {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+            <CardContent className="flex flex-col gap-6">
               {service.resource_keys && service.resource_keys.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Resource Keys ({service.resource_keys.length})</p>

@@ -64,7 +64,7 @@ export function AppSidebar({ activeTab, onNavigate }) {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1.5">
+        <div className="flex items-center gap-3 px-3 py-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <RadioIcon className="h-4 w-4" />
           </div>
@@ -95,7 +95,7 @@ export function AppSidebar({ activeTab, onNavigate }) {
         ))}
       </SidebarContent>
       <SidebarFooter>
-        <div className="px-2 py-1.5 text-xs text-muted-foreground">
+        <div className="px-3 py-3 text-xs text-muted-foreground">
           OTLP Cardinality Checker
         </div>
       </SidebarFooter>

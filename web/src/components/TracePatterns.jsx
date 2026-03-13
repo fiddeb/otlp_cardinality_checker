@@ -67,7 +67,7 @@ function TracePatterns({ onViewDetails }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Trace Patterns</h1>
           <p className="text-muted-foreground">Span names aggregated by extracted patterns</p>
@@ -79,7 +79,7 @@ function TracePatterns({ onViewDetails }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Trace Patterns</h1>
           <p className="text-muted-foreground">Span names aggregated by extracted patterns</p>
@@ -94,7 +94,7 @@ function TracePatterns({ onViewDetails }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Trace Patterns</h1>
         <p className="text-muted-foreground">

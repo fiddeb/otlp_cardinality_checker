@@ -169,7 +169,7 @@ function MetricsView({ onViewDetails }) {
   }, {})
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold">Metrics Analysis</h2>
 
       <div className="flex flex-wrap items-end gap-2">

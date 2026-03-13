@@ -58,7 +58,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-32" />
         <div className="grid grid-cols-3 gap-4">
           <Skeleton className="h-24" />
@@ -72,7 +72,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
           Back to Services
@@ -87,7 +87,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
         <ArrowLeftIcon className="mr-2 h-4 w-4" />
         Back to Services
@@ -106,7 +106,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Patterns</CardTitle>
           </CardHeader>
           <CardContent>
@@ -114,7 +114,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Messages</CardTitle>
           </CardHeader>
           <CardContent>
@@ -122,7 +122,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Avg per Pattern</CardTitle>
           </CardHeader>
           <CardContent>
@@ -149,7 +149,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
 
       {/* Patterns table */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             Log Patterns
             <Badge variant="secondary">{filteredTemplates.length.toLocaleString()}</Badge>

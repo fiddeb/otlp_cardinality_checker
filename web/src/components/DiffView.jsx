@@ -266,7 +266,7 @@ function DiffView({ initialFrom, onBack }) {
 
   if (loadingSessions) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-32" />
         <Skeleton className="h-32 w-full" />
       </div>
@@ -278,7 +278,7 @@ function DiffView({ initialFrom, onBack }) {
   const allChanges = getAllChanges()
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
         <ArrowLeftIcon className="mr-2 h-4 w-4" />
         Back to Sessions

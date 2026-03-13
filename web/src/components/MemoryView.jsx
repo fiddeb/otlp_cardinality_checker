@@ -28,7 +28,7 @@ function MemoryView() {
   }, [])
 
   if (loading) return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Card><CardHeader><Skeleton className="h-6 w-32" /></CardHeader><CardContent><div className="grid grid-cols-2 gap-4 md:grid-cols-5">{[...Array(5)].map((_,i) => <Skeleton key={i} className="h-16" />)}</div></CardContent></Card>
     </div>
   )
@@ -43,7 +43,7 @@ function MemoryView() {
   ]
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Memory Usage</CardTitle>

@@ -99,7 +99,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-32" />
         <Skeleton className="h-[500px] w-full" />
       </div>
@@ -108,7 +108,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
           Back to Patterns
@@ -124,7 +124,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
 
   if (!attributes) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
           Back to Patterns
@@ -142,7 +142,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
     if (Object.keys(keysMap).length === 0) return null
     return (
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -185,7 +185,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
         <ArrowLeftIcon className="mr-2 h-4 w-4" />
         Back to Patterns
@@ -205,7 +205,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4">
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Occurrences</CardTitle>
           </CardHeader>
           <CardContent>
@@ -213,7 +213,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Percentage</CardTitle>
           </CardHeader>
           <CardContent>
@@ -224,7 +224,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
 
       {/* Pattern template */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">Pattern Template</CardTitle>
         </CardHeader>
         <CardContent>
@@ -237,7 +237,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
       {/* Example log */}
       {attributes.template.example && (
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Example Log Message</CardTitle>
           </CardHeader>
           <CardContent>

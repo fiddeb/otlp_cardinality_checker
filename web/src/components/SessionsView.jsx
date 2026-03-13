@@ -192,7 +192,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sessions</h1>
           <p className="text-muted-foreground">Saved telemetry snapshots</p>
@@ -204,7 +204,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sessions</h1>
           <p className="text-muted-foreground">Saved telemetry snapshots</p>
@@ -219,7 +219,7 @@ function SessionsView({ onCompare, currentSessionName, onSessionChange }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sessions</h1>

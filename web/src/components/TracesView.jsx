@@ -71,7 +71,7 @@ function TracesView({ onViewDetails }) {
   if (error) return <p className="text-sm text-destructive">Error: {error}</p>
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold">Traces Analysis</h2>
 
       <div className="flex flex-wrap items-end gap-2">

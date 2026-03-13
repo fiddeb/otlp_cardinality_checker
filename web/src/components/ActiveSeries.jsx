@@ -34,7 +34,7 @@ function ActiveSeries() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Active Series</h1>
           <p className="text-muted-foreground">Cardinality breakdown per metric</p>
@@ -46,7 +46,7 @@ function ActiveSeries() {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Active Series</h1>
           <p className="text-muted-foreground">Cardinality breakdown per metric</p>
@@ -95,7 +95,7 @@ function ActiveSeries() {
   ]
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Active Series</h1>
         <p className="text-muted-foreground">Cardinality breakdown per metric</p>
@@ -103,7 +103,7 @@ function ActiveSeries() {
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Metrics</CardTitle>
           </CardHeader>
           <CardContent>
@@ -111,7 +111,7 @@ function ActiveSeries() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Series (OTLP)</CardTitle>
           </CardHeader>
           <CardContent>
@@ -119,7 +119,7 @@ function ActiveSeries() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Series (Prometheus)</CardTitle>
           </CardHeader>
           <CardContent>
@@ -127,7 +127,7 @@ function ActiveSeries() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Average per Metric</CardTitle>
           </CardHeader>
           <CardContent>
@@ -135,7 +135,7 @@ function ActiveSeries() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Highest (Prometheus)</CardTitle>
           </CardHeader>
           <CardContent>

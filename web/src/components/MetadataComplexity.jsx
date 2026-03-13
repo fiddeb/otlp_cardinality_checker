@@ -76,7 +76,7 @@ function MetadataComplexity({ onViewDetails }) {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
           <p className="text-muted-foreground">Identify signals with excessive instrumentation</p>
@@ -88,7 +88,7 @@ function MetadataComplexity({ onViewDetails }) {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
           <p className="text-muted-foreground">Identify signals with excessive instrumentation</p>
@@ -104,7 +104,7 @@ function MetadataComplexity({ onViewDetails }) {
 
   if (!data || !data.signals) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
           <p className="text-muted-foreground">Identify signals with excessive instrumentation</p>
@@ -119,7 +119,7 @@ function MetadataComplexity({ onViewDetails }) {
   const SortIndicator = ({ field }) => sortField === field ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ''
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
         <p className="text-muted-foreground">Identify signals with excessive instrumentation that may cause cardinality issues</p>
@@ -127,7 +127,7 @@ function MetadataComplexity({ onViewDetails }) {
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Complex Signals</CardTitle>
           </CardHeader>
           <CardContent>
@@ -135,7 +135,7 @@ function MetadataComplexity({ onViewDetails }) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Key Threshold</CardTitle>
           </CardHeader>
           <CardContent>
