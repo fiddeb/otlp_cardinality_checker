@@ -6,6 +6,8 @@ function LogsView({ onViewServiceDetails }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [sortBy, setSortBy] = useState('name')
+  const [sortDir, setSortDir] = useState('asc')
   const [filter, setFilter] = useState({
     minSamples: 0,
   })
@@ -26,10 +28,19 @@ function LogsView({ onViewServiceDetails }) {
       })
   }, [])
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters or sort changes
   useEffect(() => {
     setCurrentPage(1)
-  }, [filter])
+  }, [filter, sortBy, sortDir])
+
+  const handleSort = (field, defaultDir) => {
+    if (sortBy === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(field)
+      setSortDir(defaultDir)
+    }
+  }
 
   const getSeverityColor = (severity) => {
     const colors = {
@@ -70,7 +81,15 @@ function LogsView({ onViewServiceDetails }) {
     serviceGroups[svc.service_name].push(svc)
   })
 
-  const uniqueServices = Object.keys(serviceGroups).sort()
+  const uniqueServices = Object.keys(serviceGroups).sort((a, b) => {
+    if (sortBy === 'logs') {
+      const totalA = serviceGroups[a].reduce((sum, s) => sum + s.sample_count, 0)
+      const totalB = serviceGroups[b].reduce((sum, s) => sum + s.sample_count, 0)
+      return sortDir === 'asc' ? totalA - totalB : totalB - totalA
+    }
+    const cmp = a.localeCompare(b)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
   const totalPages = Math.ceil(uniqueServices.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
@@ -112,7 +131,39 @@ function LogsView({ onViewServiceDetails }) {
         </div>
       </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Services</h3>
+      <div style={{ display: 'flex', alignItems: 'center', marginTop: '20px', marginBottom: '12px' }}>
+        <h3 style={{ margin: 0 }}>Services</h3>
+        <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+          <button
+            onClick={() => handleSort('name', 'asc')}
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              background: sortBy === 'name' ? 'var(--accent)' : 'var(--bg-tertiary)',
+              color: sortBy === 'name' ? 'white' : 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px'
+            }}
+          >
+            A–Z {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+          </button>
+          <button
+            onClick={() => handleSort('logs', 'desc')}
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              background: sortBy === 'logs' ? 'var(--accent)' : 'var(--bg-tertiary)',
+              color: sortBy === 'logs' ? 'white' : 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px'
+            }}
+          >
+            Logs {sortBy === 'logs' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+          </button>
+        </div>
+      </div>
       
       <div style={{ marginTop: '15px' }}>
         {currentServices.map((serviceName) => {
