@@ -8,34 +8,13 @@
 
 ✅ **Phase 1: Foundation Setup** - COMPLETE (100%)
 ✅ **Phase 2: Layout Migration** - COMPLETE (100%)  
-🚧 **Phase 3: Component Migration** - PARTIAL (60%) - **BLOCKED**
-⏸️ **Phase 4: Interactive Components** - NOT STARTED
+✅ **Phase 3: Component Migration** - COMPLETE (100%)
+✅ **Phase 4: Interactive Components** - COMPLETE (Cmd+K command palette)
 ⏸️ **Phase 5: Polish & Accessibility** - NOT STARTED
 
 ## Current Blocker
 
-**Issue:** Tailwind CSS classes not applying to shadcn components despite correct configuration.
-
-**Symptoms:**
-- Card components render with no styling (no borders, padding, background)
-- Tailwind utility classes like `bg-card`, `text-muted-foreground`, `border` not generating CSS
-- Build succeeds without errors (22.4KB CSS generated)
-- Dev server runs without errors
-- All imports resolve correctly
-
-**Configuration verified:**
-- ✅ tailwind.config.js has correct color mappings
-- ✅ theme.css has CSS variables defined
-- ✅ index.css imports theme.css and Tailwind directives
-- ✅ vite.config.js has @tailwindcss/vite plugin
-- ✅ Card components use correct Tailwind classes
-
-**Next steps to investigate:**
-1. Check if Tailwind v4 has breaking changes with CSS variable syntax
-2. Verify content path in tailwind.config.js matches all JSX files
-3. Try downgrading to Tailwind v3
-4. Check browser DevTools computed styles for Card elements
-5. Verify CSS file actually loads in browser (Network tab)
+None — all phases through 4 are complete. Phase 5 (polish/accessibility) pending.
 
 ## Overview
 
@@ -117,7 +96,7 @@ This task list implements the gradual migration strategy outlined in `proposal.m
 
 ---
 
-## Phase 3: Component Migration 🚧 PARTIAL
+## Phase 3: Component Migration ✅ COMPLETE
 
 ### 3.1 Migrate Dashboard Stats to Cards ✅
 
@@ -135,7 +114,8 @@ This task list implements the gradual migration strategy outlined in `proposal.m
 - ✅ Dashboard table migrated
 - ✅ MetricsView table migrated
 - ✅ TracesView table migrated
-- ⏸️ LogsView, AttributesView tables pending
+- ✅ LogsView table migrated
+- ✅ AttributesView table migrated
 
 **Commits:**
 - `feat(web): migrate MetricsView and TracesView to shadcn components`
@@ -150,25 +130,33 @@ This task list implements the gradual migration strategy outlined in `proposal.m
 - Used Tailwind grid utilities for responsive layout
 - Added CardDescription for real-time update info
 
-### 3.4 Migrate Badges ⏸️
+### 3.4 Migrate Badges ✅
 
-**Status:** PARTIAL
+**Status:** COMPLETE
 - ✅ MetricsView badges migrated (using variant system)
-- ✅ TracesView badges migrated  
-- ⏸️ Other views pending
+- ✅ TracesView badges migrated
+- ✅ LogsView badges migrated
+- ✅ AttributesView badges migrated
 
 ### 3.5 Migrate Search and Filter Inputs ✅
 
-**Status:** COMPLETE (for migrated views)
+**Status:** COMPLETE (all primary views)
 - ✅ MetricsView filters using shadcn Input and Select
 - ✅ TracesView filters using shadcn Input and Select
-- ⏸️ LogsView, AttributesView filters pending
+- ✅ LogsView filters using shadcn Input
+- ✅ AttributesView filters using shadcn Input and Select
 
 ---
 
-## Phase 4: Interactive Components ⏸️ NOT STARTED
+## Phase 4: Interactive Components ✅ COMPLETE
 
-All tasks in this phase are pending.
+### Cmd+K Command Palette ✅
+
+**Status:** COMPLETE
+- CommandDialog added to App.jsx
+- Triggered by Cmd+K (macOS) / Ctrl+K (Windows/Linux)
+- All 12 navigation items available
+- Clears navigation history on selection
 
 ---
 
@@ -180,10 +168,9 @@ All tasks in this phase are pending.
 
 ## Next Steps
 
-1. **Complete Phase 3** - Migrate remaining tables, badges, and inputs
-2. **Phase 4** - Migrate modals/dialogs and loading states
-3. **Phase 5** - Remove legacy CSS, accessibility audit, bundle size check
-4. **Testing** - Full integration testing across all views
+1. **Phase 5** - Remove legacy CSS, accessibility audit, bundle size check
+2. **Testing** - Full integration testing across all views
+3. **PR** - Create pull request with all changes
 5. **PR** - Create pull request with all changes
 
 ---

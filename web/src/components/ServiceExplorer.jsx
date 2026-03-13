@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ArrowLeftIcon } from 'lucide-react'
 
 function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
   const [overview, setOverview] = useState(null)
@@ -24,9 +30,6 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
       })
   }, [serviceName])
 
-  if (loading) return <div className="loading">Loading...</div>
-  if (error) return <div className="error">Error: {error}</div>
-
   // Pagination helpers
   const paginate = (items, page) => {
     const start = (page - 1) * itemsPerPage
@@ -36,157 +39,174 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
 
   const totalPages = (items) => Math.ceil(items.length / itemsPerPage)
 
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+          <ArrowLeftIcon className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error: {error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const paginatedMetrics = paginate(overview?.metrics || [], metricsPage)
   const paginatedSpans = paginate(overview?.spans || [], spansPage)
   const paginatedLogs = paginate(overview?.logs || [], logsPage)
 
-  return (
-    <>
-      <button className="back-button" onClick={onBack}>← Back</button>
-
-      <div className="card">
-        <h2>Service: {serviceName}</h2>
-        
-        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Metrics ({overview?.metrics?.length || 0})</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Samples</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedMetrics.map(m => (
-              <tr key={m.name}>
-                <td>
-                  <span 
-                    className="detail-link"
-                    onClick={() => onViewDetails('metrics', m.name)}
-                  >
-                    {m.name}
-                  </span>
-                </td>
-                <td>{m.type}</td>
-                <td>{m.sample_count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {(overview?.metrics?.length || 0) > itemsPerPage && (
-          <div className="pagination">
-            <button 
-              onClick={() => setMetricsPage(p => Math.max(1, p - 1))}
-              disabled={metricsPage === 1}
-            >
-              Previous
-            </button>
-            <span className="template-count-text">
-              Page {metricsPage} of {totalPages(overview?.metrics || [])} 
-              (Showing {(metricsPage - 1) * itemsPerPage + 1}-{Math.min(metricsPage * itemsPerPage, overview?.metrics?.length || 0)} of {overview?.metrics?.length || 0})
-            </span>
-            <button 
-              onClick={() => setMetricsPage(p => Math.min(totalPages(overview?.metrics || []), p + 1))}
-              disabled={metricsPage === totalPages(overview?.metrics || [])}
-            >
-              Next
-            </button>
-          </div>
-        )}
-
-        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Spans ({overview?.spans?.length || 0})</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Kind</th>
-              <th>Samples</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedSpans.map(s => (
-              <tr key={s.name}>
-                <td>
-                  <span 
-                    className="detail-link"
-                    onClick={() => onViewDetails('spans', s.name)}
-                  >
-                    {s.name}
-                  </span>
-                </td>
-                <td>{s.kind}</td>
-                <td>{s.sample_count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {(overview?.spans?.length || 0) > itemsPerPage && (
-          <div className="pagination">
-            <button 
-              onClick={() => setSpansPage(p => Math.max(1, p - 1))}
-              disabled={spansPage === 1}
-            >
-              Previous
-            </button>
-            <span className="template-count-text">
-              Page {spansPage} of {totalPages(overview?.spans || [])} 
-              (Showing {(spansPage - 1) * itemsPerPage + 1}-{Math.min(spansPage * itemsPerPage, overview?.spans?.length || 0)} of {overview?.spans?.length || 0})
-            </span>
-            <button 
-              onClick={() => setSpansPage(p => Math.min(totalPages(overview?.spans || []), p + 1))}
-              disabled={spansPage === totalPages(overview?.spans || [])}
-            >
-              Next
-            </button>
-          </div>
-        )}
-
-        <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Logs ({overview?.logs?.length || 0})</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Severity</th>
-              <th>Samples</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedLogs.map(l => (
-              <tr key={l.severity}>
-                <td>
-                  <span 
-                    className="detail-link"
-                    onClick={() => onViewDetails('logs', l.severity)}
-                  >
-                    {l.severity}
-                  </span>
-                </td>
-                <td>{l.sample_count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {(overview?.logs?.length || 0) > itemsPerPage && (
-          <div className="pagination">
-            <button 
-              onClick={() => setLogsPage(p => Math.max(1, p - 1))}
-              disabled={logsPage === 1}
-            >
-              Previous
-            </button>
-            <span className="template-count-text">
-              Page {logsPage} of {totalPages(overview?.logs || [])} 
-              (Showing {(logsPage - 1) * itemsPerPage + 1}-{Math.min(logsPage * itemsPerPage, overview?.logs?.length || 0)} of {overview?.logs?.length || 0})
-            </span>
-            <button 
-              onClick={() => setLogsPage(p => Math.min(totalPages(overview?.logs || []), p + 1))}
-              disabled={logsPage === totalPages(overview?.logs || [])}
-            >
-              Next
-            </button>
-          </div>
-        )}
+  const PaginationRow = ({ items, page, setPage }) => {
+    const total = totalPages(items)
+    if (items.length <= itemsPerPage) return null
+    return (
+      <div className="flex items-center justify-between mt-2">
+        <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+          Previous
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Page {page} of {total} ({(page - 1) * itemsPerPage + 1}–{Math.min(page * itemsPerPage, items.length)} of {items.length})
+        </span>
+        <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(total, p + 1))} disabled={page === total}>
+          Next
+        </Button>
       </div>
-    </>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+        <ArrowLeftIcon className="mr-2 h-4 w-4" />
+        Back
+      </Button>
+
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">{serviceName}</h1>
+        <p className="text-muted-foreground">Service telemetry overview</p>
+      </div>
+
+      {/* Metrics */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            Metrics
+            <Badge variant="secondary">{overview?.metrics?.length || 0}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Samples</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedMetrics.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">No metrics</TableCell>
+                </TableRow>
+              ) : (
+                paginatedMetrics.map(m => (
+                  <TableRow key={m.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails('metrics', m.name)}>
+                    <TableCell className="font-mono text-sm text-primary">{m.name}</TableCell>
+                    <TableCell><Badge variant="outline">{m.type}</Badge></TableCell>
+                    <TableCell className="text-right">{m.sample_count?.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          <PaginationRow items={overview?.metrics || []} page={metricsPage} setPage={setMetricsPage} />
+        </CardContent>
+      </Card>
+
+      {/* Spans */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            Spans
+            <Badge variant="secondary">{overview?.spans?.length || 0}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Kind</TableHead>
+                <TableHead className="text-right">Samples</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedSpans.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">No spans</TableCell>
+                </TableRow>
+              ) : (
+                paginatedSpans.map(s => (
+                  <TableRow key={s.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails('spans', s.name)}>
+                    <TableCell className="font-mono text-sm text-primary">{s.name}</TableCell>
+                    <TableCell><Badge variant="outline">{s.kind}</Badge></TableCell>
+                    <TableCell className="text-right">{s.sample_count?.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          <PaginationRow items={overview?.spans || []} page={spansPage} setPage={setSpansPage} />
+        </CardContent>
+      </Card>
+
+      {/* Logs */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            Logs
+            <Badge variant="secondary">{overview?.logs?.length || 0}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Severity</TableHead>
+                <TableHead className="text-right">Samples</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={2} className="text-center text-muted-foreground">No logs</TableCell>
+                </TableRow>
+              ) : (
+                paginatedLogs.map(l => (
+                  <TableRow key={l.severity} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails('logs', l.severity)}>
+                    <TableCell className="font-medium text-primary">{l.severity}</TableCell>
+                    <TableCell className="text-right">{l.sample_count?.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          <PaginationRow items={overview?.logs || []} page={logsPage} setPage={setLogsPage} />
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

@@ -1,4 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const MAX_WATCHED_FIELDS = 10
 
@@ -23,9 +40,7 @@ function ValueExplorer({ attributeKey, onClose }) {
       page: String(page),
       page_size: String(pageSize),
     })
-    if (search) {
-      params.set('q', search)
-    }
+    if (search) params.set('q', search)
 
     fetch(`/api/v1/attributes/${encodeURIComponent(attributeKey)}/watch?${params}`)
       .then(r => {
@@ -58,174 +73,101 @@ function ValueExplorer({ attributeKey, onClose }) {
 
   const formatDateTime = (isoStr) => {
     if (!isoStr) return ''
-    const d = new Date(isoStr)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
+  const SortIndicator = ({ field }) => sortBy === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+
   return (
-    <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0,
-      width: '520px', background: 'var(--bg-primary, #fff)',
-      boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
-      zIndex: 1000, display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '16px 20px', borderBottom: '1px solid var(--border-color, #e0e0e0)',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{
-              background: '#1976d2', color: '#fff', fontSize: 11,
-              padding: '2px 8px', borderRadius: 10, fontWeight: 600,
-            }}>WATCHING</span>
+    <Sheet open={!!attributeKey} onOpenChange={(open) => { if (!open) onClose() }}>
+      <SheetContent className="flex w-[520px] flex-col gap-0 p-0 sm:max-w-[520px]">
+        <SheetHeader className="border-b px-4 py-3">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <Badge variant="default" className="text-xs">WATCHING</Badge>
             {data?.has_invalid_utf8 && (
-              <span style={{
-                background: 'rgba(220,38,38,0.12)', color: 'var(--danger, #dc2626)',
-                fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 600,
-              }}
-                title="One or more values for this key contained invalid UTF-8 bytes (replaced with \uFFFD). The source system (e.g. Kafka) is emitting binary data in this attribute."
-              >⚠ INVALID UTF-8</span>
+              <Badge variant="destructive" className="text-xs" title="One or more values contained invalid UTF-8 bytes">⚠ INVALID UTF-8</Badge>
             )}
-            <code style={{ fontSize: 14, fontWeight: 700, color: data?.has_invalid_utf8 ? 'var(--danger, #dc2626)' : undefined }}>{attributeKey}</code>
-          </div>
+            <code className="text-sm font-bold">{attributeKey}</code>
+          </SheetTitle>
           {data && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary, #666)', display: 'flex', gap: 16 }}>
+            <div className="flex gap-4 text-xs text-muted-foreground">
               <span>Since {formatDateTime(data.watching_since)}</span>
               <span>{(data.unique_count || 0).toLocaleString()} unique</span>
               <span>{(data.total_observations || 0).toLocaleString()} total</span>
-              {!data.active && (
-                <span style={{ color: '#f57c00', fontWeight: 600 }}>read-only (session)</span>
-              )}
+              {!data.active && <span className="font-semibold text-orange-500">read-only (session)</span>}
             </div>
           )}
+        </SheetHeader>
+
+        {data?.overflow && (
+          <div className="border-b bg-orange-50 px-4 py-2 text-xs text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+            ⚠ 10,000 unique values reached — new unique values are no longer collected.
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 border-b px-4 py-2">
+          <Input
+            placeholder="Prefix filter…"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            className="h-8 text-sm"
+          />
+          <Button variant="outline" size="sm" onClick={fetchData}>Refresh</Button>
         </div>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 20, color: 'var(--text-secondary, #666)',
-            padding: '0 4px', lineHeight: 1,
-          }}
-          aria-label="Close Value Explorer"
-        >✕</button>
-      </div>
 
-      {/* Overflow warning */}
-      {data?.overflow && (
-        <div style={{
-          background: '#fff3e0', border: '1px solid #ffe0b2',
-          padding: '8px 16px', fontSize: 13, color: '#e65100',
-          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span>⚠</span>
-          <span>10,000 unique values reached — new unique values are no longer collected.</span>
+        <div className="flex-1 overflow-y-auto">
+          {loading && (
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+          )}
+          {error && (
+            <p className="p-4 text-sm text-destructive">Error: {error}</p>
+          )}
+          {!loading && !error && data && (
+            <>
+              {(data.values || []).length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">No values collected yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background">
+                    <TableRow>
+                      <TableHead className="cursor-pointer select-none" onClick={() => handleSort('value')}>
+                        Value<SortIndicator field="value" />
+                      </TableHead>
+                      <TableHead className="cursor-pointer select-none text-right w-24" onClick={() => handleSort('count')}>
+                        Count<SortIndicator field="count" />
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.values.map((entry, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-mono text-xs break-all">{entry.value}</TableCell>
+                        <TableCell className="text-right tabular-nums">{entry.count.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+
+              {(data.total_values || 0) > pageSize && (
+                <div className="flex items-center justify-center gap-2 p-3">
+                  <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>
+                    ← Prev
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    {page} / {Math.ceil((data.total_values || 0) / pageSize)}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={(data.values || []).length < pageSize}>
+                    Next →
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
-
-      {/* Controls */}
-      <div style={{
-        padding: '10px 16px', borderBottom: '1px solid var(--border-color, #e0e0e0)',
-        display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0,
-      }}>
-        <input
-          type="text"
-          placeholder="Prefix filter…"
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1) }}
-          style={{
-            flex: 1, padding: '6px 10px', border: '1px solid #ccc',
-            borderRadius: 4, fontSize: 13,
-          }}
-        />
-        <button
-          onClick={fetchData}
-          style={{
-            padding: '6px 14px', background: '#1976d2', color: '#fff',
-            border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13,
-          }}
-        >
-          Refresh
-        </button>
-      </div>
-
-      {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {loading && (
-          <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>Loading…</div>
-        )}
-        {error && (
-          <div style={{ padding: 24, color: '#c62828' }}>Error: {error}</div>
-        )}
-        {!loading && !error && data && (
-          <>
-            {(data.values || []).length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#999' }}>
-                No values collected yet.
-              </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-secondary, #f5f5f5)', position: 'sticky', top: 0 }}>
-                    <th
-                      onClick={() => handleSort('value')}
-                      style={{ padding: '8px 16px', textAlign: 'left', cursor: 'pointer', userSelect: 'none' }}
-                    >
-                      Value {sortBy === 'value' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                    <th
-                      onClick={() => handleSort('count')}
-                      style={{ padding: '8px 16px', textAlign: 'right', cursor: 'pointer', userSelect: 'none', width: 100 }}
-                    >
-                      Count {sortBy === 'count' && (sortDir === 'asc' ? '↑' : '↓')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.values.map((entry, i) => (
-                    <tr
-                      key={i}
-                      style={{ borderBottom: '1px solid var(--border-color, #f0f0f0)' }}
-                    >
-                      <td style={{ padding: '6px 16px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                        {entry.value}
-                      </td>
-                      <td style={{ padding: '6px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        {entry.count.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {/* Pagination */}
-            {(data.total_values || 0) > pageSize && (
-              <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'center', gap: 8 }}>
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  style={{ padding: '4px 12px', cursor: 'pointer' }}
-                >← Prev</button>
-                <span style={{ padding: '4px 8px', fontSize: 13 }}>
-                  {page} / {Math.ceil((data.total_values || 0) / pageSize)}
-                </span>
-                <button
-                  onClick={() => setPage(p => p + 1)}
-                  disabled={(data.values || []).length < pageSize}
-                  style={{ padding: '4px 12px', cursor: 'pointer' }}
-                >Next →</button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
 export default ValueExplorer
-export { MAX_WATCHED_FIELDS }

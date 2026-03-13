@@ -1,4 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ArrowLeftIcon } from 'lucide-react'
 
 function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
   const [templates, setTemplates] = useState([])
@@ -35,138 +42,159 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
       })
   }, [serviceName, severity])
 
-  const getSeverityColor = (sev) => {
-    const colors = {
-      'ERROR': '#d32f2f',
-      'Error': '#d32f2f',
-      'WARN': '#f57c00',
-      'Warning': '#f57c00',
-      'INFO': '#1976d2',
-      'Information': '#1976d2',
-      'DEBUG': '#7b1fa2',
-      'DEBUG2': '#7b1fa2',
-      'Debug': '#7b1fa2',
-      'TRACE': '#455a64',
-      'Trace': '#455a64',
-      'UNSET': '#999'
+  const getSeverityVariant = (sev) => {
+    const map = {
+      'ERROR': 'destructive', 'Error': 'destructive',
+      'WARN': 'outline', 'Warning': 'outline',
+      'INFO': 'secondary', 'Information': 'secondary',
+      'DEBUG': 'outline', 'Debug': 'outline',
+      'TRACE': 'outline', 'Trace': 'outline',
     }
-    return colors[sev] || '#666'
+    return map[sev] || 'outline'
   }
 
   const filteredTemplates = templates.filter(t => t.count >= filter.minCount)
   const totalMessages = filteredTemplates.reduce((sum, t) => sum + t.count, 0)
 
-  if (loading) return <div className="loading">Loading patterns...</div>
-  if (error) return <div className="error">Error loading patterns: {error}</div>
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Skeleton className="h-8 w-32" />
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+        </div>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+          <ArrowLeftIcon className="mr-2 h-4 w-4" />
+          Back to Services
+        </Button>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error loading patterns: {error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <div>
-          <button 
-            onClick={onBack}
-            style={{
-              padding: '8px 16px',
-              marginBottom: '10px',
-              cursor: 'pointer'
-            }}
-          >
-            ← Back to Services
-          </button>
-          <h2>
-            Service: <code>{serviceName}</code>
-          </h2>
-          <h3 style={{ 
-            color: getSeverityColor(severity),
-            marginTop: '8px'
-          }}>
-            Severity: {severity}
-          </h3>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+        <ArrowLeftIcon className="mr-2 h-4 w-4" />
+        Back to Services
+      </Button>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginTop: '20px' }}>
-        <div className="stat-card">
-          <div className="stat-label">Total Patterns</div>
-          <div className="stat-value">{filteredTemplates.length.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Total Messages</div>
-          <div className="stat-value">{totalMessages.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Avg per Pattern</div>
-          <div className="stat-value">
-            {filteredTemplates.length > 0 
-              ? Math.round(totalMessages / filteredTemplates.length).toLocaleString()
-              : 0
-            }
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight font-mono">{serviceName}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-muted-foreground">Severity:</p>
+            <Badge variant={getSeverityVariant(severity)}>{severity}</Badge>
           </div>
         </div>
       </div>
 
-      <div className="filter-group" style={{ marginTop: '20px' }}>
-        <div className="threshold-input">
-          <label>Min Count:</label>
-          <input 
-            type="number" 
-            value={filter.minCount} 
-            onChange={(e) => setFilter({...filter, minCount: Number(e.target.value)})}
-            min="0"
-          />
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Patterns</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{filteredTemplates.length.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Messages</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{totalMessages.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Avg per Pattern</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">
+              {filteredTemplates.length > 0
+                ? Math.round(totalMessages / filteredTemplates.length).toLocaleString()
+                : 0}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>
-        Log Patterns ({filteredTemplates.length.toLocaleString()})
-      </h3>
+      {/* Filter */}
+      <div className="flex items-center gap-2">
+        <label className="text-sm text-muted-foreground whitespace-nowrap">Min Count:</label>
+        <Input
+          type="number"
+          value={filter.minCount}
+          onChange={(e) => setFilter({ ...filter, minCount: Number(e.target.value) })}
+          min="0"
+          className="w-32"
+        />
+      </div>
 
-      {filteredTemplates.length === 0 ? (
-        <p className="template-count-text">No patterns match the current filters</p>
-      ) : (
-        <table style={{ marginTop: '15px' }}>
-          <thead>
-            <tr>
-              <th style={{ width: '50%' }}>Pattern Template</th>
-              <th>Count</th>
-              <th>Percentage</th>
-              <th>Example</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTemplates.map((tmpl, i) => (
-              <tr 
-                key={i}
-                onClick={() => onViewPattern && onViewPattern(serviceName, severity, tmpl.template)}
-                style={{ cursor: onViewPattern ? 'pointer' : 'default' }}
-                className={onViewPattern ? 'clickable-row' : ''}
-              >
-                <td>
-                  <code className="template-code" style={{ 
-                    fontSize: '13px',
-                    wordBreak: 'break-word',
-                    display: 'block',
-                    padding: '8px',
-                    background: 'var(--bg-tertiary)',
-                    borderRadius: '4px'
-                  }}>
-                    {tmpl.template}
-                  </code>
-                </td>
-                <td>{tmpl.count.toLocaleString()}</td>
-                <td>{tmpl.percentage.toFixed(1)}%</td>
-                <td className="template-count-text-small" style={{ 
-                  fontStyle: 'italic',
-                  maxWidth: '300px',
-                  wordBreak: 'break-word'
-                }}>
-                  {tmpl.example}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {/* Patterns table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            Log Patterns
+            <Badge variant="secondary">{filteredTemplates.length.toLocaleString()}</Badge>
+          </CardTitle>
+          {onViewPattern && (
+            <CardDescription>Click a row to explore pattern details</CardDescription>
+          )}
+        </CardHeader>
+        <CardContent>
+          {filteredTemplates.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No patterns match the current filters</p>
+          ) : (
+            <Table className="table-fixed">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40%]">Pattern Template</TableHead>
+                  <TableHead className="w-16 text-right">Count</TableHead>
+                  <TableHead className="w-20 text-right">Percentage</TableHead>
+                  <TableHead>Example</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTemplates.map((tmpl, i) => (
+                  <TableRow
+                    key={i}
+                    onClick={() => onViewPattern && onViewPattern(serviceName, severity, tmpl.template)}
+                    className={onViewPattern ? 'cursor-pointer hover:bg-muted/50' : ''}
+                  >
+                    <TableCell className="whitespace-normal">
+                      <code className="block rounded bg-muted px-2 py-1 text-xs font-mono break-all">
+                        {tmpl.template}
+                      </code>
+                    </TableCell>
+                    <TableCell className="text-right">{tmpl.count.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{tmpl.percentage.toFixed(1)}%</TableCell>
+                    <TableCell className="text-muted-foreground text-xs italic max-w-xs truncate">
+                      {tmpl.example}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

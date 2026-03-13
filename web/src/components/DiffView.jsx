@@ -1,4 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowLeftIcon, ChevronDownIcon, ChevronRightIcon, ArrowRightIcon } from 'lucide-react'
 
 function DiffView({ initialFrom, onBack }) {
   const [sessions, setSessions] = useState([])
@@ -74,30 +81,30 @@ function DiffView({ initialFrom, onBack }) {
     }))
   }
 
-  const getChangeTypeClass = (type) => {
+  const getChangeTypeBadgeVariant = (type) => {
     switch (type) {
-      case 'added': return 'change-added'
-      case 'removed': return 'change-removed'
-      case 'changed': return 'change-modified'
-      default: return ''
+      case 'added': return 'default'
+      case 'removed': return 'destructive'
+      case 'changed': return 'outline'
+      default: return 'secondary'
     }
   }
 
-  const getSeverityClass = (severity) => {
+  const getSeverityBadgeVariant = (severity) => {
     switch (severity) {
-      case 'critical': return 'severity-critical'
-      case 'warning': return 'severity-warning'
-      case 'info': return 'severity-info'
-      default: return ''
+      case 'critical': return 'destructive'
+      case 'warning': return 'outline'
+      case 'info': return 'secondary'
+      default: return 'secondary'
     }
   }
 
-  const getSignalBadgeClass = (signalType) => {
+  const getSignalBadgeVariant = (signalType) => {
     switch (signalType) {
-      case 'metric': return 'signal-metric'
-      case 'span': return 'signal-span'
-      case 'log': return 'signal-log'
-      default: return ''
+      case 'metric': return 'default'
+      case 'span': return 'secondary'
+      case 'log': return 'outline'
+      default: return 'outline'
     }
   }
 
@@ -106,67 +113,68 @@ function DiffView({ initialFrom, onBack }) {
     const isExpanded = expandedChanges[id]
 
     return (
-      <div key={id} className={`change-item ${getChangeTypeClass(change.type)}`}>
-        <div className="change-header" onClick={() => toggleExpand(id)}>
-          <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-          <span className={`signal-badge ${getSignalBadgeClass(change.signal_type)}`}>
-            {change.signal_type}
-          </span>
-          <span className="change-name">{change.name}</span>
-          <span className={`change-type-badge ${change.type}`}>{change.type}</span>
-          <span className={`severity-badge ${getSeverityClass(change.severity)}`}>
-            {change.severity}
-          </span>
+      <div key={id} className="border rounded-md mb-2 overflow-hidden">
+        <div
+          className="flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={() => toggleExpand(id)}
+        >
+          {isExpanded
+            ? <ChevronDownIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+            : <ChevronRightIcon className="h-4 w-4 text-muted-foreground shrink-0" />}
+          <Badge variant={getSignalBadgeVariant(change.signal_type)} className="shrink-0">{change.signal_type}</Badge>
+          <span className="font-mono text-sm flex-1 truncate">{change.name}</span>
+          <Badge variant={getChangeTypeBadgeVariant(change.type)} className="shrink-0">{change.type}</Badge>
+          <Badge variant={getSeverityBadgeVariant(change.severity)} className="shrink-0">{change.severity}</Badge>
         </div>
         {isExpanded && (
-          <div className="change-details">
-            {change.metadata && (
-              <div className="change-metadata">
+          <div className="border-t bg-muted/20 px-4 py-3 flex flex-col gap-3">
+            {change.metadata && Object.keys(change.metadata).length > 0 && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                 {Object.entries(change.metadata).map(([key, value]) => (
-                  <div key={key} className="metadata-item">
-                    <span className="metadata-key">{key}:</span>
-                    <span className="metadata-value">{JSON.stringify(value)}</span>
+                  <div key={key} className="flex gap-2">
+                    <span className="text-muted-foreground font-medium">{key}:</span>
+                    <span className="font-mono truncate">{JSON.stringify(value)}</span>
                   </div>
                 ))}
               </div>
             )}
             {change.details && change.details.length > 0 && (
-              <div className="field-changes">
-                <h5>Field Changes</h5>
-                <table className="field-changes-table">
-                  <thead>
-                    <tr>
-                      <th>Field</th>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Change %</th>
-                      <th>Severity</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Field Changes</p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Field</TableHead>
+                      <TableHead>From</TableHead>
+                      <TableHead>To</TableHead>
+                      <TableHead>Change %</TableHead>
+                      <TableHead>Severity</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {change.details.map((detail, idx) => (
-                      <tr key={idx}>
-                        <td><code>{detail.field}</code></td>
-                        <td>{detail.from !== null ? JSON.stringify(detail.from) : '-'}</td>
-                        <td>{detail.to !== null ? JSON.stringify(detail.to) : '-'}</td>
-                        <td>
+                      <TableRow key={idx}>
+                        <TableCell><code className="font-mono text-xs">{detail.field}</code></TableCell>
+                        <TableCell className="font-mono text-xs">{detail.from !== null ? JSON.stringify(detail.from) : '–'}</TableCell>
+                        <TableCell className="font-mono text-xs">{detail.to !== null ? JSON.stringify(detail.to) : '–'}</TableCell>
+                        <TableCell className="text-right">
                           {detail.change_pct !== undefined && detail.change_pct !== 0
-                            ? `${detail.change_pct > 0 ? '+' : ''}${detail.change_pct.toFixed(1)}%`
-                            : '-'}
-                        </td>
-                        <td>
-                          <span className={`severity-badge ${getSeverityClass(detail.severity)}`}>
-                            {detail.severity}
-                          </span>
-                        </td>
-                      </tr>
+                            ? <span className={detail.change_pct > 0 ? 'text-destructive' : 'text-green-600'}>
+                                {detail.change_pct > 0 ? '+' : ''}{detail.change_pct.toFixed(1)}%
+                              </span>
+                            : '–'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getSeverityBadgeVariant(detail.severity)}>{detail.severity}</Badge>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
             {change.message && (
-              <div className="change-message">{change.message}</div>
+              <p className="text-sm text-muted-foreground italic">{change.message}</p>
             )}
           </div>
         )}
@@ -179,7 +187,6 @@ function DiffView({ initialFrom, onBack }) {
 
     const all = []
 
-    // Collect all changes from all signal types
     const signalTypes = ['metrics', 'spans', 'logs']
     for (const signalType of signalTypes) {
       const signalChanges = diff.changes[signalType]
@@ -190,25 +197,20 @@ function DiffView({ initialFrom, onBack }) {
       }
     }
 
-    // Apply signal filter
     let filtered = all
     if (signalFilter !== 'all') {
       filtered = filtered.filter((c) => c.signal_type === signalFilter)
     }
 
-    // Apply service filter
     if (serviceFilter !== 'all') {
       filtered = filtered.filter((c) => {
-        // Check metadata.services
         if (c.metadata?.services && serviceFilter in c.metadata.services) {
           return true
         }
-        // Check name pattern
         return c.name.startsWith(serviceFilter + '.')
       })
     }
 
-    // Sort by severity (critical first)
     const severityOrder = { critical: 0, warning: 1, info: 2 }
     filtered.sort((a, b) => {
       const severityDiff = (severityOrder[a.severity] || 3) - (severityOrder[b.severity] || 3)
@@ -233,7 +235,6 @@ function DiffView({ initialFrom, onBack }) {
     }
   }
 
-  // Extract unique services from all changes for the service filter
   const getAvailableServices = () => {
     if (!diff?.changes) return []
 
@@ -249,11 +250,9 @@ function DiffView({ initialFrom, onBack }) {
           ...(signalChanges.changed || []),
         ]
         for (const change of allChanges) {
-          // Check metadata.services if available
           if (change.metadata?.services) {
             Object.keys(change.metadata.services).forEach((s) => services.add(s))
           }
-          // Also check the name pattern (service.name format)
           const nameParts = change.name.split('.')
           if (nameParts.length > 1) {
             services.add(nameParts[0])
@@ -265,153 +264,188 @@ function DiffView({ initialFrom, onBack }) {
     return Array.from(services).sort()
   }
 
-  if (loadingSessions) return <div className="loading">Loading sessions...</div>
+  if (loadingSessions) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    )
+  }
+
+  const summary = getSummary()
+  const availableServices = getAvailableServices()
+  const allChanges = getAllChanges()
 
   return (
-    <div className="diff-view">
-      <button className="back-button" onClick={onBack}>
-        ← Back to Sessions
-      </button>
+    <div className="flex flex-col gap-6">
+      <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+        <ArrowLeftIcon className="mr-2 h-4 w-4" />
+        Back to Sessions
+      </Button>
 
-      <div className="card">
-        <h2>Compare Sessions</h2>
-        <p className="diff-subtitle">
-          Select two sessions to compare and detect changes in metrics, spans, and logs.
-        </p>
-
-        <div className="diff-controls">
-          <div className="session-selector">
-            <label>From (baseline)</label>
-            <select
-              value={fromSession}
-              onChange={(e) => setFromSession(e.target.value)}
-            >
-              <option value="">Select session...</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>{s.id}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="diff-arrow">→</div>
-
-          <div className="session-selector">
-            <label>To (comparison)</label>
-            <select
-              value={toSession}
-              onChange={(e) => setToSession(e.target.value)}
-            >
-              <option value="">Select session...</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>{s.id}</option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            className="action-button primary"
-            onClick={fetchDiff}
-            disabled={!fromSession || !toSession || loading}
-          >
-            {loading ? 'Comparing...' : 'Compare'}
-          </button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Compare Sessions</h1>
+        <p className="text-muted-foreground">Select two sessions to compare and detect changes in metrics, spans, and logs.</p>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {/* Session selector */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+            <div className="flex flex-col gap-2 flex-1">
+              <label className="text-sm font-medium">From (baseline)</label>
+              <Select value={fromSession} onValueChange={setFromSession}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select session..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessions.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="hidden sm:flex items-center pb-2">
+              <ArrowRightIcon className="h-5 w-5 text-muted-foreground" />
+            </div>
+
+            <div className="flex flex-col gap-2 flex-1">
+              <label className="text-sm font-medium">To (comparison)</label>
+              <Select value={toSession} onValueChange={setToSession}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select session..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessions.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              onClick={fetchDiff}
+              disabled={!fromSession || !toSession || loading}
+              className="sm:mb-0"
+            >
+              {loading ? 'Comparing…' : 'Compare'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {error && (
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive text-sm">{error}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {diff && (
         <>
           {/* Summary */}
-          <div className="diff-summary">
-            <div className="summary-stat">
-              <span className="summary-value">{getSummary()?.total || 0}</span>
-              <span className="summary-label">Total Changes</span>
+          {summary && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
+                </CardHeader>
+                <CardContent><p className="text-2xl font-bold">{summary.total}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Added</CardTitle>
+                </CardHeader>
+                <CardContent><p className="text-2xl font-bold text-primary">{summary.added}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Removed</CardTitle>
+                </CardHeader>
+                <CardContent><p className="text-2xl font-bold text-destructive">{summary.removed}</p></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Changed</CardTitle>
+                </CardHeader>
+                <CardContent><p className="text-2xl font-bold">{summary.changed}</p></CardContent>
+              </Card>
+              {summary.critical > 0 && (
+                <Card className="border-destructive">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-destructive">Critical</CardTitle>
+                  </CardHeader>
+                  <CardContent><p className="text-2xl font-bold text-destructive">{summary.critical}</p></CardContent>
+                </Card>
+              )}
+              {summary.warning > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Warnings</CardTitle>
+                  </CardHeader>
+                  <CardContent><p className="text-2xl font-bold">{summary.warning}</p></CardContent>
+                </Card>
+              )}
             </div>
-            <div className="summary-stat added">
-              <span className="summary-value">{getSummary()?.added || 0}</span>
-              <span className="summary-label">Added</span>
-            </div>
-            <div className="summary-stat removed">
-              <span className="summary-value">{getSummary()?.removed || 0}</span>
-              <span className="summary-label">Removed</span>
-            </div>
-            <div className="summary-stat changed">
-              <span className="summary-value">{getSummary()?.changed || 0}</span>
-              <span className="summary-label">Changed</span>
-            </div>
-            {getSummary()?.critical > 0 && (
-              <div className="summary-stat critical">
-                <span className="summary-value">{getSummary()?.critical}</span>
-                <span className="summary-label">Critical</span>
-              </div>
-            )}
-            {getSummary()?.warning > 0 && (
-              <div className="summary-stat warning">
-                <span className="summary-value">{getSummary()?.warning}</span>
-                <span className="summary-label">Warnings</span>
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Filters */}
-          <div className="diff-filters">
-            <div className="filter-tabs signal-tabs">
-              <button
-                className={`filter-tab ${signalFilter === 'all' ? 'active' : ''}`}
-                onClick={() => setSignalFilter('all')}
-              >
-                All
-              </button>
-              <button
-                className={`filter-tab ${signalFilter === 'metric' ? 'active' : ''}`}
-                onClick={() => setSignalFilter('metric')}
-              >
-                Metrics
-              </button>
-              <button
-                className={`filter-tab ${signalFilter === 'span' ? 'active' : ''}`}
-                onClick={() => setSignalFilter('span')}
-              >
-                Spans
-              </button>
-              <button
-                className={`filter-tab ${signalFilter === 'log' ? 'active' : ''}`}
-                onClick={() => setSignalFilter('log')}
-              >
-                Logs
-              </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1">
+              {['all', 'metric', 'span', 'log'].map(f => (
+                <Button
+                  key={f}
+                  variant={signalFilter === f ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSignalFilter(f)}
+                >
+                  {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1) + 's'}
+                </Button>
+              ))}
             </div>
 
-            {getAvailableServices().length > 0 && (
-              <div className="service-filter">
-                <label>Service:</label>
-                <select
-                  value={serviceFilter}
-                  onChange={(e) => setServiceFilter(e.target.value)}
-                >
-                  <option value="all">All Services</option>
-                  {getAvailableServices().map((service) => (
-                    <option key={service} value={service}>{service}</option>
-                  ))}
-                </select>
+            {availableServices.length > 0 && (
+              <div className="flex items-center gap-2 ml-2">
+                <span className="text-sm text-muted-foreground">Service:</span>
+                <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Services</SelectItem>
+                    {availableServices.map((service) => (
+                      <SelectItem key={service} value={service}>{service}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
 
           {/* Changes list */}
-          <div className="card changes-list">
-            <h3>Changes</h3>
-            {getAllChanges().length === 0 ? (
-              <div className="no-changes">
-                No changes detected between these sessions.
-              </div>
-            ) : (
-              <div className="changes-container">
-                {getAllChanges().map(formatChange)}
-              </div>
-            )}
-          </div>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                Changes
+                <Badge variant="secondary">{allChanges.length}</Badge>
+              </CardTitle>
+              {allChanges.length > 0 && (
+                <CardDescription>Click a row to expand field-level changes</CardDescription>
+              )}
+            </CardHeader>
+            <CardContent>
+              {allChanges.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No changes detected between these sessions.
+                </p>
+              ) : (
+                <div>{allChanges.map(formatChange)}</div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

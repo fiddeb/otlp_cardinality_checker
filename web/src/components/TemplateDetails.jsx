@@ -1,4 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ArrowLeftIcon } from 'lucide-react'
 
 function TemplateDetails({ severity, template, onBack }) {
   const [patternData, setPatternData] = useState(null)
@@ -8,7 +13,7 @@ function TemplateDetails({ severity, template, onBack }) {
   useEffect(() => {
     const encodedSeverity = encodeURIComponent(severity)
     const encodedTemplate = encodeURIComponent(template)
-    
+
     fetch(`/api/v1/logs/patterns/${encodedSeverity}/${encodedTemplate}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`)
@@ -24,20 +29,9 @@ function TemplateDetails({ severity, template, onBack }) {
       })
   }, [template, severity])
 
-  const getSeverityColor = (sev) => {
-    const colors = {
-      'ERROR': '#ef4444',
-      'WARN': '#f59e0b',
-      'INFO': '#3b82f6',
-      'DEBUG': '#8b5cf6',
-      'CRITICAL': '#dc2626',
-      'TRACE': '#6b7280'
-    }
-    return colors[sev] || '#6b7280'
-  }
-
-  const formatNumber = (num) => {
-    return new Intl.NumberFormat().format(num)
+  const getSeverityVariant = (sev) => {
+    const variants = { 'ERROR': 'destructive', 'CRITICAL': 'destructive', 'WARN': 'outline', 'INFO': 'secondary', 'DEBUG': 'outline', 'TRACE': 'outline' }
+    return variants[sev] || 'outline'
   }
 
   const truncateExample = (text, maxLength = 300) => {
@@ -45,180 +39,115 @@ function TemplateDetails({ severity, template, onBack }) {
     return text.substring(0, maxLength) + '...'
   }
 
-  if (loading) return <div className="loading">Loading pattern details...</div>
-  if (error) return <div className="error">Error: {error}</div>
-  if (!patternData) return <div className="error">Pattern not found</div>
+  const getCardinalityVariant = (cardinality) => {
+    if (cardinality > 100) return 'destructive'
+    if (cardinality > 10) return 'outline'
+    return 'secondary'
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+          <ArrowLeftIcon className="h-4 w-4" /> Back
+        </Button>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    )
+  }
+
+  if (error || !patternData) {
+    return (
+      <div className="flex flex-col gap-6">
+        <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+          <ArrowLeftIcon className="h-4 w-4" /> Back
+        </Button>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">{error ? `Error: ${error}` : 'Pattern not found'}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
-    <>
-      <button className="back-button" onClick={onBack}>← Back to Logs</button>
+    <div className="flex flex-col gap-6">
+      <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+        <ArrowLeftIcon className="h-4 w-4" /> Back to Logs
+      </Button>
 
-      <div className="card">
-        <h2>Pattern Details</h2>
-        
-        <div style={{ marginBottom: '20px' }}>
-          <div style={{ 
-            display: 'flex', 
-            gap: '10px', 
-            alignItems: 'center',
-            marginBottom: '12px'
-          }}>
-            <span style={{
-              backgroundColor: getSeverityColor(severity),
-              color: 'white',
-              padding: '4px 12px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: '600',
-              textTransform: 'uppercase'
-            }}>
-              {severity}
-            </span>
-            <span className="template-count-text">
-              {formatNumber(patternData.total_count)} occurrences across {(patternData.services || []).length} service{(patternData.services || []).length !== 1 ? 's' : ''}
-            </span>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Pattern Details</h1>
+        <p className="text-muted-foreground">
+          {(patternData.total_count || 0).toLocaleString()} occurrences across {(patternData.services || []).length} service{(patternData.services || []).length !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Badge variant={getSeverityVariant(severity)}>{severity}</Badge>
+            <CardTitle className="text-base">Pattern</CardTitle>
           </div>
-
-          <div style={{
-            background: 'var(--bg-tertiary)',
-            padding: '16px',
-            borderRadius: '8px',
-            marginTop: '12px'
-          }}>
-            <div style={{ 
-              fontSize: '11px',
-              color: 'var(--text-secondary)',
-              marginBottom: '6px',
-              textTransform: 'uppercase',
-              fontWeight: '600'
-            }}>
-              Template Pattern
-            </div>
-            <code style={{
-              display: 'block',
-              fontSize: '14px',
-              wordBreak: 'break-word',
-              lineHeight: '1.5'
-            }}>
-              {template}
-            </code>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="rounded-md bg-muted p-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Template Pattern</p>
+            <code className="text-sm break-words leading-relaxed">{template}</code>
           </div>
-
-          {/* Example log */}
           {patternData.example_body && (
-            <div style={{
-              background: 'var(--bg-tertiary)',
-              padding: '16px',
-              borderRadius: '8px',
-              marginTop: '12px'
-            }}>
-              <div style={{ 
-                fontSize: '11px',
-                color: 'var(--text-secondary)',
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-                fontWeight: '600'
-              }}>
-                Example Log
-              </div>
-              <pre style={{
-                fontSize: '13px',
-                wordBreak: 'break-word',
-                whiteSpace: 'pre-wrap',
-                margin: 0
-              }}>
-                {truncateExample(patternData.example_body)}
-              </pre>
+            <div className="rounded-md bg-muted p-3">
+              <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Example Log</p>
+              <pre className="text-sm whitespace-pre-wrap break-words">{truncateExample(patternData.example_body)}</pre>
             </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Per-service breakdown */}
-        <h3 style={{ marginTop: '24px', marginBottom: '16px' }}>
-          Services Using This Pattern
-        </h3>
-        
-        {patternData.services.map((service, idx) => {
-          return (
-            <div key={idx} style={{
-              background: 'var(--bg-tertiary)',
-              padding: '20px',
-              borderRadius: '8px',
-              marginBottom: '16px'
-            }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '16px'
-              }}>
-                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  🔧 {service.service_name || 'unknown'}
-                </h4>
-                <div style={{
-                  display: 'flex',
-                  gap: '12px',
-                  alignItems: 'center'
-                }}>
-                  <div style={{
-                    fontSize: '14px',
-                    color: 'var(--text-secondary)'
-                  }}>
-                    {formatNumber(service.sample_count)} samples
-                  </div>
+      <h2 className="text-lg font-semibold">Services Using This Pattern</h2>
+
+      {(patternData.services || []).length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground">No services found for this pattern with severity {severity}</p>
+          </CardContent>
+        </Card>
+      ) : (
+        (patternData.services || []).map((service, idx) => (
+          <Card key={idx}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">{service.service_name || 'unknown'}</CardTitle>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">{(service.sample_count || 0).toLocaleString()} samples</span>
                   {service.severities && service.severities.length > 0 && (
-                    <div style={{ display: 'flex', gap: '4px' }}>
+                    <div className="flex gap-1">
                       {service.severities.map((sev, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            width: '12px',
-                            height: '12px',
-                            borderRadius: '50%',
-                            backgroundColor: getSeverityColor(sev),
-                            display: 'inline-block'
-                          }}
-                          title={sev}
-                        />
+                        <Badge key={i} variant={getSeverityVariant(sev)} className="text-xs">{sev}</Badge>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
-
-              {/* Resource keys */}
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6">
               {service.resource_keys && service.resource_keys.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '12px',
-                    textTransform: 'uppercase'
-                  }}>
-                    Resource Keys ({service.resource_keys.length})
-                  </div>
-                  <div className="keys-grid">
-                    {service.resource_keys.map((key, keyIndex) => (
-                      <div key={keyIndex} className="key-item">
-                        <div className="key-header">
-                          <span className="key-name">{key.name}</span>
-                          <span 
-                            className={`cardinality ${key.cardinality > 100 ? 'high' : key.cardinality > 10 ? 'medium' : 'low'}`}
-                          >
-                            ~{key.cardinality}
-                          </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Resource Keys ({service.resource_keys.length})</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {service.resource_keys.map((key, i) => (
+                      <div key={i} className="rounded-md border p-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium">{key.name}</span>
+                          <Badge variant={getCardinalityVariant(key.cardinality)} className="text-xs">~{key.cardinality}</Badge>
                         </div>
-                        <div className="sample-values">
-                          {key.sample_values && key.sample_values.slice(0, 3).map((val, i) => (
-                            <span key={i} className="sample-value">
-                              {val}
-                            </span>
+                        <div className="flex flex-wrap gap-1">
+                          {(key.sample_values || []).slice(0, 3).map((val, j) => (
+                            <span key={j} className="rounded bg-muted px-1 text-xs text-muted-foreground">{val}</span>
                           ))}
-                          {key.sample_values && key.sample_values.length > 3 && (
-                            <span className="more-values">
-                              +{key.sample_values.length - 3} more
-                            </span>
+                          {(key.sample_values || []).length > 3 && (
+                            <span className="text-xs text-muted-foreground">+{key.sample_values.length - 3} more</span>
                           )}
                         </div>
                       </div>
@@ -226,40 +155,22 @@ function TemplateDetails({ severity, template, onBack }) {
                   </div>
                 </div>
               )}
-
-              {/* Attribute keys */}
               {service.attribute_keys && service.attribute_keys.length > 0 && (
                 <div>
-                  <div style={{
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '12px',
-                    textTransform: 'uppercase'
-                  }}>
-                    Attribute Keys ({service.attribute_keys.length})
-                  </div>
-                  <div className="keys-grid">
-                    {service.attribute_keys.map((key, keyIndex) => (
-                      <div key={keyIndex} className="key-item">
-                        <div className="key-header">
-                          <span className="key-name">{key.name}</span>
-                          <span 
-                            className={`cardinality ${key.cardinality > 100 ? 'high' : key.cardinality > 10 ? 'medium' : 'low'}`}
-                          >
-                            ~{key.cardinality}
-                          </span>
+                  <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">Attribute Keys ({service.attribute_keys.length})</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {service.attribute_keys.map((key, i) => (
+                      <div key={i} className="rounded-md border p-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium">{key.name}</span>
+                          <Badge variant={getCardinalityVariant(key.cardinality)} className="text-xs">~{key.cardinality}</Badge>
                         </div>
-                        <div className="sample-values">
-                          {key.sample_values && key.sample_values.slice(0, 3).map((val, i) => (
-                            <span key={i} className="sample-value">
-                              {val}
-                            </span>
+                        <div className="flex flex-wrap gap-1">
+                          {(key.sample_values || []).slice(0, 3).map((val, j) => (
+                            <span key={j} className="rounded bg-muted px-1 text-xs text-muted-foreground">{val}</span>
                           ))}
-                          {key.sample_values && key.sample_values.length > 3 && (
-                            <span className="more-values">
-                              +{key.sample_values.length - 3} more
-                            </span>
+                          {(key.sample_values || []).length > 3 && (
+                            <span className="text-xs text-muted-foreground">+{key.sample_values.length - 3} more</span>
                           )}
                         </div>
                       </div>
@@ -267,23 +178,11 @@ function TemplateDetails({ severity, template, onBack }) {
                   </div>
                 </div>
               )}
-            </div>
-          )
-        })}
-
-        {patternData.services.length === 0 && (
-          <div style={{
-            padding: '40px',
-            textAlign: 'center',
-            color: 'var(--text-secondary)',
-            background: 'var(--bg-tertiary)',
-            borderRadius: '8px'
-          }}>
-            No services found for this pattern with severity {severity}
-          </div>
-        )}
-      </div>
-    </>
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
   )
 }
 
