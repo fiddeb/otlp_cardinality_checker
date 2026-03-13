@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function LogsView({ onViewServiceDetails }) {
   const [services, setServices] = useState([])
@@ -49,9 +55,11 @@ function LogsView({ onViewServiceDetails }) {
     return colors[severity] || '#666'
   }
 
-  if (loading) return <div className="loading">Loading logs...</div>
-  if (error) return <div className="error">Error loading logs: {error}</div>
-  if (!services || services.length === 0) return <div className="error">No logs found</div>
+  if (loading) return (
+    <Card><CardHeader><Skeleton className="h-6 w-40" /></CardHeader><CardContent><div className="flex flex-col gap-3">{[...Array(5)].map((_,i) => <Skeleton key={i} className="h-10" />)}</div></CardContent></Card>
+  )
+  if (error) return <p className="text-sm text-destructive">Error loading logs: {error}</p>
+  if (!services || services.length === 0) return <p className="text-sm text-muted-foreground">No logs found</p>
 
   const totalSamples = services.reduce((sum, svc) => sum + svc.sample_count, 0)
 
@@ -77,170 +85,121 @@ function LogsView({ onViewServiceDetails }) {
   const currentServices = uniqueServices.slice(startIndex, endIndex)
 
   return (
-    <div className="card">
-      <h2>Log Services</h2>
-      
-      <div className="filter-group">
-        <div className="threshold-input">
-          <label>Min Sample Count:</label>
-          <input 
-            type="number" 
-            value={filter.minSamples} 
+    <div className="flex flex-col gap-4">
+      <h2 className="text-xl font-semibold">Log Services</h2>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex items-center gap-1">
+          <label className="text-sm text-muted-foreground whitespace-nowrap">Min Sample Count:</label>
+          <Input
+            type="number"
+            value={filter.minSamples}
             onChange={(e) => setFilter({...filter, minSamples: Number(e.target.value)})}
             min="0"
+            className="w-24"
           />
         </div>
       </div>
 
-      <p style={{ marginTop: '10px' }} className="template-count-text">
-        Showing {startIndex + 1}-{Math.min(endIndex, uniqueServices.length)} of {uniqueServices.length} services
+      <p className="text-sm text-muted-foreground">
+        Showing {startIndex + 1}–{Math.min(endIndex, uniqueServices.length)} of {uniqueServices.length} services
         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginTop: '20px' }}>
-        <div className="stat-card">
-          <div className="stat-label">Total Services</div>
-          <div className="stat-value">{uniqueServices.length}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Service×Severity Combos</div>
-          <div className="stat-value">{services.length}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Total Log Messages</div>
-          <div className="stat-value">{totalSamples.toLocaleString()}</div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Total Services</p>
+            <p className="text-2xl font-bold">{uniqueServices.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Service×Severity Combos</p>
+            <p className="text-2xl font-bold">{services.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Total Log Messages</p>
+            <p className="text-2xl font-bold">{totalSamples.toLocaleString()}</p>
+          </CardContent>
+        </Card>
       </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Services</h3>
-      
-      <div style={{ marginTop: '15px' }}>
-        {currentServices.map((serviceName) => {
-          const severities = serviceGroups[serviceName]
-          const totalForService = severities.reduce((sum, s) => sum + s.sample_count, 0)
-          const isExpanded = expandedService === serviceName
+      <div>
+        <h3 className="text-base font-medium mb-2">Services</h3>
+        <div className="flex flex-col gap-2">
+          {currentServices.map((serviceName) => {
+            const severities = serviceGroups[serviceName]
+            const totalForService = severities.reduce((sum, s) => sum + s.sample_count, 0)
+            const isExpanded = expandedService === serviceName
 
-          return (
-            <div key={serviceName} style={{ 
-              marginBottom: '10px',
-              border: '1px solid var(--border-color)',
-              borderRadius: '6px',
-              overflow: 'hidden'
-            }}>
-              <div
-                onClick={() => setExpandedService(isExpanded ? null : serviceName)}
-                style={{
-                  padding: '12px 16px',
-                  background: isExpanded ? 'var(--bg-secondary)' : 'var(--bg-primary)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontWeight: '500'
-                }}
-              >
-                <span>
-                  {isExpanded ? '▼' : '▶'} {serviceName}
-                </span>
-                <span className="template-count-text">
-                  {severities.length} severities · {totalForService.toLocaleString()} logs
-                </span>
-              </div>
+            return (
+              <Card key={serviceName} className="overflow-hidden">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setExpandedService(isExpanded ? null : serviceName)}
+                  onKeyDown={(e) => e.key === 'Enter' && setExpandedService(isExpanded ? null : serviceName)}
+                  className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-muted/50 font-medium"
+                >
+                  <span>{isExpanded ? '▼' : '▶'} {serviceName}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {severities.length} severities · {totalForService.toLocaleString()} logs
+                  </span>
+                </div>
 
-              {isExpanded && (
-                <div style={{ padding: '0' }}>
-                  <table style={{ width: '100%', margin: 0 }}>
-                    <thead>
-                      <tr>
-                        <th>Severity</th>
-                        <th>Log Count</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                {isExpanded && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Severity</TableHead>
+                        <TableHead>Log Count</TableHead>
+                        <TableHead>Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {severities
                         .sort((a, b) => String(a.severity).localeCompare(String(b.severity)))
                         .map((svc, i) => (
-                          <tr key={i}>
-                            <td>
-                              <span style={{ 
-                                fontWeight: 'bold',
-                                color: getSeverityColor(svc.severity)
-                              }}>
+                          <TableRow key={i}>
+                            <TableCell>
+                              <span style={{ fontWeight: 'bold', color: getSeverityColor(svc.severity) }}>
                                 {svc.severity}
                               </span>
-                            </td>
-                            <td>{svc.sample_count.toLocaleString()}</td>
-                            <td>
-                              <button 
-                                onClick={() => onViewServiceDetails && onViewServiceDetails(serviceName, svc.severity)}
-                                style={{
-                                  padding: '6px 12px',
-                                  fontSize: '13px',
-                                  cursor: 'pointer',
-                                  background: 'var(--primary-color)',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px'
-                                }}
-                              >
+                            </TableCell>
+                            <TableCell>{svc.sample_count.toLocaleString()}</TableCell>
+                            <TableCell>
+                              <Button size="sm" onClick={() => onViewServiceDetails && onViewServiceDetails(serviceName, svc.severity)}>
                                 View Patterns
-                              </button>
-                            </td>
-                          </tr>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )
-        })}
+                    </TableBody>
+                  </Table>
+                )}
+              </Card>
+            )
+          })}
+        </div>
       </div>
 
       {totalPages > 1 && (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          gap: '10px',
-          marginTop: '20px',
-          padding: '20px'
-        }}>
-          <button 
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            style={{
-              padding: '8px 16px',
-              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-              opacity: currentPage === 1 ? 0.5 : 1
-            }}
-          >
+        <div className="flex justify-center items-center gap-2 py-2">
+          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
             Previous
-          </button>
-          
-          <span className="template-count-text">
-            Page {currentPage} of {totalPages}
-          </span>
-          
-          <button 
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            style={{
-              padding: '8px 16px',
-              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-              opacity: currentPage === totalPages ? 0.5 : 1
-            }}
-          >
+          </Button>
+          <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
             Next
-          </button>
+          </Button>
         </div>
       )}
 
       {currentServices.length === 0 && uniqueServices.length === 0 && (
-        <p style={{ textAlign: 'center', padding: '20px' }} className="template-count-text">
-          No logs match the current filters
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-5">No logs match the current filters</p>
       )}
     </div>
   )

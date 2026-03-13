@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 
 function Dashboard({ onViewService }) {
   const [stats, setStats] = useState(null)
@@ -81,71 +85,79 @@ function Dashboard({ onViewService }) {
     }
   }
 
-  if (loading) return <div className="loading">Loading...</div>
-  if (error) return <div className="error">Error: {error}</div>
+  if (loading) return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <Card key={i}><CardContent className="pt-6"><Skeleton className="h-8 w-16 mb-2" /><Skeleton className="h-4 w-24" /></CardContent></Card>
+        ))}
+      </div>
+      <Card><CardHeader><Skeleton className="h-6 w-48" /></CardHeader><CardContent><Skeleton className="h-40 w-full" /></CardContent></Card>
+    </div>
+  )
+  if (error) return <p className="text-sm text-destructive">Error: {error}</p>
 
   return (
-    <>
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-value">{stats?.metrics || 0}</div>
-          <div className="stat-label">Metrics</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{stats?.spans || 0}</div>
-          <div className="stat-label">Spans</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{(stats?.logs || 0).toLocaleString()}</div>
-          <div className="stat-label">Total Logs</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{services?.length || 0}</div>
-          <div className="stat-label">Services</div>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {[
+          { label: 'Metrics', value: stats?.metrics || 0 },
+          { label: 'Spans', value: stats?.spans || 0 },
+          { label: 'Total Logs', value: (stats?.logs || 0).toLocaleString() },
+          { label: 'Services', value: services?.length || 0 },
+        ].map(({ label, value }) => (
+          <Card key={label}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{value}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="card">
-        <h2>Top 10 Services by Sample Volume</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Service</th>
-              <th>Total Samples</th>
-              <th>Metrics</th>
-              <th>Spans</th>
-              <th>Logs</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(serviceStats)
-              .sort((a, b) => b[1].total - a[1].total)
-              .slice(0, 10)
-              .map(([service, stats]) => (
-                <tr key={service}>
-                  <td>
-                    <span 
-                      className="detail-link"
-                      onClick={() => onViewService(service)}
-                    >
-                      {service}
-                    </span>
-                  </td>
-                  <td><strong>{stats.total.toLocaleString()}</strong></td>
-                  <td>{stats.metrics.toLocaleString()}</td>
-                  <td>{stats.spans.toLocaleString()}</td>
-                  <td>{stats.logs.toLocaleString()}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-        {Object.keys(serviceStats).length === 0 && (
-          <p style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-            No service data available
-          </p>
-        )}
-      </div>
-    </>
+      <Card>
+        <CardHeader>
+          <CardTitle>Top 10 Services by Sample Volume</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {Object.keys(serviceStats).length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No service data available</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Total Samples</TableHead>
+                  <TableHead>Metrics</TableHead>
+                  <TableHead>Spans</TableHead>
+                  <TableHead>Logs</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(serviceStats)
+                  .sort((a, b) => b[1].total - a[1].total)
+                  .slice(0, 10)
+                  .map(([service, stats]) => (
+                    <TableRow key={service}>
+                      <TableCell>
+                        <Button variant="link" className="h-auto p-0" onClick={() => onViewService(service)}>
+                          {service}
+                        </Button>
+                      </TableCell>
+                      <TableCell className="font-semibold">{stats.total.toLocaleString()}</TableCell>
+                      <TableCell>{stats.metrics.toLocaleString()}</TableCell>
+                      <TableCell>{stats.spans.toLocaleString()}</TableCell>
+                      <TableCell>{stats.logs.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

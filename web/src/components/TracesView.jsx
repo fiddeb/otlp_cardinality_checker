@@ -1,4 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function TracesView({ onViewDetails }) {
   const [spans, setSpans] = useState([])
@@ -58,148 +65,121 @@ function TracesView({ onViewDetails }) {
     return 'low'
   }
 
-  if (loading) return <div className="loading">Loading...</div>
-  if (error) return <div className="error">Error: {error}</div>
+  if (loading) return (
+    <Card><CardHeader><Skeleton className="h-6 w-40" /></CardHeader><CardContent><div className="flex flex-col gap-3">{[...Array(5)].map((_,i) => <Skeleton key={i} className="h-10" />)}</div></CardContent></Card>
+  )
+  if (error) return <p className="text-sm text-destructive">Error: {error}</p>
 
   return (
-    <div className="card">
-      <h2>Traces Analysis</h2>
-      
-      <div className="filter-group">
-        <input 
-          type="text"
+    <div className="flex flex-col gap-4">
+      <h2 className="text-xl font-semibold">Traces Analysis</h2>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <Input
           placeholder="Search spans..."
           value={filter.search}
           onChange={(e) => setFilter({...filter, search: e.target.value})}
-          style={{ width: '200px' }}
+          className="w-48"
         />
 
-        <select 
-          value={filter.kind} 
-          onChange={(e) => setFilter({...filter, kind: e.target.value})}
-        >
-          {spanKinds.map(kind => (
-            <option key={kind} value={kind}>
-              {kind === 'all' ? 'All Kinds' : `Kind: ${kind}`}
-            </option>
-          ))}
-        </select>
+        <Select value={filter.kind} onValueChange={(v) => setFilter({...filter, kind: v})}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="All Kinds" />
+          </SelectTrigger>
+          <SelectContent>
+            {spanKinds.map(kind => (
+              <SelectItem key={kind} value={kind}>
+                {kind === 'all' ? 'All Kinds' : `Kind: ${kind}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <div className="threshold-input">
-          <label>Min Samples:</label>
-          <input 
-            type="number" 
-            value={filter.minSamples} 
+        <div className="flex items-center gap-1">
+          <label className="text-sm text-muted-foreground whitespace-nowrap">Min Samples:</label>
+          <Input
+            type="number"
+            value={filter.minSamples}
             onChange={(e) => setFilter({...filter, minSamples: Number(e.target.value)})}
             min="0"
+            className="w-24"
           />
         </div>
 
-        <div className="threshold-input">
-          <label>Min Cardinality:</label>
-          <input 
-            type="number" 
-            value={filter.minCardinality} 
+        <div className="flex items-center gap-1">
+          <label className="text-sm text-muted-foreground whitespace-nowrap">Min Cardinality:</label>
+          <Input
+            type="number"
+            value={filter.minCardinality}
             onChange={(e) => setFilter({...filter, minCardinality: Number(e.target.value)})}
             min="0"
+            className="w-24"
           />
         </div>
       </div>
 
-      <p className="template-count-text" style={{ marginTop: '10px' }}>
-        Showing {startIndex + 1}-{Math.min(endIndex, filteredSpans.length)} of {filteredSpans.length} span operations
+      <p className="text-sm text-muted-foreground">
+        Showing {startIndex + 1}–{Math.min(endIndex, filteredSpans.length)} of {filteredSpans.length} span operations
         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
       </p>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Span Name</th>
-            <th>Kind</th>
-            <th>Samples</th>
-            <th>Attributes</th>
-            <th>Max Cardinality</th>
-            <th>Services</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Span Name</TableHead>
+            <TableHead>Kind</TableHead>
+            <TableHead>Samples</TableHead>
+            <TableHead>Attributes</TableHead>
+            <TableHead>Max Cardinality</TableHead>
+            <TableHead>Services</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {currentSpans.map((span, i) => {
             const maxCard = getMaxCardinality(span)
             const attrCount = span.attribute_keys ? Object.keys(span.attribute_keys).length : 0
             const serviceCount = span.services ? Object.keys(span.services).length : 0
-            
+
             return (
-              <tr key={i}>
-                <td>
-                  <span 
-                    className="detail-link"
-                    onClick={() => onViewDetails('spans', span.name)}
-                  >
+              <TableRow key={i}>
+                <TableCell>
+                  <Button variant="link" className="h-auto p-0 font-normal" onClick={() => onViewDetails('spans', span.name)}>
                     {span.name}
-                  </span>
-                </td>
-                <td>
-                  <span className="key-badge">{span.kind || 'Unknown'}</span>
-                </td>
-                <td>{span.sample_count.toLocaleString()}</td>
-                <td>{attrCount}</td>
-                <td>
+                  </Button>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">{span.kind || 'Unknown'}</Badge>
+                </TableCell>
+                <TableCell>{span.sample_count.toLocaleString()}</TableCell>
+                <TableCell>{attrCount}</TableCell>
+                <TableCell>
                   {maxCard > 0 ? (
-                    <span className={`badge ${getCardinalityBadge(maxCard)}`}>
+                    <Badge variant={getCardinalityBadge(maxCard) === 'high' ? 'destructive' : getCardinalityBadge(maxCard) === 'medium' ? 'secondary' : 'outline'}>
                       {maxCard}
-                    </span>
+                    </Badge>
                   ) : '-'}
-                </td>
-                <td>{serviceCount}</td>
-              </tr>
+                </TableCell>
+                <TableCell>{serviceCount}</TableCell>
+              </TableRow>
             )
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
 
       {totalPages > 1 && (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          gap: '10px',
-          marginTop: '20px',
-          padding: '20px'
-        }}>
-          <button 
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            style={{
-              padding: '8px 16px',
-              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-              opacity: currentPage === 1 ? 0.5 : 1
-            }}
-          >
+        <div className="flex justify-center items-center gap-2 py-2">
+          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
             Previous
-          </button>
-          
-          <span className="template-count-text">
-            Page {currentPage} of {totalPages}
-          </span>
-          
-          <button 
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            style={{
-              padding: '8px 16px',
-              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-              opacity: currentPage === totalPages ? 0.5 : 1
-            }}
-          >
+          </Button>
+          <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+          <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
             Next
-          </button>
+          </Button>
         </div>
       )}
 
       {filteredSpans.length === 0 && (
-        <p className="template-count-text" style={{ textAlign: 'center', padding: '20px' }}>
-          No spans match the current filters
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-5">No spans match the current filters</p>
       )}
     </div>
   )
