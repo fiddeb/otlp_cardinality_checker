@@ -34,6 +34,9 @@ func (a *MetricsAnalyzer) AnalyzeWithContext(ctx context.Context, req *colmetric
 		return nil, fmt.Errorf("request cannot be nil")
 	}
 
+	// Batch catalog deduplicates writes within this request.
+	batch := newBatchCatalog(a.catalog)
+
 	var results []*models.MetricMetadata
 
 	for _, resourceMetrics := range req.ResourceMetrics {
@@ -42,7 +45,7 @@ func (a *MetricsAnalyzer) AnalyzeWithContext(ctx context.Context, req *colmetric
 		serviceName := getServiceName(resourceAttrs)
 		
 		// Feed resource attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, resourceAttrs, "metric", "resource")
+		extractAttributesToCatalog(ctx, batch, resourceAttrs, "metric", "resource")
 
 		for _, scopeMetrics := range resourceMetrics.ScopeMetrics {
 			scopeInfo := &models.ScopeMetadata{
@@ -51,7 +54,7 @@ func (a *MetricsAnalyzer) AnalyzeWithContext(ctx context.Context, req *colmetric
 			}
 
 			for _, metric := range scopeMetrics.Metrics {
-				metadata := a.analyzeMetricWithContext(ctx, metric, resourceAttrs, serviceName, scopeInfo)
+				metadata := a.analyzeMetricWithContext(ctx, batch, metric, resourceAttrs, serviceName, scopeInfo)
 				if metadata != nil {
 					results = append(results, metadata)
 				}
@@ -65,6 +68,7 @@ func (a *MetricsAnalyzer) AnalyzeWithContext(ctx context.Context, req *colmetric
 // analyzeMetricWithContext extracts metadata from a single metric with context.
 func (a *MetricsAnalyzer) analyzeMetricWithContext(
 	ctx context.Context,
+	catalog AttributeCatalog,
 	metric *metricspb.Metric,
 	resourceAttrs map[string]string,
 	serviceName string,
@@ -130,22 +134,22 @@ func (a *MetricsAnalyzer) analyzeMetricWithContext(
 	// Extract data point attributes based on metric type
 	switch data := metric.Data.(type) {
 	case *metricspb.Metric_Gauge:
-		a.extractGaugeKeys(ctx, data.Gauge, metadata, serviceName)
+		a.extractGaugeKeys(ctx, catalog, data.Gauge, metadata, serviceName)
 	case *metricspb.Metric_Sum:
-		a.extractSumKeys(ctx, data.Sum, metadata, serviceName)
+		a.extractSumKeys(ctx, catalog, data.Sum, metadata, serviceName)
 	case *metricspb.Metric_Histogram:
-		a.extractHistogramKeys(ctx, data.Histogram, metadata, serviceName)
+		a.extractHistogramKeys(ctx, catalog, data.Histogram, metadata, serviceName)
 	case *metricspb.Metric_ExponentialHistogram:
-		a.extractExponentialHistogramKeys(ctx, data.ExponentialHistogram, metadata, serviceName)
+		a.extractExponentialHistogramKeys(ctx, catalog, data.ExponentialHistogram, metadata, serviceName)
 	case *metricspb.Metric_Summary:
-		a.extractSummaryKeys(ctx, data.Summary, metadata, serviceName)
+		a.extractSummaryKeys(ctx, catalog, data.Summary, metadata, serviceName)
 	}
 
 	return metadata
 }
 
 // extractGaugeKeys extracts label keys from gauge data points.
-func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, gauge *metricspb.Gauge, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, catalog AttributeCatalog, gauge *metricspb.Gauge, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range gauge.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -159,7 +163,7 @@ func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, gauge *metricspb
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
 		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
@@ -182,7 +186,7 @@ func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, gauge *metricspb
 }
 
 // extractSumKeys extracts label keys from sum data points.
-func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, sum *metricspb.Sum, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, catalog AttributeCatalog, sum *metricspb.Sum, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range sum.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -196,7 +200,7 @@ func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, sum *metricspb.Sum
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
 		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
@@ -219,7 +223,7 @@ func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, sum *metricspb.Sum
 }
 
 // extractHistogramKeys extracts label keys from histogram data points.
-func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, histogram *metricspb.Histogram, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, catalog AttributeCatalog, histogram *metricspb.Histogram, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range histogram.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -233,7 +237,7 @@ func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, histogram *m
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
 		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
@@ -256,7 +260,7 @@ func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, histogram *m
 }
 
 // extractExponentialHistogramKeys extracts label keys from exponential histogram data points.
-func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, histogram *metricspb.ExponentialHistogram, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, catalog AttributeCatalog, histogram *metricspb.ExponentialHistogram, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range histogram.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -270,7 +274,7 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, h
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
 		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {
@@ -293,7 +297,7 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, h
 }
 
 // extractSummaryKeys extracts label keys from summary data points.
-func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, summary *metricspb.Summary, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, catalog AttributeCatalog, summary *metricspb.Summary, metadata *models.MetricMetadata, serviceName string) {
 	for _, dp := range summary.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -307,7 +311,7 @@ func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, summary *metri
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, attrs, "metric", "attribute")
+		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
 		
 		for key, value := range attrs {
 			if metadata.LabelKeys[key] == nil {

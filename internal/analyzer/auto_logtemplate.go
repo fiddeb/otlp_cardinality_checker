@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
 	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
@@ -47,26 +48,36 @@ func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
 	// Pre-mask with regex patterns
 	masked := a.preMask(body)
 	
-	// Extract template using miner
+	// Extract template using miner (shard-level locking inside)
 	template, _ := a.miner.Add(masked)
 	
-	// Update metadata
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	
-	a.total++
-	
-	if tmpl, exists := a.templates[template]; exists {
-		tmpl.Count++
-	} else {
-		hash := hashString(template)
-		a.templates[template] = &LogTemplate{
-			Template:    template,
-			Hash:        hash,
-			Count:       1,
-			ExampleBody: body, // Store original unmaked body as example
-		}
+	atomic.AddInt64(&a.total, 1)
+
+	// Fast path: template already tracked — use atomic increment, no map lock.
+	a.mu.RLock()
+	tmpl, exists := a.templates[template]
+	a.mu.RUnlock()
+	if exists {
+		atomic.AddInt64(&tmpl.Count, 1)
+		return template
 	}
+
+	// Slow path: first time seeing this template — write lock, re-check.
+	a.mu.Lock()
+	tmpl, exists = a.templates[template]
+	if exists {
+		a.mu.Unlock()
+		atomic.AddInt64(&tmpl.Count, 1)
+		return template
+	}
+	hash := hashString(template)
+	a.templates[template] = &LogTemplate{
+		Template:    template,
+		Hash:        hash,
+		Count:       1,
+		ExampleBody: body,
+	}
+	a.mu.Unlock()
 	
 	return template
 }
@@ -143,7 +154,7 @@ func (a *AutoLogBodyAnalyzer) GetStats() map[string]interface{} {
 	minerStats := a.miner.Stats()
 	
 	return map[string]interface{}{
-		"total_messages":    a.total,
+		"total_messages":    atomic.LoadInt64(&a.total),
 		"template_count":    len(a.templates),
 		"miner_shards":      minerStats["shards"],
 		"miner_clusters":    minerStats["clusters"],

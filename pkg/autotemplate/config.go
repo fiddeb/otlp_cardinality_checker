@@ -1,5 +1,7 @@
 package autotemplate
 
+import "runtime"
+
 // Config holds configuration for the template miner
 type Config struct {
 	// Number of shards for concurrent processing
@@ -26,8 +28,12 @@ type Config struct {
 
 // DefaultConfig returns sensible defaults for production use
 func DefaultConfig() Config {
+	nShards := runtime.NumCPU()
+	if nShards < 4 {
+		nShards = 4
+	}
 	return Config{
-		Shards:          4,
+		Shards:          nShards,
 		MaxDepth:        4,
 		MaxChildren:     100,
 		MaxClusters:     1000,
