@@ -1,0 +1,86 @@
+import { useState } from 'react'
+import { MoonIcon, SunIcon, Trash2Icon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { SidebarTrigger } from '@/components/ui/sidebar'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Separator } from '@/components/ui/separator'
+
+export function AppHeader({ darkMode, onToggleDarkMode, appVersion, currentSessionName }) {
+  const [isClearing, setIsClearing] = useState(false)
+  const [clearError, setClearError] = useState(null)
+
+  const handleClearData = async () => {
+    setIsClearing(true)
+    setClearError(null)
+    try {
+      const response = await fetch('/api/v1/admin/clear', { method: 'POST' })
+      if (response.ok) {
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        setClearError(data.error || 'Unknown error')
+      }
+    } catch (error) {
+      setClearError(error.message)
+    } finally {
+      setIsClearing(false)
+    }
+  }
+
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="h-4" />
+      <div className="flex flex-1 items-center gap-2">
+        <span className="text-sm font-medium">OTLP Cardinality Checker</span>
+        {appVersion && (
+          <span className="text-xs text-muted-foreground">v{appVersion}</span>
+        )}
+        {currentSessionName && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            {currentSessionName}
+          </span>
+        )}
+      </div>
+      {clearError && (
+        <p className="text-sm text-destructive">{clearError}</p>
+      )}
+      <div className="flex items-center gap-1">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="icon" disabled={isClearing} title="Clear all data">
+              <Trash2Icon data-icon="inline-start" />
+              <span className="sr-only">Clear data</span>
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear all data?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all telemetry metadata. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleClearData}>Clear data</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <Button variant="ghost" size="icon" onClick={onToggleDarkMode} title={darkMode ? 'Light mode' : 'Dark mode'}>
+          {darkMode ? <SunIcon /> : <MoonIcon />}
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+      </div>
+    </header>
+  )
+}
