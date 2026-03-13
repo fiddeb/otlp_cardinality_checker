@@ -195,13 +195,13 @@ func TestRealPatterns(t *testing.T) {
 		{
 			name:     "Apache timestamp with notice",
 			input:    "[Sun Dec 04 04:51:08 2005] [notice] jk2_init() Found child 6725",
-			expected: "<TIMESTAMP> [notice] jk2_init() Found child <NUM>",
+			expected: "<TIMESTAMP> [notice] jk2_init() Found child 6725",
 		},
 		// Syslog timestamp
 		{
 			name:     "Syslog timestamp single digit",
 			input:    "Jul  5 13:52:21 combo ftpd[6590]: connection",
-			expected: "<TIMESTAMP> combo ftpd[<NUM>]: connection",
+			expected: "<TIMESTAMP> combo ftpd[6590]: connection",
 		},
 		{
 			name:     "Syslog timestamp double digit",
@@ -238,35 +238,32 @@ func TestRealPatterns(t *testing.T) {
 			input:    "Connection from 192.168.1.100 accepted",
 			expected: "Connection from <IP> accepted",
 		},
-		// Duration
+		// Duration, Size, Hex, Number — removed from patterns.yaml; drain generalises these naturally.
 		{
-			name:     "Duration ms",
+			name:     "Duration ms (no pattern, drain handles)",
 			input:    "Query took 150ms to complete",
-			expected: "Query took <DURATION> to complete",
+			expected: "Query took 150ms to complete",
 		},
-		// Size
 		{
-			name:     "Size MB",
+			name:     "Size MB (no pattern, drain handles)",
 			input:    "Downloaded 25.3MB successfully",
-			expected: "Downloaded <SIZE> successfully",
+			expected: "Downloaded 25.3MB successfully",
 		},
-		// Hex
 		{
-			name:     "Git commit hash",
+			name:     "Git commit hash (no hex pattern, drain handles)",
 			input:    "Commit 7f8a9b3c2d1e4f5a6b7c8d9e0f1a2b3c pushed",
-			expected: "Commit <HEX> pushed",
+			expected: "Commit 7f8a9b3c2d1e4f5a6b7c8d9e0f1a2b3c pushed",
 		},
-		// Numbers (applied last)
 		{
-			name:     "Port number",
+			name:     "Port number (no number pattern, drain handles)",
 			input:    "Listening on port 8080",
-			expected: "Listening on port <NUM>",
+			expected: "Listening on port 8080",
 		},
 		// Combined
 		{
 			name:     "Multiple patterns",
 			input:    "Jul 27 14:41:57 server sshd[1234]: Failed from 10.0.0.1",
-			expected: "<TIMESTAMP> server sshd[<NUM>]: Failed from <IP>",
+			expected: "<TIMESTAMP> server sshd[1234]: Failed from <IP>",
 		},
 	}
 
