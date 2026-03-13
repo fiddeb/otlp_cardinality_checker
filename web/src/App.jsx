@@ -21,22 +21,7 @@ import { AppSidebar } from './components/layout/AppSidebar'
 import { AppHeader } from './components/layout/AppHeader'
 import { SidebarProvider, SidebarInset } from './components/ui/sidebar'
 import { TooltipProvider } from './components/ui/tooltip'
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './components/ui/command'
 
-const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'metadata-complexity', label: 'Metadata Complexity' },
-  { id: 'metrics-overview', label: 'Metrics Overview' },
-  { id: 'active-series', label: 'Active Series' },
-  { id: 'metrics', label: 'Metrics Details' },
-  { id: 'traces', label: 'Traces' },
-  { id: 'trace-patterns', label: 'Trace Patterns' },
-  { id: 'logs', label: 'Logs' },
-  { id: 'attributes', label: 'Attributes' },
-  { id: 'noisy-neighbors', label: 'Noisy Neighbors' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'sessions', label: 'Sessions' },
-]
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -49,7 +34,6 @@ function App() {
   const [currentSessionName, setCurrentSessionName] = useState(null)
   const [diffFromSession, setDiffFromSession] = useState(null)
   const [appVersion, setAppVersion] = useState(null)
-  const [commandOpen, setCommandOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode')
@@ -99,17 +83,6 @@ function App() {
   const toggleDarkMode = () => {
     setDarkMode(!darkMode)
   }
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setCommandOpen(open => !open)
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
 
   const pushNavigation = (tab, state = {}) => {
     // Save current state to history before navigating
@@ -194,15 +167,14 @@ function App() {
           setActiveTab(tab)
           setNavigationHistory([])
         }} />
-        <SidebarInset>
+        <SidebarInset className="min-w-0 overflow-x-hidden">
           <AppHeader
             darkMode={darkMode}
             onToggleDarkMode={toggleDarkMode}
             appVersion={appVersion}
             currentSessionName={currentSessionName}
-            onOpenSearch={() => setCommandOpen(true)}
           />
-          <div className="flex flex-1 flex-col gap-4 px-4 py-6">
+          <div className="flex flex-1 flex-col gap-4 px-4 py-6 overflow-x-hidden">
             {activeTab === 'dashboard' && !selectedService && (
               <Dashboard onViewService={handleViewService} />
             )}
@@ -313,26 +285,6 @@ function App() {
         </SidebarInset>
       </SidebarProvider>
 
-      <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
-        <CommandInput placeholder="Go to..." />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Navigation">
-            {NAV_ITEMS.map(({ id, label }) => (
-              <CommandItem
-                key={id}
-                onSelect={() => {
-                  setActiveTab(id)
-                  setNavigationHistory([])
-                  setCommandOpen(false)
-                }}
-              >
-                {label}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
     </TooltipProvider>
   )
 }

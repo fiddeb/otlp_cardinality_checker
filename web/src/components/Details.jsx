@@ -179,9 +179,11 @@ function Details({ type, name, onBack }) {
           {showTemplates && (
             <CardContent className="flex flex-col gap-2">
               {data.body_templates.slice(0, 10).map((tmpl, idx) => (
-                <div key={idx} className="rounded-md border p-3">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <code className="text-xs break-all flex-1">{tmpl.template}</code>
+                <div key={idx} className="rounded-md border p-3 overflow-hidden">
+                  <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
+                    <div className="overflow-hidden flex-1 min-w-0">
+                      <code className="text-xs break-all">{tmpl.template}</code>
+                    </div>
                     <div className="text-right shrink-0">
                       <p className="font-semibold">{tmpl.count.toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">{tmpl.percentage?.toFixed(1)}%</p>
