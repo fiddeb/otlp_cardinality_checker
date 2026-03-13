@@ -185,7 +185,7 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
                     </TableCell>
                     <TableCell className="text-right">{tmpl.count.toLocaleString()}</TableCell>
                     <TableCell className="text-right">{tmpl.percentage.toFixed(1)}%</TableCell>
-                    <TableCell className="text-muted-foreground text-xs italic max-w-xs break-words">
+                    <TableCell className="text-muted-foreground text-xs italic max-w-xs truncate">
                       {tmpl.example}
                     </TableCell>
                   </TableRow>
