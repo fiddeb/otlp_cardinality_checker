@@ -66,10 +66,10 @@ export function AppSidebar({ activeTab, onNavigate }) {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-3 px-3 py-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <RadioIcon className="h-4 w-4" />
           </div>
-          <div className="flex flex-col leading-none">
+          <div className="flex flex-col leading-none group-data-[collapsible=icon]:hidden">
             <span className="font-semibold text-sm text-sidebar-foreground">OCC</span>
             <span className="text-[10px] text-muted-foreground">Cardinality Checker</span>
           </div>
