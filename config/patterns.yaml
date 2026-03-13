@@ -8,6 +8,7 @@ patterns:
     regex: '\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}\]'
     placeholder: '<TIMESTAMP>'
     description: 'Apache-style timestamps [Weekday Month DD HH:MM:SS YYYY]'
+    required_substring: '['
 
   - name: syslog_timestamp
     regex: '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
@@ -30,12 +31,14 @@ patterns:
     regex: '\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
     placeholder: '<EMAIL>'
     description: 'Email addresses'
+    required_substring: '@'
   
   # URL patterns
   - name: url
     regex: 'https?://[^\s]+|\s(/[a-zA-Z0-9/_.-]+)'
     placeholder: ' <URL>'
     description: 'HTTP/HTTPS URLs and absolute paths'
+    required_substring: '/'
   
   # Duration patterns
   - name: duration
