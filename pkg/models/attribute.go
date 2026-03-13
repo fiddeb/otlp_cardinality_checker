@@ -53,7 +53,7 @@ func NewAttributeMetadata(key string) *AttributeMetadata {
 	const maxSamples = 10 // Keep first 10 unique values for sampling
 	return &AttributeMetadata{
 		Key:                  key,
-		hll:                  hyperloglog.New(14), // Precision 14 = 16KB memory, 0.81% error
+		hll:                  hyperloglog.New(10), // Precision 10 = 1KB memory, 1.6% error
 		Count:                0,
 		EstimatedCardinality: 0,
 		ValueSamples:         make([]string, 0, maxSamples),

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
 	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
@@ -18,6 +19,11 @@ type LogBodyAnalyzerInterface interface {
 	GetTemplates() []*LogTemplate
 }
 
+// templateSyncInterval is how often GetTemplates() is called per key on the
+// ingestion path. Keeping templates slightly stale (10s) eliminates the
+// tokensToString / slice-build overhead that otherwise fires on every batch.
+const templateSyncInterval = 10 * time.Second
+
 // LogsAnalyzer extracts metadata from OTLP logs.
 type LogsAnalyzer struct {
 	mu                  sync.RWMutex                        // Protects bodyAnalyzers map
@@ -28,6 +34,9 @@ type LogsAnalyzer struct {
 	catalog             AttributeCatalog                    // Attribute catalog for global tracking
 	podLogEnrichment    bool                                // Enrichment for pod logs
 	podLogServiceLabels []string                            // Ordered label priority list
+
+	lastTemplateSyncMu sync.Mutex
+	lastTemplateSync   map[string]time.Time // key -> last time GetTemplates was called
 }
 
 // SetPodLogEnrichment configures pod log enrichment on an existing analyzer.
@@ -58,20 +67,22 @@ func inferSeverityFromBody(body string) string {
 // NewLogsAnalyzerWithCatalog creates a logs analyzer with attribute catalog.
 func NewLogsAnalyzerWithCatalog(catalog AttributeCatalog) *LogsAnalyzer {
 	return &LogsAnalyzer{
-		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
-		useAutoTemplate: false,
-		catalog:         catalog,
+		bodyAnalyzers:    make(map[string]LogBodyAnalyzerInterface),
+		useAutoTemplate:  false,
+		catalog:          catalog,
+		lastTemplateSync: make(map[string]time.Time),
 	}
 }
 
 // NewLogsAnalyzerWithAutoTemplateAndCatalog creates a logs analyzer with autotemplate and catalog.
 func NewLogsAnalyzerWithAutoTemplateAndCatalog(cfg autotemplate.Config, pats []patterns.CompiledPattern, catalog AttributeCatalog) *LogsAnalyzer {
 	return &LogsAnalyzer{
-		bodyAnalyzers:   make(map[string]LogBodyAnalyzerInterface),
-		useAutoTemplate: true,
-		autoTemplateCfg: cfg,
-		patterns:        pats,
-		catalog:         catalog,
+		bodyAnalyzers:    make(map[string]LogBodyAnalyzerInterface),
+		useAutoTemplate:  true,
+		autoTemplateCfg:  cfg,
+		patterns:         pats,
+		catalog:          catalog,
+		lastTemplateSync: make(map[string]time.Time),
 	}
 }
 
@@ -243,21 +254,34 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 			}
 		}
 		
-		// Add body templates for this service+severity combination
+		// Add body templates for this service+severity combination.
+		// Templates are throttled: refreshed at most once per templateSyncInterval
+		// to avoid the expensive GetClusters()/tokensToString work on every batch.
 		a.mu.RLock()
 		analyzer, exists := a.bodyAnalyzers[key]
 		a.mu.RUnlock()
-		
+
 		if exists {
-			templates := analyzer.GetTemplates()
-			metadata.BodyTemplates = make([]*models.BodyTemplate, 0, len(templates))
-			for _, tmpl := range templates {
-				metadata.BodyTemplates = append(metadata.BodyTemplates, &models.BodyTemplate{
-					Template:   tmpl.Template,
-					Count:      tmpl.Count,
-					Percentage: tmpl.Percentage,
-					Example:    tmpl.ExampleBody,
-				})
+			a.lastTemplateSyncMu.Lock()
+			lastSync := a.lastTemplateSync[key]
+			now := time.Now()
+			refresh := now.Sub(lastSync) >= templateSyncInterval
+			if refresh {
+				a.lastTemplateSync[key] = now
+			}
+			a.lastTemplateSyncMu.Unlock()
+
+			if refresh {
+				templates := analyzer.GetTemplates()
+				metadata.BodyTemplates = make([]*models.BodyTemplate, 0, len(templates))
+				for _, tmpl := range templates {
+					metadata.BodyTemplates = append(metadata.BodyTemplates, &models.BodyTemplate{
+						Template:   tmpl.Template,
+						Count:      tmpl.Count,
+						Percentage: tmpl.Percentage,
+						Example:    tmpl.ExampleBody,
+					})
+				}
 			}
 		}
 		

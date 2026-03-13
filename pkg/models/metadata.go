@@ -325,7 +325,7 @@ func NewMetricMetadata(name string, data MetricData) *MetricMetadata {
 		ResourceKeys: make(map[string]*KeyMetadata),
 		Services:     make(map[string]int64),
 		Metadata:     make(map[string]string),
-		seriesHLL:    hyperloglog.New(14), // Precision 14 = ~16KB memory, 0.81% error
+		seriesHLL:    hyperloglog.New(10), // Precision 10 = ~1KB memory, 1.6% error
 		ActiveSeries: 0,
 	}
 }
@@ -369,7 +369,7 @@ func NewLogMetadata(severity string) *LogMetadata {
 func NewKeyMetadata() *KeyMetadata {
 	return &KeyMetadata{
 		ValueSamples: []string{},
-		hll:          hyperloglog.New(14), // Precision 14 = ~0.81% standard error
+		hll:          hyperloglog.New(10), // Precision 10 = ~1.6% standard error
 		MaxSamples:   10,                  // Default: keep first 10 unique values (enough for sampling)
 	}
 }
@@ -570,7 +570,7 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	// Merge active series HLL sketch
 	if other.seriesHLL != nil {
 		if m.seriesHLL == nil {
-			m.seriesHLL = hyperloglog.New(14)
+			m.seriesHLL = hyperloglog.New(10)
 		}
 		m.seriesHLL.Merge(other.seriesHLL)
 		m.ActiveSeries = int64(m.seriesHLL.Count())
@@ -646,7 +646,7 @@ func (m *MetricMetadata) AddSeriesFingerprint(fingerprint string) {
 	defer m.mu.Unlock()
 
 	if m.seriesHLL == nil {
-		m.seriesHLL = hyperloglog.New(14)
+		m.seriesHLL = hyperloglog.New(10)
 	}
 	
 	m.seriesHLL.Add(fingerprint)

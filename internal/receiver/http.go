@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer"
@@ -27,6 +28,13 @@ import (
 // Log level configuration
 var verboseLogging = strings.ToLower(os.Getenv("VERBOSE_LOGGING")) == "true"
 
+// bodyBufPool reuses bytes.Buffer allocations for reading HTTP request bodies.
+// Each OTLP batch is typically 50–200 KB; pooling avoids allocating a fresh
+// backing array on every request (which was the #1 allocation source).
+var bodyBufPool = sync.Pool{
+	New: func() any { return new(bytes.Buffer) },
+}
+
 // min returns the minimum of two integers
 func min(a, b int) int {
 	if a < b {
@@ -40,29 +48,44 @@ func min(a, b int) int {
 // header OR by the gzip magic bytes (0x1f 0x8b) at the start of the body.
 // The latter handles collectors that compress without advertising it, which
 // is the root cause of "cannot parse invalid wire-format data" errors.
-func readAndDecompressBody(req *http.Request) ([]byte, error) {
-	raw, err := io.ReadAll(req.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
+//
+// The caller MUST call release() after consuming the returned slice (i.e.
+// after proto.Unmarshal / protojson.Unmarshal returns) to return the buffer
+// to the pool. Holding the slice after release() is a use-after-free.
+func readAndDecompressBody(req *http.Request) (data []byte, release func(), err error) {
+	buf := bodyBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+
+	if _, err = buf.ReadFrom(req.Body); err != nil {
+		bodyBufPool.Put(buf)
+		return nil, nil, fmt.Errorf("read body: %w", err)
 	}
 
+	raw := buf.Bytes()
 	isGzipHeader := strings.EqualFold(req.Header.Get("Content-Encoding"), "gzip")
 	hasMagicBytes := len(raw) >= 2 && raw[0] == 0x1f && raw[1] == 0x8b
 
 	if isGzipHeader || hasMagicBytes {
-		gzr, err := gzip.NewReader(bytes.NewReader(raw))
-		if err != nil {
-			return nil, fmt.Errorf("gzip reader: %w", err)
+		gzr, gzErr := gzip.NewReader(bytes.NewReader(raw))
+		if gzErr != nil {
+			bodyBufPool.Put(buf)
+			return nil, nil, fmt.Errorf("gzip reader: %w", gzErr)
 		}
 		defer gzr.Close()
-		decompressed, err := io.ReadAll(gzr)
-		if err != nil {
-			return nil, fmt.Errorf("decompress: %w", err)
+
+		// Decompress into a second pooled buffer.
+		decompBuf := bodyBufPool.Get().(*bytes.Buffer)
+		decompBuf.Reset()
+		if _, err = decompBuf.ReadFrom(gzr); err != nil {
+			bodyBufPool.Put(buf)
+			bodyBufPool.Put(decompBuf)
+			return nil, nil, fmt.Errorf("decompress: %w", err)
 		}
-		return decompressed, nil
+		bodyBufPool.Put(buf) // raw (compressed) buffer no longer needed
+		return decompBuf.Bytes(), func() { bodyBufPool.Put(decompBuf) }, nil
 	}
 
-	return raw, nil
+	return raw, func() { bodyBufPool.Put(buf) }, nil
 }
 
 // sanitizeUTF8 replaces invalid UTF-8 byte sequences with the Unicode
@@ -152,7 +175,7 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	body, err := readAndDecompressBody(req)
+	body, releaseBody, err := readAndDecompressBody(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
@@ -177,6 +200,7 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 		if jsonErr := unmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
 			// Fall back to protobuf in case Content-Type was set incorrectly.
 			if protoErr := proto.Unmarshal(body, &exportReq); protoErr != nil {
+				releaseBody()
 				log.Printf("Failed to parse metrics request: json error: %v, protobuf error: %v", jsonErr, protoErr)
 				http.Error(w, fmt.Sprintf("Failed to parse request: %v", jsonErr), http.StatusBadRequest)
 				return
@@ -191,6 +215,7 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 		// Default: try protobuf first, fall back to JSON.
 		if err := proto.Unmarshal(body, &exportReq); err != nil {
 			if jsonErr := unmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+				releaseBody()
 				log.Printf("Failed to parse metrics request: protobuf error: %v, json error: %v", err, jsonErr)
 				if verboseLogging {
 					fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
@@ -205,6 +230,7 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 			fmt.Println("Parsed metrics as protobuf")
 		}
 	}
+	releaseBody()
 
 	// Analyze metrics
 	metricsMetadata, err := r.metricsAnalyzer.AnalyzeWithContext(ctx, &exportReq)
@@ -241,7 +267,7 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	body, err := readAndDecompressBody(req)
+	body, releaseBody, err := readAndDecompressBody(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
@@ -255,6 +281,7 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 	if isJSONContentType(traceContentType) {
 		if jsonErr := traceUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
 			if protoErr := proto.Unmarshal(body, &exportReq); protoErr != nil {
+				releaseBody()
 				log.Printf("Failed to parse traces request: json error: %v, protobuf error: %v", jsonErr, protoErr)
 				http.Error(w, fmt.Sprintf("Failed to parse request: %v", jsonErr), http.StatusBadRequest)
 				return
@@ -265,6 +292,7 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 	} else {
 		if err := proto.Unmarshal(body, &exportReq); err != nil {
 			if jsonErr := traceUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+				releaseBody()
 				log.Printf("Failed to parse traces request: protobuf error: %v, json error: %v", err, jsonErr)
 				if verboseLogging {
 					fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
@@ -279,6 +307,7 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 			fmt.Println("Parsed traces as protobuf")
 		}
 	}
+	releaseBody()
 
 	// Analyze traces
 	spansMetadata, err := r.tracesAnalyzer.AnalyzeWithContext(ctx, &exportReq)
@@ -315,7 +344,7 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	body, err := readAndDecompressBody(req)
+	body, releaseBody, err := readAndDecompressBody(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
@@ -329,6 +358,7 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 	if isJSONContentType(logsContentType) {
 		if jsonErr := logsUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
 			if protoErr := proto.Unmarshal(body, &exportReq); protoErr != nil {
+				releaseBody()
 				log.Printf("Failed to parse logs request: json error: %v, protobuf error: %v", jsonErr, protoErr)
 				http.Error(w, fmt.Sprintf("Failed to parse request: %v", jsonErr), http.StatusBadRequest)
 				return
@@ -339,6 +369,7 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 	} else {
 		if err := proto.Unmarshal(body, &exportReq); err != nil {
 			if jsonErr := logsUnmarshaler.Unmarshal(sanitizeUTF8(body), &exportReq); jsonErr != nil {
+				releaseBody()
 				log.Printf("Failed to parse logs request: protobuf error: %v, json error: %v", err, jsonErr)
 				if verboseLogging {
 					fmt.Printf("Body preview: %s\n", string(body[:min(len(body), 100)]))
@@ -353,6 +384,7 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 			fmt.Println("Parsed logs as protobuf")
 		}
 	}
+	releaseBody()
 
 	// Analyze logs
 	logsMetadata, err := r.logsAnalyzer.AnalyzeWithContext(ctx, &exportReq)

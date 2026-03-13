@@ -3,6 +3,7 @@ package analyzer
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/patterns"
@@ -75,10 +76,15 @@ func (a *AutoLogBodyAnalyzer) AddMessage(body string) {
 	a.ProcessMessage(body)
 }
 
-// preMask applies regex-based masking before template extraction
+// preMask applies regex-based masking before template extraction.
+// Patterns with a RequiredSubstring are skipped when the body does not contain
+// that substring, avoiding expensive regex backtracking on non-matching lines.
 func (a *AutoLogBodyAnalyzer) preMask(body string) string {
 	result := body
 	for _, pattern := range a.patterns {
+		if pattern.RequiredSubstring != "" && !strings.Contains(result, pattern.RequiredSubstring) {
+			continue
+		}
 		result = pattern.Regex.ReplaceAllString(result, pattern.Placeholder)
 	}
 	return result

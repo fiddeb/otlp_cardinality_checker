@@ -10,10 +10,11 @@ import (
 
 // Pattern represents a single log template pattern
 type Pattern struct {
-	Name        string `yaml:"name"`
-	Regex       string `yaml:"regex"`
-	Placeholder string `yaml:"placeholder"`
-	Description string `yaml:"description"`
+	Name               string `yaml:"name"`
+	Regex              string `yaml:"regex"`
+	Placeholder        string `yaml:"placeholder"`
+	Description        string `yaml:"description"`
+	RequiredSubstring  string `yaml:"required_substring"`
 }
 
 // PatternsConfig represents the patterns configuration file
@@ -23,10 +24,11 @@ type PatternsConfig struct {
 
 // CompiledPattern is a pattern with compiled regex
 type CompiledPattern struct {
-	Name        string
-	Regex       *regexp.Regexp
-	Placeholder string
-	Description string
+	Name               string
+	Regex              *regexp.Regexp
+	Placeholder        string
+	Description        string
+	RequiredSubstring  string // if non-empty, skip this pattern when the body does not contain this substring
 }
 
 // LoadPatterns loads patterns from a YAML file
@@ -49,10 +51,11 @@ func LoadPatterns(filepath string) ([]CompiledPattern, error) {
 		}
 
 		compiled = append(compiled, CompiledPattern{
-			Name:        p.Name,
-			Regex:       regex,
-			Placeholder: p.Placeholder,
-			Description: p.Description,
+			Name:              p.Name,
+			Regex:             regex,
+			Placeholder:       p.Placeholder,
+			Description:       p.Description,
+			RequiredSubstring: p.RequiredSubstring,
 		})
 	}
 
