@@ -12,6 +12,7 @@ function LogsView({ onViewServiceDetails }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [sort, setSort] = useState({ field: 'name', dir: 'asc' })
   const [filter, setFilter] = useState({
     minSamples: 0,
   })
@@ -32,10 +33,22 @@ function LogsView({ onViewServiceDetails }) {
       })
   }, [])
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters or sort change
   useEffect(() => {
     setCurrentPage(1)
-  }, [filter])
+  }, [filter, sort])
+
+  const toggleSort = (field) => {
+    setSort(prev => prev.field === field
+      ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { field, dir: field === 'name' ? 'asc' : 'desc' }
+    )
+  }
+
+  const sortIndicator = (field) => {
+    if (sort.field !== field) return <span className="text-muted-foreground/40 ml-1">↕</span>
+    return <span className="ml-1">{sort.dir === 'asc' ? '↑' : '↓'}</span>
+  }
 
   const getSeverityColor = (severity) => {
     const colors = {
@@ -78,7 +91,15 @@ function LogsView({ onViewServiceDetails }) {
     serviceGroups[svc.service_name].push(svc)
   })
 
-  const uniqueServices = Object.keys(serviceGroups).sort()
+  const uniqueServices = Object.keys(serviceGroups).sort((a, b) => {
+    if (sort.field === 'name') {
+      return sort.dir === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+    }
+    // field === 'count'
+    const countA = serviceGroups[a].reduce((s, x) => s + x.sample_count, 0)
+    const countB = serviceGroups[b].reduce((s, x) => s + x.sample_count, 0)
+    return sort.dir === 'asc' ? countA - countB : countB - countA
+  })
   const totalPages = Math.ceil(uniqueServices.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
@@ -87,19 +108,6 @@ function LogsView({ onViewServiceDetails }) {
   return (
     <div className="flex flex-col gap-6">
       <h2 className="text-xl font-semibold">Log Services</h2>
-
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex items-center gap-1">
-          <label className="text-sm text-muted-foreground whitespace-nowrap">Min Sample Count:</label>
-          <Input
-            type="number"
-            value={filter.minSamples}
-            onChange={(e) => setFilter({...filter, minSamples: Number(e.target.value)})}
-            min="0"
-            className="w-24"
-          />
-        </div>
-      </div>
 
       <p className="text-sm text-muted-foreground">
         Showing {startIndex + 1}–{Math.min(endIndex, uniqueServices.length)} of {uniqueServices.length} services
@@ -128,7 +136,27 @@ function LogsView({ onViewServiceDetails }) {
       </div>
 
       <div>
-        <h3 className="text-base font-medium mb-2">Services</h3>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <h3 className="text-base font-medium">Services</h3>
+          <div className="flex items-center gap-1 ml-auto">
+            <div className="flex items-center gap-1">
+              <label className="text-sm text-muted-foreground whitespace-nowrap">Min:</label>
+              <Input
+                type="number"
+                value={filter.minSamples}
+                onChange={(e) => setFilter({...filter, minSamples: Number(e.target.value)})}
+                min="0"
+                className="w-20"
+              />
+            </div>
+            <Button variant={sort.field === 'name' ? 'secondary' : 'outline'} size="sm" onClick={() => toggleSort('name')}>
+              Name{sortIndicator('name')}
+            </Button>
+            <Button variant={sort.field === 'count' ? 'secondary' : 'outline'} size="sm" onClick={() => toggleSort('count')}>
+              Logs{sortIndicator('count')}
+            </Button>
+          </div>
+        </div>
         <div className="flex flex-col gap-2">
           {currentServices.map((serviceName) => {
             const severities = serviceGroups[serviceName]
