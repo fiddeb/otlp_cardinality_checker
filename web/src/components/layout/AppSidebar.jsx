@@ -11,7 +11,7 @@ import {
   LayersIcon,
   ClipboardListIcon,
   LayoutDashboardIcon,
-  RadioIcon,
+  SearchCodeIcon,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -31,14 +31,13 @@ const NAV_GROUPS = [
     label: 'Overview',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
-      { id: 'metadata-complexity', label: 'Metadata Complexity', icon: LayersIcon },
-      { id: 'metrics-overview', label: 'Metrics Overview', icon: BarChart2Icon },
     ],
   },
   {
     label: 'Telemetry',
     items: [
       { id: 'active-series', label: 'Active Series', icon: ActivityIcon },
+      { id: 'metrics-overview', label: 'Metrics Overview', icon: BarChart2Icon },
       { id: 'metrics', label: 'Metrics Details', icon: BarChart3Icon },
       { id: 'traces', label: 'Traces', icon: GitBranchIcon },
       { id: 'trace-patterns', label: 'Trace Patterns', icon: NetworkIcon },
@@ -50,6 +49,7 @@ const NAV_GROUPS = [
     label: 'Analysis',
     items: [
       { id: 'noisy-neighbors', label: 'Noisy Neighbors', icon: ZapIcon },
+      { id: 'metadata-complexity', label: 'Metadata Complexity', icon: LayersIcon },
     ],
   },
   {
@@ -67,7 +67,7 @@ export function AppSidebar({ activeTab, onNavigate }) {
       <SidebarHeader>
         <div className="flex items-center gap-3 px-3 py-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <RadioIcon className="h-4 w-4" />
+            <SearchCodeIcon className="h-4 w-4 scale-x-[-1]" />
           </div>
           <div className="flex flex-col leading-none group-data-[collapsible=icon]:hidden">
             <span className="font-semibold text-sm text-sidebar-foreground">OCC</span>

@@ -136,17 +136,35 @@ function LogsView({ onViewServiceDetails }) {
             const isExpanded = expandedService === serviceName
 
             return (
-              <Card key={serviceName} className="overflow-hidden">
+              <div key={serviceName} className="overflow-hidden rounded-lg border border-border bg-card text-sm">
                 <div
                   role="button"
                   tabIndex={0}
                   onClick={() => setExpandedService(isExpanded ? null : serviceName)}
                   onKeyDown={(e) => e.key === 'Enter' && setExpandedService(isExpanded ? null : serviceName)}
-                  className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-muted/50 font-medium"
+                  className="flex justify-between items-center px-4 py-1.5 cursor-pointer hover:bg-muted/50 font-medium"
                 >
-                  <span>{isExpanded ? '▼' : '▶'} {serviceName}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {severities.length} severities · {totalForService.toLocaleString()} logs
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0">{isExpanded ? '▼' : '▶'}</span>
+                    <span className="truncate">{serviceName}</span>
+                    {!isExpanded && (
+                      <div className="flex flex-wrap gap-1 ml-1">
+                        {severities
+                          .sort((a, b) => String(a.severity).localeCompare(String(b.severity)))
+                          .map((s) => (
+                            <span
+                              key={s.severity}
+                              className="inline-block rounded px-1.5 py-0 text-[10px] font-semibold leading-5"
+                              style={{ color: getSeverityColor(s.severity), border: `1px solid ${getSeverityColor(s.severity)}` }}
+                            >
+                              {s.severity}
+                            </span>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-sm text-muted-foreground shrink-0 ml-2">
+                    {totalForService.toLocaleString()} logs
                   </span>
                 </div>
 
@@ -180,7 +198,7 @@ function LogsView({ onViewServiceDetails }) {
                     </TableBody>
                   </Table>
                 )}
-              </Card>
+              </div>
             )
           })}
         </div>

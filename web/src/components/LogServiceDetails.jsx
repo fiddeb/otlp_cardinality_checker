@@ -165,9 +165,9 @@ function LogServiceDetails({ serviceName, severity, onBack, onViewPattern }) {
             <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-1/2">Pattern Template</TableHead>
-                  <TableHead className="text-right">Count</TableHead>
-                  <TableHead className="text-right">Percentage</TableHead>
+                  <TableHead className="w-[40%]">Pattern Template</TableHead>
+                  <TableHead className="w-16 text-right">Count</TableHead>
+                  <TableHead className="w-20 text-right">Percentage</TableHead>
                   <TableHead>Example</TableHead>
                 </TableRow>
               </TableHeader>
