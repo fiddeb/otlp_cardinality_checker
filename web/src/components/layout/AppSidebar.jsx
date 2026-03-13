@@ -23,6 +23,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from '@/components/ui/sidebar'
 
 const NAV_GROUPS = [
@@ -62,7 +63,7 @@ const NAV_GROUPS = [
 
 export function AppSidebar({ activeTab, onNavigate }) {
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-3 px-3 py-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -83,6 +84,7 @@ export function AppSidebar({ activeTab, onNavigate }) {
                 <SidebarMenuItem key={id}>
                   <SidebarMenuButton
                     isActive={activeTab === id}
+                    tooltip={itemLabel}
                     onClick={() => onNavigate(id)}
                   >
                     <Icon />
@@ -94,8 +96,9 @@ export function AppSidebar({ activeTab, onNavigate }) {
           </SidebarGroup>
         ))}
       </SidebarContent>
+      <SidebarRail />
       <SidebarFooter>
-        <div className="px-3 py-3 text-xs text-muted-foreground">
+        <div className="px-3 py-3 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
           OTLP Cardinality Checker
         </div>
       </SidebarFooter>
