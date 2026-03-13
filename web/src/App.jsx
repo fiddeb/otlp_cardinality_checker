@@ -202,7 +202,7 @@ function App() {
             currentSessionName={currentSessionName}
             onOpenSearch={() => setCommandOpen(true)}
           />
-          <main className="flex flex-1 flex-col gap-4 p-4">
+          <div className="flex flex-1 flex-col gap-4 px-4 py-6">
             {activeTab === 'dashboard' && !selectedService && (
               <Dashboard onViewService={handleViewService} />
             )}
@@ -309,7 +309,7 @@ function App() {
                 onBack={handleBack}
               />
             )}
-          </main>
+          </div>
         </SidebarInset>
       </SidebarProvider>
 
