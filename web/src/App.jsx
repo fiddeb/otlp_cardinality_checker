@@ -200,6 +200,7 @@ function App() {
             onToggleDarkMode={toggleDarkMode}
             appVersion={appVersion}
             currentSessionName={currentSessionName}
+            onOpenSearch={() => setCommandOpen(true)}
           />
           <main className="flex flex-1 flex-col gap-4 p-4">
             {activeTab === 'dashboard' && !selectedService && (

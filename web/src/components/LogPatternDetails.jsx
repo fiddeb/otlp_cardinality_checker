@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ArrowLeftIcon } from 'lucide-react'
 
 function LogPatternDetails({ serviceName, severity, template, onBack }) {
   const [attributes, setAttributes] = useState(null)
@@ -9,7 +15,6 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
     setLoading(true)
     setError(null)
     
-    // Fetch pattern-specific data (not service+severity aggregated data)
     const encodedSeverity = encodeURIComponent(severity)
     const encodedTemplate = encodeURIComponent(template)
     
@@ -21,19 +26,17 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
         return res.json()
       })
       .then(data => {
-        // Find the specific service in the pattern data
         const serviceData = data.services?.find(s => s.service_name === serviceName)
         
         if (!serviceData) {
           throw new Error('Service not found for this pattern')
         }
         
-        // Convert KeyInfo array to map with metadata for table rendering
         const resourceKeysMap = {}
         if (serviceData.resource_keys) {
           serviceData.resource_keys.forEach(key => {
             resourceKeysMap[key.name] = {
-              count: serviceData.sample_count, // Use service sample count
+              count: serviceData.sample_count,
               estimated_cardinality: key.cardinality,
               value_samples: key.sample_values || []
             }
@@ -56,7 +59,7 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
             template: data.template,
             example: data.example_body,
             count: serviceData.sample_count,
-            percentage: 100 // Pattern-specific view, always 100% for this service
+            percentage: 100
           },
           resource_keys: resourceKeysMap,
           body_keys: attributeKeysMap
@@ -69,191 +72,189 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
       })
   }, [serviceName, severity, template])
 
-  const getSeverityColor = (sev) => {
-    const colors = {
-      'ERROR': '#d32f2f',
-      'Error': '#d32f2f',
-      'WARN': '#f57c00',
-      'Warning': '#f57c00',
-      'INFO': '#1976d2',
-      'Information': '#1976d2',
-      'DEBUG': '#7b1fa2',
-      'DEBUG2': '#7b1fa2',
-      'Debug': '#7b1fa2',
-      'TRACE': '#455a64',
-      'Trace': '#455a64',
-      'UNSET': '#999'
+  const getSeverityVariant = (sev) => {
+    const map = {
+      'ERROR': 'destructive', 'Error': 'destructive',
+      'WARN': 'outline', 'Warning': 'outline',
+      'INFO': 'secondary', 'Information': 'secondary',
+      'DEBUG': 'outline', 'Debug': 'outline',
+      'TRACE': 'outline', 'Trace': 'outline',
     }
-    return colors[sev] || '#666'
+    return map[sev] || 'outline'
   }
 
-  const getCardinalityBadge = (cardinality) => {
+  const getCardinalityVariant = (cardinality) => {
+    if (cardinality === 1) return 'secondary'
+    if (cardinality <= 10) return 'outline'
+    if (cardinality <= 100) return 'outline'
+    return 'destructive'
+  }
+
+  const getCardinalityLabel = (cardinality) => {
     if (cardinality === 1) return 'low'
     if (cardinality <= 10) return 'medium'
     if (cardinality <= 100) return 'high'
     return 'very-high'
   }
 
-  if (loading) return <div className="loading">Loading pattern details...</div>
-  if (error) return <div className="error">Error loading pattern: {error}</div>
-  if (!attributes) return <div className="error">Pattern not found</div>
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-[500px] w-full" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+          <ArrowLeftIcon className="mr-2 h-4 w-4" />
+          Back to Patterns
+        </Button>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error loading pattern: {error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!attributes) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+          <ArrowLeftIcon className="mr-2 h-4 w-4" />
+          Back to Patterns
+        </Button>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Pattern not found</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const AttributesTable = ({ keysMap, title }) => {
+    if (Object.keys(keysMap).length === 0) return null
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Key</TableHead>
+                <TableHead>Cardinality</TableHead>
+                <TableHead className="text-right">Usage</TableHead>
+                <TableHead>Sample Values</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.entries(keysMap).map(([key, metadata]) => {
+                const percentage = attributes.template.count > 0
+                  ? (metadata.count / attributes.template.count * 100)
+                  : 100
+                return (
+                  <TableRow key={key}>
+                    <TableCell><code className="font-mono text-sm">{key}</code></TableCell>
+                    <TableCell>
+                      <Badge variant={getCardinalityVariant(metadata.estimated_cardinality)}>
+                        {getCardinalityLabel(metadata.estimated_cardinality)} ({metadata.estimated_cardinality})
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{percentage.toFixed(1)}%</TableCell>
+                    <TableCell className="text-muted-foreground text-xs max-w-xs truncate">
+                      {metadata.value_samples && metadata.value_samples.length > 0
+                        ? metadata.value_samples.slice(0, 5).join(', ')
+                        : '—'}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
-    <div className="card">
-      <button 
-        onClick={onBack}
-        style={{
-          padding: '8px 16px',
-          marginBottom: '20px',
-          cursor: 'pointer'
-        }}
-      >
-        ← Back to Patterns
-      </button>
+    <div className="flex flex-col gap-4">
+      <Button variant="ghost" size="sm" className="w-fit" onClick={onBack}>
+        <ArrowLeftIcon className="mr-2 h-4 w-4" />
+        Back to Patterns
+      </Button>
 
-      <div style={{ marginBottom: '30px' }}>
-        <h2>Pattern Details</h2>
-        <div style={{ marginTop: '15px' }}>
-          <p><strong>Service:</strong> <code>{serviceName}</code></p>
-          <p>
-            <strong>Severity:</strong>{' '}
-            <span style={{ color: getSeverityColor(severity), fontWeight: 'bold' }}>
-              {severity}
-            </span>
-          </p>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Pattern Details</h1>
+        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+          <span>Service:</span>
+          <code className="font-mono text-foreground">{serviceName}</code>
+          <span>·</span>
+          <span>Severity:</span>
+          <Badge variant={getSeverityVariant(severity)}>{severity}</Badge>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
-        <div className="stat-card">
-          <div className="stat-label">Occurrences</div>
-          <div className="stat-value">{attributes.template.count.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Percentage</div>
-          <div className="stat-value">{attributes.template.percentage.toFixed(2)}%</div>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Occurrences</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{attributes.template.count.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Percentage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{attributes.template.percentage.toFixed(2)}%</p>
+          </CardContent>
+        </Card>
       </div>
 
-      <div style={{ marginBottom: '30px' }}>
-        <h3>Pattern Template</h3>
-        <pre style={{ 
-          background: 'var(--bg-tertiary)',
-          padding: '15px',
-          borderRadius: '6px',
-          overflow: 'auto',
-          fontSize: '13px',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word'
-        }}>
-          {template}
-        </pre>
-      </div>
+      {/* Pattern template */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">Pattern Template</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <pre className="rounded bg-muted p-4 text-sm font-mono whitespace-pre-wrap break-words overflow-auto">
+            {template}
+          </pre>
+        </CardContent>
+      </Card>
 
-      <div style={{ marginBottom: '30px' }}>
-        <h3>Example Log Message</h3>
-        <pre style={{ 
-          background: 'var(--bg-tertiary)',
-          padding: '15px',
-          borderRadius: '6px',
-          overflow: 'auto',
-          fontSize: '13px',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word'
-        }}>
-          {attributes.template.example}
-        </pre>
-      </div>
+      {/* Example log */}
+      {attributes.template.example && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Example Log Message</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="rounded bg-muted p-4 text-sm font-mono whitespace-pre-wrap break-words overflow-auto">
+              {attributes.template.example}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
 
-      <div style={{ marginBottom: '30px' }}>
-        <h3>Attributes for This Pattern (Service: {serviceName})</h3>
-        
-        {Object.keys(attributes.resource_keys).length > 0 && (
-          <>
-            <h4 style={{ marginTop: '20px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
-              Resource Attributes
-            </h4>
-            <table>
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Cardinality</th>
-                  <th>Usage</th>
-                  <th>Sample Values</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(attributes.resource_keys).map(([key, metadata]) => {
-                  const percentage = attributes.template.count > 0 
-                    ? (metadata.count / attributes.template.count * 100) 
-                    : 100
-                  return (
-                    <tr key={key}>
-                      <td><code>{key}</code></td>
-                      <td>
-                        <span className={`badge ${getCardinalityBadge(metadata.estimated_cardinality)}`}>
-                          {metadata.estimated_cardinality}
-                        </span>
-                      </td>
-                      <td>{percentage.toFixed(1)}%</td>
-                      <td className="samples">
-                        {metadata.value_samples && metadata.value_samples.length > 0 
-                          ? metadata.value_samples.slice(0, 5).join(', ')
-                          : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </>
-        )}
+      {/* Attribute tables */}
+      <AttributesTable keysMap={attributes.resource_keys} title="Resource Attributes" />
+      <AttributesTable keysMap={attributes.body_keys} title="Body Attributes" />
 
-        {Object.keys(attributes.body_keys).length > 0 && (
-          <>
-            <h4 style={{ marginTop: '20px', marginBottom: '12px', color: 'var(--text-secondary)' }}>
-              Body Attributes
-            </h4>
-            <table>
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Cardinality</th>
-                  <th>Usage</th>
-                  <th>Sample Values</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(attributes.body_keys).map(([key, metadata]) => {
-                  const percentage = attributes.template.count > 0 
-                    ? (metadata.count / attributes.template.count * 100) 
-                    : 100
-                  return (
-                    <tr key={key}>
-                      <td><code>{key}</code></td>
-                      <td>
-                        <span className={`badge ${getCardinalityBadge(metadata.estimated_cardinality)}`}>
-                          {metadata.estimated_cardinality}
-                        </span>
-                      </td>
-                      <td>{percentage.toFixed(1)}%</td>
-                      <td className="samples">
-                        {metadata.value_samples && metadata.value_samples.length > 0 
-                          ? metadata.value_samples.slice(0, 5).join(', ')
-                          : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </>
-        )}
-
-        {Object.keys(attributes.resource_keys).length === 0 && Object.keys(attributes.body_keys).length === 0 && (
-          <p className="template-count-text">No attribute information available</p>
-        )}
-      </div>
+      {Object.keys(attributes.resource_keys).length === 0 && Object.keys(attributes.body_keys).length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-4">No attribute information available</p>
+      )}
     </div>
   )
 }

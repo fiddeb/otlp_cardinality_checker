@@ -1,4 +1,18 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react'
 
 function TracePatterns({ onViewDetails }) {
   const [patterns, setPatterns] = useState([])
@@ -16,9 +30,7 @@ function TracePatterns({ onViewDetails }) {
     try {
       setLoading(true)
       const response = await fetch('/api/v1/span-patterns')
-      if (!response.ok) {
-        throw new Error('Failed to fetch span patterns')
-      }
+      if (!response.ok) throw new Error('Failed to fetch span patterns')
       const data = await response.json()
       setPatterns(data.patterns || [])
     } catch (err) {
@@ -29,25 +41,15 @@ function TracePatterns({ onViewDetails }) {
   }
 
   const toggleExpand = (pattern) => {
-    setExpandedPatterns(prev => ({
-      ...prev,
-      [pattern]: !prev[pattern]
-    }))
+    setExpandedPatterns(prev => ({ ...prev, [pattern]: !prev[pattern] }))
   }
 
-  // Check if a pattern was normalized (contains any placeholder like <NUM>, <URL>, <METHOD>, etc.)
-  const isNormalized = (pattern) => {
-    return /<[A-Z_]+>/i.test(pattern)
-  }
+  const isNormalized = (pattern) => /<[A-Z_]+>/i.test(pattern)
 
-  // Get an example span name that differs from the pattern
   const getExample = (pg) => {
     if (pg.matching_spans && pg.matching_spans.length > 0) {
       const firstSpan = pg.matching_spans[0].span_name
-      // If pattern equals span name, it wasn't normalized
-      if (firstSpan === pg.pattern) {
-        return null
-      }
+      if (firstSpan === pg.pattern) return null
       return firstSpan
     }
     return null
@@ -58,401 +60,233 @@ function TracePatterns({ onViewDetails }) {
     if (showOnlyNormalized && !isNormalized(p.pattern)) return false
     return true
   })
-  
-  // Separate multi-span patterns (interesting) from single-span patterns
+
   const multiSpanPatterns = filteredPatterns.filter(p => p.span_count > 1)
   const singleSpanPatterns = filteredPatterns.filter(p => p.span_count === 1)
-  
-  // Count normalized patterns
   const normalizedCount = filteredPatterns.filter(p => isNormalized(p.pattern)).length
 
   if (loading) {
-    return <div className="loading">Loading patterns...</div>
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Trace Patterns</h1>
+          <p className="text-muted-foreground">Span names aggregated by extracted patterns</p>
+        </div>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    )
   }
 
   if (error) {
-    return <div className="error">Error: {error}</div>
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Trace Patterns</h1>
+          <p className="text-muted-foreground">Span names aggregated by extracted patterns</p>
+        </div>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error: {error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
-    <div className="patterns-view">
-      <div className="view-header">
-        <h2>Trace Patterns</h2>
-        <p className="subtitle">
-          Span names aggregated by extracted patterns. Multi-variant patterns indicate 
-          high-cardinality span naming (dynamic values in span names).
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Trace Patterns</h1>
+        <p className="text-muted-foreground">
+          Span names aggregated by extracted patterns. Multi-variant patterns indicate high-cardinality span naming.
         </p>
       </div>
 
-      <div className="filters">
-        <label>
-          Min Variants:
-          <input
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium whitespace-nowrap">Min Variants:</label>
+          <Input
             type="number"
             min="1"
             value={minSpans}
             onChange={(e) => setMinSpans(parseInt(e.target.value) || 1)}
-            style={{ width: '60px', marginLeft: '8px' }}
+            className="w-20"
           />
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
           <input
             type="checkbox"
             checked={showOnlyNormalized}
             onChange={(e) => setShowOnlyNormalized(e.target.checked)}
+            className="rounded"
           />
-          Show only normalized patterns
+          Normalized only
         </label>
-        <span className="filter-info">
-          {filteredPatterns.length} patterns ({normalizedCount} normalized, {multiSpanPatterns.length} multi-variant)
+        <span className="text-sm text-muted-foreground ml-auto">
+          {filteredPatterns.length} patterns · {normalizedCount} normalized · {multiSpanPatterns.length} multi-variant
         </span>
       </div>
 
-      <div className="legend">
-        <span className="legend-item">
-          <span className="legend-badge normalized">Normalized</span>
-          Pattern extracted - dynamic values replaced with placeholders
-        </span>
-        <span className="legend-item">
-          <span className="legend-badge original">Original</span>
-          Already well-named - no dynamic values detected
-        </span>
+      <div className="flex gap-2 flex-wrap">
+        <Badge variant="default" className="gap-1">Normalized — dynamic values replaced with placeholders</Badge>
+        <Badge variant="outline" className="gap-1">Original — no dynamic values detected</Badge>
       </div>
 
       {multiSpanPatterns.length > 0 && (
-        <section className="pattern-section">
-          <h3>High Cardinality Patterns ({multiSpanPatterns.length})</h3>
-          <p className="section-info">
-            Patterns with 2+ variants = multiple span names normalized to the same pattern.
-            This indicates dynamic values (IDs, paths) embedded in span names.
-          </p>
-          <div className="pattern-list">
+        <Card>
+          <CardHeader>
+            <CardTitle>High Cardinality Patterns ({multiSpanPatterns.length})</CardTitle>
+            <CardDescription>
+              Patterns with 2+ variants indicate dynamic values (IDs, paths) embedded in span names.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 p-3">
             {multiSpanPatterns.map((pg, idx) => {
               const normalized = isNormalized(pg.pattern)
               const example = getExample(pg)
-              
+              const expanded = expandedPatterns[pg.pattern]
               return (
-                <div key={idx} className={`pattern-card ${normalized ? 'normalized' : 'original'}`}>
-                  <div 
-                    className="pattern-header"
+                <div key={idx} className="rounded-md border">
+                  <button
+                    className="flex w-full items-start gap-2 p-3 text-left hover:bg-muted/50 transition-colors"
                     onClick={() => toggleExpand(pg.pattern)}
                   >
-                    <div className="pattern-info">
-                      <div className="pattern-line">
-                        <span className={`type-badge ${normalized ? 'normalized' : 'original'}`}>
+                    {expanded ? (
+                      <ChevronDownIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="flex flex-1 flex-col gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={normalized ? 'default' : 'outline'}>
                           {normalized ? 'Normalized' : 'Original'}
-                        </span>
-                        <code className="pattern-template">{pg.pattern}</code>
+                        </Badge>
+                        <code className="text-sm">{pg.pattern}</code>
                       </div>
                       {example && (
-                        <div className="example-line">
-                          <span className="example-label">Example:</span>
-                          <code className="example-name">{example}</code>
-                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          Example: <code>{example}</code>
+                        </span>
                       )}
-                      <div className="pattern-stats">
-                        <span className="badge warning">{pg.span_count} variants</span>
-                        <span className="stat">{pg.total_samples.toLocaleString()} total samples</span>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive" className="text-xs">{pg.span_count} variants</Badge>
+                        <span className="text-xs text-muted-foreground">{pg.total_samples.toLocaleString()} samples</span>
                       </div>
                     </div>
-                    <span className="expand-icon">
-                      {expandedPatterns[pg.pattern] ? '▼' : '▶'}
-                    </span>
-                  </div>
-                  
-                  {expandedPatterns[pg.pattern] && (
-                    <div className="pattern-details">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Span Name (Variant)</th>
-                            <th>Kind</th>
-                            <th>Samples</th>
-                            <th>Services</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                  </button>
+                  {expanded && (
+                    <div className="border-t">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Span Name (Variant)</TableHead>
+                            <TableHead>Kind</TableHead>
+                            <TableHead>Samples</TableHead>
+                            <TableHead>Services</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {pg.matching_spans.map((span, i) => (
-                            <tr key={i}>
-                              <td>
-                                <span 
-                                  className="detail-link"
-                                  onClick={() => onViewDetails('spans', span.span_name)}
-                                >
-                                  {span.span_name}
-                                </span>
-                              </td>
-                              <td>
-                                <span className="key-badge">{span.kind || 'Unknown'}</span>
-                              </td>
-                              <td>{span.sample_count.toLocaleString()}</td>
-                              <td>{span.services?.join(', ') || '-'}</td>
-                            </tr>
+                            <TableRow key={i}>
+                              <TableCell
+                                className="font-mono text-xs cursor-pointer text-primary hover:underline"
+                                onClick={() => onViewDetails('spans', span.span_name)}
+                              >
+                                {span.span_name}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{span.kind || 'Unknown'}</Badge>
+                              </TableCell>
+                              <TableCell>{span.sample_count.toLocaleString()}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {span.services?.join(', ') || '-'}
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
                   )}
                 </div>
               )
             })}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       )}
 
       {minSpans === 1 && singleSpanPatterns.length > 0 && (
-        <section className="pattern-section">
-          <h3>Single-Variant Patterns ({singleSpanPatterns.length})</h3>
-          <p className="section-info">
-            Each pattern matches only one span name. Normalized = we detected dynamic values but only saw one variant.
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Pattern</th>
-                <th>Example</th>
-                <th>Kind</th>
-                <th>Samples</th>
-                <th>Services</th>
-              </tr>
-            </thead>
-            <tbody>
-              {singleSpanPatterns.slice(0, 50).map((pg, idx) => {
-                const span = pg.matching_spans[0]
-                const normalized = isNormalized(pg.pattern)
-                const example = getExample(pg)
-                
-                return (
-                  <tr key={idx} className={normalized ? 'row-normalized' : ''}>
-                    <td>
-                      <span className={`type-badge small ${normalized ? 'normalized' : 'original'}`}>
-                        {normalized ? 'Normalized' : 'Original'}
-                      </span>
-                    </td>
-                    <td>
-                      <code className="pattern-template">{pg.pattern}</code>
-                    </td>
-                    <td>
-                      {example ? (
-                        <span 
-                          className="detail-link"
-                          onClick={() => onViewDetails('spans', span.span_name)}
-                        >
-                          {example}
-                        </span>
-                      ) : (
-                        <span className="no-example">-</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className="key-badge">{span?.kind || 'Unknown'}</span>
-                    </td>
-                    <td>{pg.total_samples.toLocaleString()}</td>
-                    <td>{span?.services?.slice(0, 3).join(', ')}{span?.services?.length > 3 ? '...' : ''}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          {singleSpanPatterns.length > 50 && (
-            <p className="more-info">
-              Showing 50 of {singleSpanPatterns.length} single-variant patterns
-            </p>
-          )}
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Single-Variant Patterns ({singleSpanPatterns.length})</CardTitle>
+            <CardDescription>
+              Each pattern matches only one span name.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Pattern</TableHead>
+                  <TableHead>Example</TableHead>
+                  <TableHead>Kind</TableHead>
+                  <TableHead>Samples</TableHead>
+                  <TableHead>Services</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {singleSpanPatterns.slice(0, 50).map((pg, idx) => {
+                  const span = pg.matching_spans[0]
+                  const normalized = isNormalized(pg.pattern)
+                  const example = getExample(pg)
+                  return (
+                    <TableRow key={idx}>
+                      <TableCell>
+                        <Badge variant={normalized ? 'default' : 'outline'} className="text-xs">
+                          {normalized ? 'Normalized' : 'Original'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{pg.pattern}</TableCell>
+                      <TableCell>
+                        {example ? (
+                          <span
+                            className="font-mono text-xs cursor-pointer text-primary hover:underline"
+                            onClick={() => onViewDetails('spans', span.span_name)}
+                          >
+                            {example}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{span?.kind || 'Unknown'}</Badge>
+                      </TableCell>
+                      <TableCell>{pg.total_samples.toLocaleString()}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {span?.services?.slice(0, 3).join(', ')}{span?.services?.length > 3 ? '...' : ''}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+            {singleSpanPatterns.length > 50 && (
+              <p className="py-3 text-center text-xs text-muted-foreground">
+                Showing 50 of {singleSpanPatterns.length} patterns
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {filteredPatterns.length === 0 && (
-        <div className="empty-state">
-          <p>No span patterns found. Send some trace data to see patterns.</p>
-        </div>
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground">No span patterns found. Send some trace data to see patterns.</p>
+          </CardContent>
+        </Card>
       )}
-
-      <style>{`
-        .patterns-view {
-          padding: 20px;
-        }
-        .view-header {
-          margin-bottom: 20px;
-        }
-        .view-header h2 {
-          margin: 0 0 8px 0;
-        }
-        .subtitle {
-          color: var(--text-secondary);
-          margin: 0;
-        }
-        .filters {
-          display: flex;
-          gap: 20px;
-          align-items: center;
-          margin-bottom: 16px;
-          padding: 12px;
-          background: var(--bg-secondary);
-          border-radius: 6px;
-        }
-        .filter-info {
-          color: var(--text-secondary);
-          font-size: 0.9em;
-          margin-left: auto;
-        }
-        .legend {
-          display: flex;
-          gap: 24px;
-          margin-bottom: 20px;
-          padding: 10px 12px;
-          background: var(--bg-tertiary);
-          border-radius: 6px;
-          font-size: 0.85em;
-        }
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: var(--text-secondary);
-        }
-        .legend-badge {
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 0.8em;
-          font-weight: 500;
-        }
-        .legend-badge.normalized {
-          background: #7c3aed;
-          color: white;
-        }
-        .legend-badge.original {
-          background: #059669;
-          color: white;
-        }
-        .pattern-section {
-          margin-bottom: 30px;
-        }
-        .pattern-section h3 {
-          margin: 0 0 8px 0;
-        }
-        .section-info {
-          color: var(--text-secondary);
-          margin: 0 0 16px 0;
-          font-size: 0.9em;
-        }
-        .pattern-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        .pattern-card {
-          background: var(--bg-secondary);
-          border-radius: 8px;
-          overflow: hidden;
-        }
-        .pattern-card.normalized {
-          border-left: 4px solid #7c3aed;
-        }
-        .pattern-card.original {
-          border-left: 4px solid #059669;
-        }
-        .pattern-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          padding: 16px;
-          cursor: pointer;
-        }
-        .pattern-header:hover {
-          background: var(--bg-hover);
-        }
-        .pattern-info {
-          flex: 1;
-        }
-        .pattern-line {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 6px;
-        }
-        .type-badge {
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 0.75em;
-          font-weight: 600;
-          text-transform: uppercase;
-        }
-        .type-badge.small {
-          padding: 1px 6px;
-          font-size: 0.7em;
-        }
-        .type-badge.normalized {
-          background: #7c3aed;
-          color: white;
-        }
-        .type-badge.original {
-          background: #059669;
-          color: white;
-        }
-        .pattern-template {
-          font-size: 1.05em;
-          font-weight: 500;
-        }
-        .example-line {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 8px;
-          font-size: 0.9em;
-        }
-        .example-label {
-          color: var(--text-secondary);
-        }
-        .example-name {
-          color: var(--text-secondary);
-          font-style: italic;
-        }
-        .pattern-stats {
-          display: flex;
-          gap: 12px;
-          align-items: center;
-        }
-        .stat {
-          color: var(--text-secondary);
-          font-size: 0.9em;
-        }
-        .badge.warning {
-          background: var(--warning-color);
-          color: white;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 0.85em;
-        }
-        .expand-icon {
-          color: var(--text-secondary);
-          font-size: 0.8em;
-          padding-top: 4px;
-        }
-        .pattern-details {
-          padding: 0 16px 16px 16px;
-        }
-        .pattern-details table {
-          width: 100%;
-        }
-        .row-normalized {
-          background: rgba(124, 58, 237, 0.1);
-        }
-        .no-example {
-          color: var(--text-tertiary);
-        }
-        .empty-state {
-          text-align: center;
-          padding: 40px;
-          color: var(--text-secondary);
-        }
-        .more-info {
-          color: var(--text-secondary);
-          font-size: 0.9em;
-          margin-top: 12px;
-        }
-      `}</style>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MoonIcon, SunIcon, Trash2Icon } from 'lucide-react'
+import { MoonIcon, SunIcon, Trash2Icon, SearchIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import {
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Separator } from '@/components/ui/separator'
 
-export function AppHeader({ darkMode, onToggleDarkMode, appVersion, currentSessionName }) {
+export function AppHeader({ darkMode, onToggleDarkMode, appVersion, currentSessionName, onOpenSearch }) {
   const [isClearing, setIsClearing] = useState(false)
   const [clearError, setClearError] = useState(null)
 
@@ -42,10 +42,17 @@ export function AppHeader({ darkMode, onToggleDarkMode, appVersion, currentSessi
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="h-4" />
       <div className="flex flex-1 items-center gap-2">
-        <span className="text-sm font-medium">OTLP Cardinality Checker</span>
-        {appVersion && (
-          <span className="text-xs text-muted-foreground">v{appVersion}</span>
-        )}
+        <Button
+          variant="outline"
+          className="relative h-8 w-full max-w-xs justify-start gap-2 text-sm text-muted-foreground font-normal shadow-none"
+          onClick={onOpenSearch}
+        >
+          <SearchIcon className="h-4 w-4" />
+          <span>Search...</span>
+          <kbd className="pointer-events-none ml-auto hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+            ⌘K
+          </kbd>
+        </Button>
         {currentSessionName && (
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
             {currentSessionName}
@@ -56,6 +63,9 @@ export function AppHeader({ darkMode, onToggleDarkMode, appVersion, currentSessi
         <p className="text-sm text-destructive">{clearError}</p>
       )}
       <div className="flex items-center gap-1">
+        {appVersion && (
+          <span className="hidden text-xs text-muted-foreground sm:block">v{appVersion}</span>
+        )}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" disabled={isClearing} title="Clear all data">

@@ -1,4 +1,16 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function MetadataComplexity({ onViewDetails }) {
   const [threshold, setThreshold] = useState(10)
@@ -28,19 +40,19 @@ function MetadataComplexity({ onViewDetails }) {
       })
   }, [threshold, limit])
 
-  const getSignalTypeColor = (type) => {
+  const getSignalTypeVariant = (type) => {
     switch(type) {
-      case 'metric': return '#4CAF50'
-      case 'span': return '#2196F3'
-      case 'log': return '#FF9800'
-      default: return '#757575'
+      case 'metric': return 'default'
+      case 'span': return 'secondary'
+      case 'log': return 'outline'
+      default: return 'outline'
     }
   }
 
-  const getComplexityColor = (score) => {
-    if (score < 50) return '#4CAF50'
-    if (score < 200) return '#FF9800'
-    return '#f44336'
+  const getComplexityVariant = (score) => {
+    if (score < 50) return 'secondary'
+    if (score < 200) return 'outline'
+    return 'destructive'
   }
 
   const handleSort = (field) => {
@@ -54,189 +66,189 @@ function MetadataComplexity({ onViewDetails }) {
 
   const sortData = (signals) => {
     if (!signals) return []
-    
     return [...signals].sort((a, b) => {
-      let aVal = a[sortField]
-      let bVal = b[sortField]
-      
-      if (sortDirection === 'asc') {
-        return aVal > bVal ? 1 : -1
-      } else {
-        return aVal < bVal ? 1 : -1
-      }
+      const aVal = a[sortField]
+      const bVal = b[sortField]
+      if (sortDirection === 'asc') return aVal > bVal ? 1 : -1
+      return aVal < bVal ? 1 : -1
     })
   }
 
-  if (loading) return <div className="loading">Loading metadata complexity data...</div>
-  if (error) return <div className="error">Error: {error}</div>
-  if (!data || !data.signals) return <div className="no-data">No signals found</div>
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
+          <p className="text-muted-foreground">Identify signals with excessive instrumentation</p>
+        </div>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
+          <p className="text-muted-foreground">Identify signals with excessive instrumentation</p>
+        </div>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error: {error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!data || !data.signals) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
+          <p className="text-muted-foreground">Identify signals with excessive instrumentation</p>
+        </div>
+        <p className="text-muted-foreground">No signals found</p>
+      </div>
+    )
+  }
 
   const sortedSignals = sortData(data.signals)
 
+  const SortIndicator = ({ field }) => sortField === field ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ''
+
   return (
-    <div className="metadata-complexity">
-      <div className="header">
-        <h2>Metadata Complexity Analysis</h2>
-        <p>Identify signals with excessive instrumentation that may cause cardinality issues</p>
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Metadata Complexity</h1>
+        <p className="text-muted-foreground">Identify signals with excessive instrumentation that may cause cardinality issues</p>
       </div>
 
-      <div className="controls">
-        <div className="control-group">
-          <label>
-            Min Total Keys:
-            <input
-              type="number"
-              value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value))}
-              min="1"
-              step="5"
-            />
-          </label>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Complex Signals</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.total}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Key Threshold</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{threshold}+</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium whitespace-nowrap">Min Total Keys:</label>
+          <Input
+            type="number"
+            value={threshold}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            min="1"
+            step="5"
+            className="w-24"
+          />
         </div>
-        <div className="control-group">
-          <label>
-            Max Results:
-            <input
-              type="number"
-              value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
-              min="10"
-              max="1000"
-              step="10"
-            />
-          </label>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium whitespace-nowrap">Max Results:</label>
+          <Input
+            type="number"
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            min="10"
+            max="1000"
+            step="10"
+            className="w-24"
+          />
         </div>
       </div>
 
-      <div className="stats">
-        <div className="stat-card">
-          <div className="stat-value">{data.total}</div>
-          <div className="stat-label">Complex Signals</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{threshold}+</div>
-          <div className="stat-label">Key Threshold</div>
-        </div>
-      </div>
-
-      <div className="complexity-table">
-        <table>
-          <thead>
-            <tr>
-              <th onClick={() => handleSort('signal_type')} className="sortable">
-                Signal Type {sortField === 'signal_type' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('signal_name')} className="sortable">
-                Signal Name {sortField === 'signal_name' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('total_keys')} className="sortable">
-                Total Keys {sortField === 'total_keys' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('attribute_key_count')} className="sortable">
-                Attributes {sortField === 'attribute_key_count' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('resource_key_count')} className="sortable">
-                Resources {sortField === 'resource_key_count' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('event_key_count')} className="sortable">
-                Events {sortField === 'event_key_count' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('link_key_count')} className="sortable">
-                Links {sortField === 'link_key_count' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('max_cardinality')} className="sortable">
-                Max Card {sortField === 'max_cardinality' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('high_cardinality_count')} className="sortable">
-                High Card Keys {sortField === 'high_cardinality_count' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('complexity_score')} className="sortable">
-                Complexity {sortField === 'complexity_score' && (sortDirection === 'asc' ? '▲' : '▼')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedSignals.map((signal, idx) => {
-              // Convert singular to plural for Details component
-              const typeMap = { 'metric': 'metrics', 'span': 'spans', 'log': 'logs' }
-              const pluralType = typeMap[signal.signal_type] || signal.signal_type
-              
-              return (
-                <tr 
-                  key={idx}
-                  onClick={() => onViewDetails(pluralType, signal.signal_name)}
-                  style={{ cursor: 'pointer' }}
-                  className="clickable-row"
-                >
-                <td>
-                  <span 
-                    className="signal-type-badge"
-                    style={{ backgroundColor: getSignalTypeColor(signal.signal_type) }}
+      <Card>
+        <CardHeader>
+          <CardTitle>Signals ({sortedSignals.length})</CardTitle>
+          <CardDescription>Click a row to view signal details</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('signal_type')}>
+                  Type<SortIndicator field="signal_type" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('signal_name')}>
+                  Signal Name<SortIndicator field="signal_name" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('total_keys')}>
+                  Total Keys<SortIndicator field="total_keys" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('attribute_key_count')}>
+                  Attributes<SortIndicator field="attribute_key_count" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('resource_key_count')}>
+                  Resources<SortIndicator field="resource_key_count" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('max_cardinality')}>
+                  Max Card<SortIndicator field="max_cardinality" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('high_cardinality_count')}>
+                  High Card Keys<SortIndicator field="high_cardinality_count" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('complexity_score')}>
+                  Complexity<SortIndicator field="complexity_score" />
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedSignals.map((signal, idx) => {
+                const typeMap = { 'metric': 'metrics', 'span': 'spans', 'log': 'logs' }
+                const pluralType = typeMap[signal.signal_type] || signal.signal_type
+                return (
+                  <TableRow
+                    key={idx}
+                    className="cursor-pointer"
+                    onClick={() => onViewDetails(pluralType, signal.signal_name)}
                   >
-                    {signal.signal_type}
-                  </span>
-                </td>
-                <td className="signal-name">
-                  <code>{signal.signal_name}</code>
-                </td>
-                <td>
-                  <strong>{signal.total_keys}</strong>
-                </td>
-                <td>{signal.attribute_key_count}</td>
-                <td>{signal.resource_key_count}</td>
-                <td>{signal.event_key_count || 0}</td>
-                <td>{signal.link_key_count || 0}</td>
-                <td>{signal.max_cardinality.toLocaleString()}</td>
-                <td>
-                  {signal.high_cardinality_count > 0 ? (
-                    <span className="warning-badge">
-                      {signal.high_cardinality_count}
-                    </span>
-                  ) : (
-                    <span className="ok-badge">0</span>
-                  )}
-                </td>
-                <td>
-                  <span 
-                    className="complexity-badge"
-                    style={{ 
-                      backgroundColor: getComplexityColor(signal.complexity_score),
-                      color: 'white',
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    {signal.complexity_score.toLocaleString()}
-                  </span>
-                </td>
-              </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {sortedSignals.length === 0 && (
-        <div className="no-results">
-          No signals found with {threshold}+ total keys. Try lowering the threshold.
-        </div>
-      )}
-
-      <div className="legend">
-        <h3>Understanding Complexity Score</h3>
-        <p>
-          <strong>Complexity Score</strong> = Total Keys × Max Cardinality
-        </p>
-        <ul>
-          <li><span style={{color: '#4CAF50'}}>Green (&lt;50)</span>: Low complexity, efficient</li>
-          <li><span style={{color: '#FF9800'}}>Orange (50-200)</span>: Medium complexity, monitor</li>
-          <li><span style={{color: '#f44336'}}>Red (&gt;200)</span>: High complexity, optimize</li>
-        </ul>
-        <p>
-          <strong>High Card Keys</strong>: Number of keys with estimated cardinality &gt; 100
-        </p>
-      </div>
+                    <TableCell>
+                      <Badge variant={getSignalTypeVariant(signal.signal_type)}>
+                        {signal.signal_type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{signal.signal_name}</TableCell>
+                    <TableCell className="font-semibold">{signal.total_keys}</TableCell>
+                    <TableCell>{signal.attribute_key_count}</TableCell>
+                    <TableCell>{signal.resource_key_count}</TableCell>
+                    <TableCell>{signal.max_cardinality.toLocaleString()}</TableCell>
+                    <TableCell>
+                      {signal.high_cardinality_count > 0 ? (
+                        <Badge variant="destructive">{signal.high_cardinality_count}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getComplexityVariant(signal.complexity_score)}>
+                        {signal.complexity_score.toLocaleString()}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+          {sortedSignals.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No signals found with {threshold}+ total keys. Try lowering the threshold.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

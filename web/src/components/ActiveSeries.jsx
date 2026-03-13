@@ -1,19 +1,29 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function ActiveSeries() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showAll, setShowAll] = useState(false)
-  const [sortBy, setSortBy] = useState('series-prom') // 'series-otlp', 'series-prom', 'name', 'samples'
+  const [sortBy, setSortBy] = useState('series-prom')
 
   useEffect(() => {
     fetch('/api/v1/metrics')
       .then(r => r.json())
       .then(response => {
-        // Extract metrics from paginated response
-        const metrics = response.data || response
-        setData(metrics)
+        setData(response.data || response)
         setLoading(false)
       })
       .catch(err => {
@@ -22,213 +32,183 @@ function ActiveSeries() {
       })
   }, [])
 
-  if (loading) return <div className="loading">Loading...</div>
-  if (error) return <div className="error">Error: {error}</div>
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Active Series</h1>
+          <p className="text-muted-foreground">Cardinality breakdown per metric</p>
+        </div>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Active Series</h1>
+          <p className="text-muted-foreground">Cardinality breakdown per metric</p>
+        </div>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error: {error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const getOtlpSeries = (metric) => metric.active_series_otlp ?? metric.active_series ?? 0
   const getPromSeries = (metric) => metric.active_series_prometheus ?? getOtlpSeries(metric)
 
-  // Sort metrics
   const sorted = [...data].sort((a, b) => {
     switch (sortBy) {
-      case 'series-otlp':
-        return getOtlpSeries(b) - getOtlpSeries(a)
-      case 'series-prom':
-        return getPromSeries(b) - getPromSeries(a)
-      case 'name':
-        return a.name.localeCompare(b.name)
-      case 'samples':
-        return b.sample_count - a.sample_count
-      default:
-        return 0
+      case 'series-otlp': return getOtlpSeries(b) - getOtlpSeries(a)
+      case 'series-prom': return getPromSeries(b) - getPromSeries(a)
+      case 'name': return a.name.localeCompare(b.name)
+      case 'samples': return b.sample_count - a.sample_count
+      default: return 0
     }
   })
 
-  // Calculate statistics
   const totalOtlpSeries = sorted.reduce((sum, m) => sum + getOtlpSeries(m), 0)
   const totalPromSeries = sorted.reduce((sum, m) => sum + getPromSeries(m), 0)
   const avgOtlpSeries = totalOtlpSeries / (sorted.length || 1)
-  const maxPromSeries = Math.max(...sorted.map(m => getPromSeries(m)))
+  const maxPromSeries = sorted.length > 0 ? Math.max(...sorted.map(m => getPromSeries(m))) : 0
 
-  // Display limit
   const displayLimit = showAll ? sorted.length : 20
   const displayed = sorted.slice(0, displayLimit)
 
-  const getSeriesBadge = (count) => {
-    if (count > 1000) return 'high'
-    if (count > 100) return 'medium'
-    return 'low'
+  const getSeriesVariant = (count) => {
+    if (count > 1000) return 'destructive'
+    if (count > 100) return 'outline'
+    return 'secondary'
   }
 
+  const sortButtons = [
+    { id: 'series-prom', label: 'Prometheus Series' },
+    { id: 'series-otlp', label: 'OTLP Series' },
+    { id: 'name', label: 'Name' },
+    { id: 'samples', label: 'Sample Count' },
+  ]
+
   return (
-    <div className="view-container">
-      <h1>📊 Active Series</h1>
-      
-      <div className="card">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '20px' }}>
-          <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
-            <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Total Metrics
-            </div>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
-              {sorted.length.toLocaleString()}
-            </div>
-          </div>
-          
-          <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
-            <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Total Active Series (OTLP)
-            </div>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
-              {totalOtlpSeries.toLocaleString()}
-            </div>
-          </div>
-          
-          <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
-            <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Total Active Series (Prometheus)
-            </div>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
-              {totalPromSeries.toLocaleString()}
-            </div>
-          </div>
-          
-          <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
-            <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Average per Metric (OTLP)
-            </div>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold' }}>
-              {Math.round(avgOtlpSeries).toLocaleString()}
-            </div>
-          </div>
-
-          <div style={{ padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
-            <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Highest Cardinality (Prometheus)
-            </div>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: maxPromSeries > 1000 ? 'var(--danger)' : 'var(--success)' }}>
-              {maxPromSeries.toLocaleString()}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontWeight: '500' }}>Sort by:</span>
-          <button 
-            onClick={() => setSortBy('series-otlp')}
-            className={sortBy === 'series-otlp' ? 'sort-button active' : 'sort-button'}
-          >
-            OTLP Series
-          </button>
-          <button 
-            onClick={() => setSortBy('series-prom')}
-            className={sortBy === 'series-prom' ? 'sort-button active' : 'sort-button'}
-          >
-            Prometheus Series
-          </button>
-          <button 
-            onClick={() => setSortBy('name')}
-            className={sortBy === 'name' ? 'sort-button active' : 'sort-button'}
-          >
-            Name
-          </button>
-          <button 
-            onClick={() => setSortBy('samples')}
-            className={sortBy === 'samples' ? 'sort-button active' : 'sort-button'}
-          >
-            Sample Count
-          </button>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Metric Name</th>
-              <th>Type</th>
-              <th>Active Series (OTLP)</th>
-              <th>Active Series (Prometheus)</th>
-              <th>Label Keys</th>
-              <th>Samples</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayed.map((metric, idx) => (
-              <tr key={metric.name}>
-                <td style={{ fontWeight: '500' }}>#{idx + 1}</td>
-                <td>
-                  <code style={{ fontSize: '0.9em' }}>{metric.name}</code>
-                </td>
-                <td>
-                  <span className="type-badge">{metric.type || 'Unknown'}</span>
-                </td>
-                <td>
-                  <span className={`badge ${getSeriesBadge(getOtlpSeries(metric))}`}>
-                    {getOtlpSeries(metric).toLocaleString()}
-                  </span>
-                </td>
-                <td>
-                  <span className={`badge ${getSeriesBadge(getPromSeries(metric))}`}>
-                    {getPromSeries(metric).toLocaleString()}
-                  </span>
-                </td>
-                <td>
-                  {Object.keys(metric.label_keys || {}).length} keys
-                </td>
-                <td>
-                  {metric.sample_count.toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {sorted.length > displayLimit && (
-          <div style={{ marginTop: '16px', textAlign: 'center' }}>
-            <button 
-              onClick={() => setShowAll(!showAll)}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: 'var(--link-color)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              {showAll ? 'Show Top 20' : `Show All ${sorted.length} Metrics`}
-            </button>
-          </div>
-        )}
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Active Series</h1>
+        <p className="text-muted-foreground">Cardinality breakdown per metric</p>
       </div>
 
-      <style jsx>{`
-        .sort-button {
-          padding: 6px 12px;
-          border: 1px solid var(--border-color);
-          background-color: var(--bg-secondary);
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .sort-button:hover {
-          background-color: var(--bg-hover);
-        }
-        
-        .sort-button.active {
-          background-color: var(--link-color);
-          color: white;
-          border-color: var(--link-color);
-        }
-        
-        .type-badge {
-          padding: 2px 8px;
-          background-color: var(--bg-secondary);
-          border-radius: 3px;
-          font-size: 0.85em;
-        }
-      `}</style>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Metrics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{sorted.length.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Series (OTLP)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalOtlpSeries.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Series (Prometheus)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalPromSeries.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Average per Metric</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{Math.round(avgOtlpSeries).toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Highest (Prometheus)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${maxPromSeries > 1000 ? 'text-destructive' : ''}`}>
+              {maxPromSeries.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">Sort by:</span>
+        {sortButtons.map(({ id, label }) => (
+          <Button
+            key={id}
+            variant={sortBy === id ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16">Rank</TableHead>
+                <TableHead>Metric Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Active Series (OTLP)</TableHead>
+                <TableHead>Active Series (Prometheus)</TableHead>
+                <TableHead>Label Keys</TableHead>
+                <TableHead>Samples</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayed.map((metric, idx) => (
+                <TableRow key={metric.name}>
+                  <TableCell className="font-medium">#{idx + 1}</TableCell>
+                  <TableCell className="font-mono text-xs">{metric.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{metric.type || 'Unknown'}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getSeriesVariant(getOtlpSeries(metric))}>
+                      {getOtlpSeries(metric).toLocaleString()}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getSeriesVariant(getPromSeries(metric))}>
+                      {getPromSeries(metric).toLocaleString()}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {Object.keys(metric.label_keys || {}).length} keys
+                  </TableCell>
+                  <TableCell>{metric.sample_count.toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {sorted.length > displayLimit && (
+            <div className="flex justify-center p-4">
+              <Button variant="outline" onClick={() => setShowAll(!showAll)}>
+                {showAll ? 'Show Top 20' : `Show All ${sorted.length} Metrics`}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

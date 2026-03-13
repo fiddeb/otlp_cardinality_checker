@@ -1,13 +1,29 @@
 import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function MetricsOverview({ onViewMetric }) {
   const [metrics, setMetrics] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filter, setFilter] = useState({
-    type: 'all',
-    search: ''
-  })
+  const [filter, setFilter] = useState({ type: 'all', search: '' })
   const [sortField, setSortField] = useState('sample_count')
   const [sortDirection, setSortDirection] = useState('desc')
 
@@ -32,44 +48,31 @@ function MetricsOverview({ onViewMetric }) {
 
   const metricTypes = ['all', ...new Set((metrics || []).map(m => m.type).filter(Boolean))]
 
-  const getTypeColor = (type) => {
-    const colors = {
-      'Sum': '#1976d2',
-      'Gauge': '#388e3c',
-      'Histogram': '#f57c00',
-      'Summary': '#7b1fa2',
-      'ExponentialHistogram': '#d32f2f'
-    }
-    return colors[type] || 'var(--text-secondary)'
+  const getTypeVariant = (type) => {
+    const variants = { 'Sum': 'default', 'Gauge': 'secondary', 'Histogram': 'outline', 'Summary': 'secondary', 'ExponentialHistogram': 'destructive' }
+    return variants[type] || 'outline'
   }
 
   const getComplexity = (metric) => {
-    // Calculate total keys (labels + resources + histogram buckets if applicable)
     const labelCount = metric.label_keys ? Object.keys(metric.label_keys).length : 0
     const resourceCount = metric.resource_keys ? Object.keys(metric.resource_keys).length : 0
     let bucketCount = 0
-    
     if (metric.type === 'Histogram' && metric.data && metric.data.explicit_bounds) {
       bucketCount = metric.data.explicit_bounds.length + 1
     } else if (metric.type === 'ExponentialHistogram' && metric.data && metric.data.scales) {
       bucketCount = metric.data.scales.length * 10
     }
-    
     const totalKeys = labelCount + resourceCount + bucketCount
-    
-    // Get max cardinality
     let maxCardinality = 0
     if (metric.label_keys) {
-      const labelCardinalities = Object.values(metric.label_keys).map(v => v.estimated_cardinality || 0)
-      maxCardinality = Math.max(maxCardinality, ...labelCardinalities)
+      const vals = Object.values(metric.label_keys).map(v => v.estimated_cardinality || 0)
+      maxCardinality = Math.max(maxCardinality, ...vals)
     }
     if (metric.resource_keys) {
-      const resourceCardinalities = Object.values(metric.resource_keys).map(v => v.estimated_cardinality || 0)
-      maxCardinality = Math.max(maxCardinality, ...resourceCardinalities)
+      const vals = Object.values(metric.resource_keys).map(v => v.estimated_cardinality || 0)
+      maxCardinality = Math.max(maxCardinality, ...vals)
     }
-    
-    const complexity = totalKeys * maxCardinality
-    return complexity > 0 ? complexity : 0
+    return totalKeys * maxCardinality
   }
 
   const handleSort = (field) => {
@@ -81,182 +84,177 @@ function MetricsOverview({ onViewMetric }) {
     }
   }
 
-  const getSortedMetrics = (metrics) => {
-    return [...metrics].sort((a, b) => {
+  const getSortedMetrics = (list) => {
+    return [...list].sort((a, b) => {
       let aVal, bVal
-      
-      switch(sortField) {
-        case 'name':
-          aVal = a.name
-          bVal = b.name
-          break
-        case 'type':
-          aVal = a.type
-          bVal = b.type
-          break
-        case 'unit':
-          aVal = a.unit || ''
-          bVal = b.unit || ''
-          break
-        case 'sample_count':
-          aVal = a.sample_count
-          bVal = b.sample_count
-          break
-        case 'complexity':
-          aVal = getComplexity(a)
-          bVal = getComplexity(b)
-          break
-        default:
-          aVal = a.sample_count
-          bVal = b.sample_count
+      switch (sortField) {
+        case 'name': aVal = a.name; bVal = b.name; break
+        case 'type': aVal = a.type; bVal = b.type; break
+        case 'unit': aVal = a.unit || ''; bVal = b.unit || ''; break
+        case 'complexity': aVal = getComplexity(a); bVal = getComplexity(b); break
+        default: aVal = a.sample_count; bVal = b.sample_count
       }
-      
       if (typeof aVal === 'string') {
-        return sortDirection === 'asc' 
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal)
-      } else {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
+        return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
       }
+      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
     })
   }
 
-  if (loading) return <div className="loading">Loading metrics...</div>
-  if (error) return <div className="error">Error: {error}</div>
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Metrics Overview</h1>
+          <p className="text-muted-foreground">All observed metrics and their cardinality</p>
+        </div>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    )
+  }
 
-  const totalSamples = filteredMetrics.reduce((sum, metric) => sum + metric.sample_count, 0)
-  const typeBreakdown = filteredMetrics.reduce((acc, metric) => {
-    acc[metric.type] = (acc[metric.type] || 0) + 1
+  if (error) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Metrics Overview</h1>
+          <p className="text-muted-foreground">All observed metrics and their cardinality</p>
+        </div>
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <p className="text-destructive">Error: {error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const totalSamples = filteredMetrics.reduce((sum, m) => sum + m.sample_count, 0)
+  const typeBreakdown = filteredMetrics.reduce((acc, m) => {
+    acc[m.type] = (acc[m.type] || 0) + 1
     return acc
   }, {})
 
+  const SortIndicator = ({ field }) => sortField === field ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ''
+
   return (
-    <div className="card">
-      <h2>Metrics Overview</h2>
-      
-      <div className="stats-row">
-        <div className="stat-card">
-          <div className="stat-label">Total Metrics</div>
-          <div className="stat-value">{filteredMetrics.length}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Total Observations</div>
-          <div className="stat-value">{totalSamples.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Metric Types</div>
-          <div className="stat-value">{Object.keys(typeBreakdown).length}</div>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Metrics Overview</h1>
+        <p className="text-muted-foreground">All observed metrics and their cardinality</p>
       </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>Type Distribution</h3>
-      
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
-        {Object.entries(typeBreakdown)
-          .sort((a, b) => b[1] - a[1])
-          .map(([type, count]) => (
-            <div 
-              key={type}
-              style={{
-                padding: '8px 16px',
-                background: getTypeColor(type),
-                color: 'white',
-                borderRadius: '4px',
-                fontSize: '0.9em',
-                fontWeight: '500'
-              }}
-            >
-              {type}: {count}
-            </div>
-          ))}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Metrics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredMetrics.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Observations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalSamples.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Metric Types</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{Object.keys(typeBreakdown).length}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="filter-group">
-        <input 
-          type="text"
+      {Object.keys(typeBreakdown).length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(typeBreakdown)
+            .sort((a, b) => b[1] - a[1])
+            .map(([type, count]) => (
+              <Badge key={type} variant={getTypeVariant(type)} className="text-xs">
+                {type}: {count}
+              </Badge>
+            ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Input
           placeholder="Search metrics..."
           value={filter.search}
-          onChange={(e) => setFilter({...filter, search: e.target.value})}
-          style={{ width: '250px' }}
+          onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+          className="max-w-xs"
         />
-
-        <select 
-          value={filter.type} 
-          onChange={(e) => setFilter({...filter, type: e.target.value})}
-        >
-          {metricTypes.map(type => (
-            <option key={type} value={type}>
-              {type === 'all' ? 'All Types' : `Type: ${type}`}
-            </option>
-          ))}
-        </select>
+        <Select value={filter.type} onValueChange={(v) => setFilter({ ...filter, type: v })}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {metricTypes.map(type => (
+              <SelectItem key={type} value={type}>
+                {type === 'all' ? 'All Types' : `Type: ${type}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <h3 style={{ marginTop: '20px', marginBottom: '12px' }}>
-        Metrics ({filteredMetrics.length})
-      </h3>
-
-      <table>
-        <thead>
-          <tr>
-            <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
-              Metric Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('type')} style={{ cursor: 'pointer' }}>
-              Type {sortField === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('unit')} style={{ cursor: 'pointer' }}>
-              Unit {sortField === 'unit' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th>Description</th>
-            <th onClick={() => handleSort('sample_count')} style={{ cursor: 'pointer' }}>
-              Observations {sortField === 'sample_count' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-            <th onClick={() => handleSort('complexity')} style={{ cursor: 'pointer' }}>
-              Complexity {sortField === 'complexity' && (sortDirection === 'asc' ? '↑' : '↓')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {getSortedMetrics(filteredMetrics)
-            .map((metric, i) => (
-              <tr key={i}>
-                <td>
-                  <span 
-                    className="detail-link"
-                    onClick={() => onViewMetric && onViewMetric(metric.name)}
-                    style={{ cursor: onViewMetric ? 'pointer' : 'default' }}
-                  >
-                    {metric.name}
-                  </span>
-                </td>
-                <td>
-                  <span 
-                    className="key-badge"
-                    style={{ 
-                      background: getTypeColor(metric.type),
-                      color: 'white'
-                    }}
-                  >
-                    {metric.type}
-                  </span>
-                </td>
-                <td>{metric.unit || '-'}</td>
-                <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {metric.description || '-'}
-                </td>
-                <td>{metric.sample_count.toLocaleString()}</td>
-                <td>{getComplexity(metric).toLocaleString()}</td>
-              </tr>
-            ))}
-        </tbody>
-      </table>
-
-      {filteredMetrics.length === 0 && (
-        <p className="template-count-text" style={{ textAlign: 'center', padding: '20px' }}>
-          No metrics match the current filters
-        </p>
-      )}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('name')}>
+                  Metric Name<SortIndicator field="name" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('type')}>
+                  Type<SortIndicator field="type" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('unit')}>
+                  Unit<SortIndicator field="unit" />
+                </TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('sample_count')}>
+                  Observations<SortIndicator field="sample_count" />
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => handleSort('complexity')}>
+                  Complexity<SortIndicator field="complexity" />
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {getSortedMetrics(filteredMetrics).map((metric, i) => (
+                <TableRow
+                  key={i}
+                  className={onViewMetric ? 'cursor-pointer' : ''}
+                  onClick={() => onViewMetric && onViewMetric(metric.name)}
+                >
+                  <TableCell className="font-mono text-xs">{metric.name}</TableCell>
+                  <TableCell>
+                    <Badge variant={getTypeVariant(metric.type)}>{metric.type}</Badge>
+                  </TableCell>
+                  <TableCell>{metric.unit || '-'}</TableCell>
+                  <TableCell className="max-w-xs truncate text-muted-foreground text-xs">
+                    {metric.description || '-'}
+                  </TableCell>
+                  <TableCell>{metric.sample_count.toLocaleString()}</TableCell>
+                  <TableCell>{getComplexity(metric).toLocaleString()}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {filteredMetrics.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No metrics match the current filters
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
