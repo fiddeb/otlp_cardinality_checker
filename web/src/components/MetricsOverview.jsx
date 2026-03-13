@@ -48,9 +48,9 @@ function MetricsOverview({ onViewMetric }) {
 
   const metricTypes = ['all', ...new Set((metrics || []).map(m => m.type).filter(Boolean))]
 
-  const getTypeVariant = (type) => {
-    const variants = { 'Sum': 'default', 'Gauge': 'secondary', 'Histogram': 'outline', 'Summary': 'secondary', 'ExponentialHistogram': 'destructive' }
-    return variants[type] || 'outline'
+  const getTypeColor = (type) => {
+    const colors = { 'Sum': 'var(--chart-1)', 'Gauge': 'var(--chart-2)', 'Histogram': 'var(--chart-3)', 'Summary': 'var(--chart-4)', 'ExponentialHistogram': 'var(--chart-5)' }
+    return colors[type] || 'var(--muted-foreground)'
   }
 
   const getComplexity = (metric) => {
@@ -176,9 +176,13 @@ function MetricsOverview({ onViewMetric }) {
           {Object.entries(typeBreakdown)
             .sort((a, b) => b[1] - a[1])
             .map(([type, count]) => (
-              <Badge key={type} variant={getTypeVariant(type)} className="text-xs">
+              <span
+                key={type}
+                style={{ color: getTypeColor(type), borderColor: getTypeColor(type) }}
+                className="px-3 py-1 rounded border text-xs font-medium"
+              >
                 {type}: {count}
-              </Badge>
+              </span>
             ))}
         </div>
       )}
@@ -236,7 +240,7 @@ function MetricsOverview({ onViewMetric }) {
                 >
                   <TableCell className="font-mono text-xs">{metric.name}</TableCell>
                   <TableCell>
-                    <Badge variant={getTypeVariant(metric.type)}>{metric.type}</Badge>
+                    <Badge style={{ color: getTypeColor(metric.type), borderColor: getTypeColor(metric.type) }} className="bg-transparent">{metric.type}</Badge>
                   </TableCell>
                   <TableCell>{metric.unit || '-'}</TableCell>
                   <TableCell className="max-w-xs truncate text-muted-foreground text-xs">

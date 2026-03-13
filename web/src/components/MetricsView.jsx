@@ -69,13 +69,13 @@ function MetricsView({ onViewDetails }) {
 
   const getTypeColor = (type) => {
     const colors = {
-      'Sum': '#1976d2',
-      'Gauge': '#388e3c',
-      'Histogram': '#f57c00',
-      'Summary': '#7b1fa2',
-      'ExponentialHistogram': '#d32f2f'
+      'Sum': 'var(--chart-1)',
+      'Gauge': 'var(--chart-2)',
+      'Histogram': 'var(--chart-3)',
+      'Summary': 'var(--chart-4)',
+      'ExponentialHistogram': 'var(--chart-5)'
     }
-    return colors[type] || 'var(--text-secondary)'
+    return colors[type] || 'var(--muted-foreground)'
   }
 
   const handleSort = (field) => {
@@ -250,8 +250,8 @@ function MetricsView({ onViewDetails }) {
             .map(([type, count]) => (
               <span
                 key={type}
-                style={{ background: getTypeColor(type) }}
-                className="px-3 py-1 rounded text-white text-sm font-medium"
+                style={{ color: getTypeColor(type), borderColor: getTypeColor(type) }}
+                className="px-3 py-1 rounded border text-sm font-medium"
               >
                 {type}: {count}
               </span>
@@ -261,6 +261,8 @@ function MetricsView({ onViewDetails }) {
 
       <div>
         <h3 className="text-base font-medium mb-2">Metrics Breakdown</h3>
+        <Card>
+          <CardContent className="p-0">
         <Table>
           <TableHeader>
             <TableRow>
@@ -315,7 +317,7 @@ function MetricsView({ onViewDetails }) {
                     </Button>
                   </TableCell>
                   <TableCell>
-                    <Badge style={{ background: getTypeColor(metric.type) }} className="text-white border-0">
+                    <Badge style={{ color: getTypeColor(metric.type), borderColor: getTypeColor(metric.type) }} className="bg-transparent">
                       {metric.type}
                     </Badge>
                   </TableCell>
@@ -336,6 +338,8 @@ function MetricsView({ onViewDetails }) {
             })}
           </TableBody>
         </Table>
+          </CardContent>
+        </Card>
       </div>
 
       {totalPages > 1 && (

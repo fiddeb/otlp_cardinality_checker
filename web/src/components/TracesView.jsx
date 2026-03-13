@@ -123,6 +123,8 @@ function TracesView({ onViewDetails }) {
         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
       </p>
 
+      <Card>
+        <CardContent className="p-0">
       <Table>
         <TableHeader>
           <TableRow>
@@ -165,6 +167,8 @@ function TracesView({ onViewDetails }) {
           })}
         </TableBody>
       </Table>
+        </CardContent>
+      </Card>
 
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 py-2">

@@ -206,6 +206,8 @@ function AttributesView() {
         </Card>
       </div>
 
+      <Card>
+        <CardContent className="p-0">
       <Table>
         <TableHeader>
           <TableRow>
@@ -327,6 +329,8 @@ function AttributesView() {
           ))}
         </TableBody>
       </Table>
+        </CardContent>
+      </Card>
 
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 py-2">

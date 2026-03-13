@@ -63,6 +63,11 @@ function ActiveSeries() {
   const getOtlpSeries = (metric) => metric.active_series_otlp ?? metric.active_series ?? 0
   const getPromSeries = (metric) => metric.active_series_prometheus ?? getOtlpSeries(metric)
 
+  const getTypeColor = (type) => {
+    const colors = { 'Sum': 'var(--chart-1)', 'Gauge': 'var(--chart-2)', 'Histogram': 'var(--chart-3)', 'Summary': 'var(--chart-4)', 'ExponentialHistogram': 'var(--chart-5)' }
+    return colors[type] || 'var(--muted-foreground)'
+  }
+
   const sorted = [...data].sort((a, b) => {
     switch (sortBy) {
       case 'series-otlp': return getOtlpSeries(b) - getOtlpSeries(a)
@@ -180,7 +185,7 @@ function ActiveSeries() {
                   <TableCell className="font-medium">#{idx + 1}</TableCell>
                   <TableCell className="font-mono text-xs">{metric.name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{metric.type || 'Unknown'}</Badge>
+                    <Badge style={{ color: getTypeColor(metric.type), borderColor: getTypeColor(metric.type) }} className="bg-transparent">{metric.type || 'Unknown'}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant={getSeriesVariant(getOtlpSeries(metric))}>
