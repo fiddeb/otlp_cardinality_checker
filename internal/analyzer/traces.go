@@ -38,13 +38,16 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 
 	spanMap := make(map[string]*models.SpanMetadata)
 
+	// Batch catalog deduplicates writes within this request.
+	batch := newBatchCatalog(a.catalog)
+
 	for _, resourceSpans := range req.ResourceSpans {
 		// Extract resource attributes
 		resourceAttrs := extractAttributes(resourceSpans.Resource.GetAttributes())
 		serviceName := getServiceName(resourceAttrs)
 		
 		// Feed resource attributes to catalog
-		extractAttributesToCatalog(ctx, a.catalog, resourceAttrs, "span", "resource")
+		extractAttributesToCatalog(ctx, batch, resourceAttrs, "span", "resource")
 
 		for _, scopeSpans := range resourceSpans.ScopeSpans {
 			scopeInfo := &models.ScopeMetadata{
@@ -153,7 +156,7 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 			spanAttrs := extractAttributes(span.Attributes)
 			
 			// Feed span attributes to catalog
-			extractAttributesToCatalog(ctx, a.catalog, spanAttrs, "span", "attribute")
+			extractAttributesToCatalog(ctx, batch, spanAttrs, "span", "attribute")
 			
 			for attrKey, attrValue := range spanAttrs {
 				if metadata.AttributeKeys[attrKey] == nil {
@@ -182,7 +185,7 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 					eventAttrs := extractAttributes(event.Attributes)
 					
 					// Feed event attributes to catalog
-					extractAttributesToCatalog(ctx, a.catalog, eventAttrs, "span", "attribute")
+					extractAttributesToCatalog(ctx, batch, eventAttrs, "span", "attribute")
 					
 					for key, value := range eventAttrs {
 						if metadata.EventAttributeKeys[event.Name][key] == nil {
@@ -197,8 +200,7 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 					linkAttrs := extractAttributes(link.Attributes)
 					
 					// Feed link attributes to catalog
-					extractAttributesToCatalog(ctx, a.catalog, linkAttrs, "span", "attribute")
-					
+				extractAttributesToCatalog(ctx, batch, linkAttrs, "span", "attribute")
 					for key, value := range linkAttrs {
 						if metadata.LinkAttributeKeys[key] == nil {
 							metadata.LinkAttributeKeys[key] = models.NewKeyMetadata()

@@ -330,6 +330,9 @@ func (s *MinerShard) findBestCluster(clusters []*cluster, tokens []string) *clus
 		if matched >= minMatches && score > bestScore {
 			bestScore = score
 			best = c
+			if matched == len(tokens) {
+				return best // perfect match, can't improve
+			}
 		}
 	}
 
