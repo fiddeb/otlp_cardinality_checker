@@ -110,10 +110,10 @@ func TestAutoLogBodyAnalyzerWithPreMasking(t *testing.T) {
 	cfg := autotemplate.DefaultConfig()
 	cfg.SimThreshold = 0.5
 	
-	// Create analyzer with default patterns (includes IP, UUID, etc.)
-	analyzer := NewAutoLogBodyAnalyzerWithPatterns(cfg, nil)
+	// Pre-masking was removed; Drain generalises variable tokens to <*>.
+	analyzer := NewAutoLogBodyAnalyzer(cfg)
 	
-	// Process logs with IPs
+	// Process logs with IPs — Drain sees three variants and generalises.
 	analyzer.ProcessMessage("connected to 192.168.1.100")
 	analyzer.ProcessMessage("connected to 10.0.0.5")
 	analyzer.ProcessMessage("connected to 172.16.0.1")
@@ -123,7 +123,7 @@ func TestAutoLogBodyAnalyzerWithPreMasking(t *testing.T) {
 		t.Fatal("expected at least one template")
 	}
 	
-	// All should map to same template since IPs are pre-masked
+	// All should map to same template since Drain generalises the IP token to <*>
 	if len(templates) != 1 {
 		t.Logf("Templates found: %d", len(templates))
 		for i, tmpl := range templates {
@@ -136,9 +136,9 @@ func TestAutoLogBodyAnalyzerWithPreMasking(t *testing.T) {
 		t.Errorf("expected template count = 3, got %d", templates[0].Count)
 	}
 	
-	// Template should contain the IP placeholder
-	if !strings.Contains(templates[0].Template, "<IP>") {
-		t.Errorf("template should contain <IP> placeholder, got: %s", templates[0].Template)
+	// Template should contain wildcard (Drain uses <*> instead of <IP>)
+	if !strings.Contains(templates[0].Template, "<*>") {
+		t.Errorf("template should contain <*> wildcard, got: %s", templates[0].Template)
 	}
 }
 
