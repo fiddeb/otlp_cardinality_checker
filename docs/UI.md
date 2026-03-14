@@ -10,29 +10,21 @@ Main dashboard overview showing cardinality analysis across all signal types.
 
 ## Sessions Management
 
-![Sessions List](img/sessions.png)
+![Sessions List](img/Sessions.png)
 
 View and manage analysis sessions.
 
-![Save Session](img/save_session.png)
-
-Save current analysis session for later review.
-
-![Merge Sessions](img/merge_sessions.png)
-
-Merge multiple sessions to compare cardinality patterns over time.
-
 ## Metrics Analysis
 
-![Metrics Overview](img/metrics_overview.png)
+![Metrics Overview](img/metric_overview.png)
 
 High-level overview of metrics cardinality patterns.
 
-![Metrics Details](img/metrics_details.png)
+![Metrics Details](img/metric_detail.png)
 
 Detailed metrics cardinality analysis with breakdowns by attribute keys.
 
-![Single Metric View](img/metric.png)
+![Single Metric View](img/metric_deep.png)
 
 Deep dive into a specific metric's cardinality.
 
@@ -52,21 +44,17 @@ Detected patterns in log attribute cardinality.
 
 ## Traces Analysis
 
-![Traces](img/treaces.png)
+![Traces](img/traces.png)
 
 Trace cardinality overview and span attribute analysis.
 
-![Trace Patterns](img/tracepatterns.png)
+![Trace Patterns](img/trace_patterns.png)
 
 Pattern detection in trace attribute cardinality.
 
-![Trace Patterns 2](img/trace_patterns2.png)
-
-Additional trace pattern visualizations.
-
 ## Advanced Analysis
 
-![Attributes](img/attributs.png)
+![Attributes](img/attributes.png)
 
 Cross-signal attribute key cardinality analysis.
 
@@ -74,8 +62,30 @@ Cross-signal attribute key cardinality analysis.
 
 Metadata complexity visualization showing attribute key combinations.
 
+![Noicy Neigbour](img/noicy_neigbour.png)
+
+Shows problematic signals
+
+## Memory
+
+![Memory Usage](img/memory_usage.png)
+
+Runtime memory usage statistics — heap size, goroutine counts, and per-signal storage breakdown.
+
+## Attribute Deep Watch
+
+![Deep Watch](img/deep_watch.png)
+
+Captures every distinct value seen for a watched attribute key. Activate from the Attributes view or via the API (`POST /api/v1/attributes/{key}/watch`).
+
 ## Load Testing
 
 ![K6 Load Test](img/k6_load.png)
 
 Cardinality behavior under load testing with k6.
+
+## Binary
+
+![occ](img/binary.png)
+
+When starting the binary, API addresses, feature flags, and version info are shown.

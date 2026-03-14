@@ -201,7 +201,7 @@ curl "http://localhost:8080/api/v1/metrics?service=my-service&limit=100"
 
 #### Health check
 ```
-GET /health
+GET /api/v1/health
 ```
 
 Response:
@@ -238,11 +238,11 @@ Offset-based pagination works fine for simple navigation. For very large dataset
 
 #### `estimated_cardinality`
 - Number of unique values observed for this key
-- Accurate up to 100 unique values (MaxSamples)
-- Beyond 100 values, continues counting but stops storing samples
+- Accurate up to 10 unique values (MaxSamples)
+- Beyond 10 values, continues counting but stops storing samples
 
 #### `value_samples`
-- Up to 100 example values
+- Up to 10 example values
 - Always sorted for consistency
 - Useful for spotting cardinality issues
 
@@ -634,7 +634,7 @@ curl -X POST http://localhost:8080/api/v1/sessions/import \
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
 | `OCC_SESSION_DIR` | `./data/sessions` | Directory for session storage |
-| `OCC_MAX_SESSION_SIZE` | `104857600` (100MB) | Maximum session file size |
+| `OCC_MAX_SESSION_SIZE` | `1073741824` (1GB) | Maximum session file size |
 | `OCC_MAX_SESSIONS` | `50` | Maximum number of saved sessions |
 
 ### Use Cases

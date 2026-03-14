@@ -1374,7 +1374,7 @@ cache: metrics=15 spans=5 logs=2
 **Check OTLP endpoint:**
 ```bash
 # Verify server is running
-curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/health
 
 # Check OTLP endpoint
 curl -X POST http://localhost:4318/v1/metrics \
@@ -1386,8 +1386,8 @@ curl -X POST http://localhost:4318/v1/metrics \
 ```yaml
 exporters:
   otlp:
-    endpoint: http://localhost:4318
-    # NOT localhost:4317 (that's gRPC, not yet implemented)
+    endpoint: http://localhost:4318  # HTTP
+    # For gRPC use: grpc endpoint localhost:4317
 ```
 
 ### High memory usage
@@ -1810,7 +1810,7 @@ By default, sessions are stored as gzip-compressed JSON files in `data/sessions/
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
 | `OCC_SESSION_DIR` | `./data/sessions` | Directory for session storage |
-| `OCC_MAX_SESSION_SIZE` | `104857600` (100MB) | Maximum session file size |
+| `OCC_MAX_SESSION_SIZE` | `1073741824` (1GB) | Maximum session file size |
 | `OCC_MAX_SESSIONS` | `50` | Maximum number of saved sessions |
 
 ---
@@ -2119,4 +2119,4 @@ curl http://localhost:8080/api/v1/sessions/session-b | jq '.created_at'
 
 - **Production Deployment**: See [../k8s/README.md](../k8s/README.md) for Kubernetes deployment guide
 - **API Documentation**: See [API.md](API.md)
-- **Scalability**: See [SCALABILITY.md](SCALABILITY.md)
+- **Scalability**: See [../k8s/README.md](../k8s/README.md) for Kubernetes deployment and scaling
