@@ -172,7 +172,7 @@ The tool will start listening on:
 - **Attributes** - Global attribute catalog across all signals
 - **Noisy Neighbors** - Identify services generating excessive telemetry volume
 - **Memory** - Runtime memory usage statistics
-- **Service Explorer** - Deep dive into all telemetry for a specific service
+- **Service Explorer** - Deep dive into all telemetry for a specific service (drill-down from Dashboard or Noisy Neighbors)
 - **Sessions** - Snapshot the current in-memory state to a file, restore it later, or merge multiple snapshots to compare telemetry across environments or time windows
 
 
@@ -209,8 +209,6 @@ curl http://localhost:8080/api/v1/logs/INFO
 # Get span patterns (aggregated pattern analysis)
 curl http://localhost:8080/api/v1/span-patterns
 
-# Get summary
-curl http://localhost:8080/api/v1/summary
 ```
 
 Example response:
@@ -342,6 +340,18 @@ export POD_LOG_ENRICHMENT=true
 # Defaults to the Loki-compatible priority list when not set.
 export POD_LOG_SERVICE_LABELS="app,k8s.container.name,k8s.deployment.name"
 
+# Session snapshot directory (default: ./data/sessions)
+export OCC_SESSION_DIR="./data/sessions"
+
+# Maximum session file size in bytes (default: 1073741824 = 1 GB)
+export OCC_MAX_SESSION_SIZE=1073741824
+
+# Maximum number of stored sessions (default: 50)
+export OCC_MAX_SESSIONS=50
+
+# pprof server address – omit to disable (default: localhost:6060)
+export PPROF_ADDR="localhost:6060"
+
 # Run the server
 ./bin/occ
 ```
@@ -354,18 +364,19 @@ export POD_LOG_SERVICE_LABELS="app,k8s.container.name,k8s.deployment.name"
 **Features:**
 - **Algorithm**: Drain (ICWS'17) - Fixed-depth tree with token similarity clustering
 - **Pattern detection**: Automatically groups similar log messages into templates
-- **Pre-masking**: Recognizes timestamps, UUIDs, IPs, URLs, emails, and more
+- **Variable tokens**: Variable parts are replaced with `<*>` in the extracted template
 - **Example bodies**: Each template stores an example log for reference
 
 **Example patterns detected:**
 ```
 Syslog:
   Dec  4 10:30:15 host sshd[1234]: Accepted publickey for user from 1.2.3.4
-  → <TIMESTAMP> host sshd[<NUM>]: Accepted publickey for user from <IP>
+  → <*> host sshd[<*>]: Accepted publickey for user from <*>
 
-Apache:
-  [Sun Dec 04 04:51:08 2005] [notice] jk2_init() Found child 6725
-  → <TIMESTAMP> [notice] jk2_init() Found child <NUM>
+Application:
+  User 123 logged in from 10.0.0.1
+  User 456 logged in from 10.0.0.2
+  → User <*> logged in from <*>
 ```
 
 **Query templates from api:**
@@ -401,7 +412,6 @@ curl http://localhost:8080/api/v1/logs/ERROR | jq '{severity, sample_count, body
 ### Phase 2: Production Hardening
 - [x] OTLP gRPC receiver (port 4317)
 - [x] Automatic log template extraction with Drain algorithm
-- [x] Pattern pre-masking (timestamps, UUIDs, IPs, URLs, etc.)
 - [x] Configurable similarity threshold for template specificity
 - [x] Comprehensive pattern validation tests
 - [x] Performance benchmarks (53k-1.6M EPS)
@@ -410,19 +420,19 @@ curl http://localhost:8080/api/v1/logs/ERROR | jq '{severity, sample_count, body
 
 ### Phase 3: Enhanced Features (Future)
 - [x] Web UI for visualization (embedded React UI)
+- [x] Comparison tools (session diff view)
 - [ ] CI/CD integrations
-- [ ] Comparison tools
 
 
 ## Technology Stack
 
 - **Language**: Go 1.24+
-- **OTLP**: gRPC (4317) and HTTP (4318) receivers using OpenTelemetry SDK
-- **Storage**: In-memory (ephemeral by design)
+- **OTLP**: gRPC (4317) and HTTP (4318) receivers using OTLP protobuf + gRPC
+- **Storage**: In-memory (ephemeral by design) + file-based session snapshots
 - **API**: REST API with chi router
 - **UI**: React with Vite (embedded in binary)
 - **Algorithms**: Drain (log templates), HyperLogLog (cardinality estimation)
-- **Testing**: Go testing, testify, K6 load tests
+- **Testing**: Go testing, K6 load tests
 
 ## Contributing
 
