@@ -99,7 +99,8 @@ export function AppSidebar({ activeTab, onNavigate }) {
       <SidebarRail />
       <SidebarFooter>
         <div className="px-3 py-3 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-          OTLP Cardinality Checker
+          <div>OTLP Cardinality Checker</div>
+          <div className="mt-1 text-muted-foreground/60">© Fredrik Berggren 2025</div>
         </div>
       </SidebarFooter>
     </Sidebar>

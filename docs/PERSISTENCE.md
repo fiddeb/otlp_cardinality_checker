@@ -1,6 +1,6 @@
 # Persistence Design
 
-OTLP Cardinality Checker uses in-memory storage only by design. This is intentional, not a limitation.
+OTLP Cardinality Checker keeps live telemetry state in memory by design. Session snapshots are written to disk and survive restarts; only the live (unsnapshotted) in-memory state is ephemeral.
 
 ## Why Ephemeral?
 
