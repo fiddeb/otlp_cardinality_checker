@@ -3,6 +3,14 @@
 
 These instructions are for AI assistants working in this project.
 
+**Tooling**
+
+| Tool | Command | Purpose |
+|------|---------|---------|
+| ripgrep | `rg` | Search file contents |
+| fd | `fd` | Find files and directories |
+| eza | `eza` | List directory contents |
+
 **Project-specific coding conventions**: See [.github/copilot-instructions.md](.github/copilot-instructions.md)
 
 Always open `@/openspec/AGENTS.md` when the request:
