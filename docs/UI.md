@@ -4,13 +4,13 @@ This page showcases the OTLP Cardinality Checker web interface.
 
 ## Dashboard
 
-![Dashboard](img/dashboard.png)
+![Dashboard](img/dash.png)
 
 Main dashboard overview showing cardinality analysis across all signal types.
 
 ## Sessions Management
 
-![Sessions List](img/Sessions.png)
+![Sessions List](img/Session.png)
 
 View and manage analysis sessions.
 
