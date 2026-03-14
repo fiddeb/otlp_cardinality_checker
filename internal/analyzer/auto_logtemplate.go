@@ -3,7 +3,6 @@ package analyzer
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -11,15 +10,15 @@ import (
 	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
 )
 
-// AutoLogBodyAnalyzer uses the autotemplate miner for log template extraction
+// AutoLogBodyAnalyzer uses the autotemplate miner for log template extraction.
+// Pre-masking with regex patterns was removed: Drain generalises variable
+// tokens (IPs, numbers, UUIDs, etc.) to <*> naturally, making the regex
+// pass redundant on the log hot path.
 type AutoLogBodyAnalyzer struct {
 	mu        sync.RWMutex
 	miner     *autotemplate.ShardedMiner
 	templates map[string]*LogTemplate // template string -> metadata
 	total     int64
-	
-	// Optional pre-masking patterns (applied before miner)
-	patterns []patterns.CompiledPattern
 }
 
 // NewAutoLogBodyAnalyzer creates a new auto-template analyzer
@@ -27,29 +26,22 @@ func NewAutoLogBodyAnalyzer(minerCfg autotemplate.Config) *AutoLogBodyAnalyzer {
 	return NewAutoLogBodyAnalyzerWithPatterns(minerCfg, nil)
 }
 
-// NewAutoLogBodyAnalyzerWithPatterns creates analyzer with pre-masking patterns
-func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, pats []patterns.CompiledPattern) *AutoLogBodyAnalyzer {
-	if pats == nil {
-		// Use default patterns for pre-masking
-		pats = patterns.DefaultPatterns()
-	}
-	
+// NewAutoLogBodyAnalyzerWithPatterns creates analyzer.
+// The pats parameter is accepted for API compatibility but ignored;
+// Drain generalises variable tokens without regex pre-masking.
+func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, _ []patterns.CompiledPattern) *AutoLogBodyAnalyzer {
 	miner := autotemplate.NewShardedMiner(minerCfg)
-	
+
 	return &AutoLogBodyAnalyzer{
 		miner:     miner,
 		templates: make(map[string]*LogTemplate),
-		patterns:  pats,
 	}
 }
 
 // ProcessMessage processes a single log body and extracts/updates template
 func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
-	// Pre-mask with regex patterns
-	masked := a.preMask(body)
-	
 	// Extract template using miner (shard-level locking inside)
-	template, _ := a.miner.Add(masked)
+	template, _ := a.miner.Add(body)
 	
 	atomic.AddInt64(&a.total, 1)
 
@@ -85,20 +77,6 @@ func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
 // AddMessage is an alias for ProcessMessage to match the interface
 func (a *AutoLogBodyAnalyzer) AddMessage(body string) {
 	a.ProcessMessage(body)
-}
-
-// preMask applies regex-based masking before template extraction.
-// Patterns with a RequiredSubstring are skipped when the body does not contain
-// that substring, avoiding expensive regex backtracking on non-matching lines.
-func (a *AutoLogBodyAnalyzer) preMask(body string) string {
-	result := body
-	for _, pattern := range a.patterns {
-		if pattern.RequiredSubstring != "" && !strings.Contains(result, pattern.RequiredSubstring) {
-			continue
-		}
-		result = pattern.Regex.ReplaceAllString(result, pattern.Placeholder)
-	}
-	return result
 }
 
 // GetTemplates returns all templates sorted by count.
