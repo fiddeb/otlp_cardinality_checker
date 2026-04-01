@@ -49,10 +49,10 @@ kubectl logs -l app=occ -f
 
 ```bash
 # Port-forward to access locally
-kubectl port-forward svc/occ 8080:8080 4318:4318
+kubectl port-forward svc/occ 8090:8090 4318:4318
 
 # Test API
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8090/api/v1/health
 
 # Test OTLP endpoint (from OpenTelemetry Collector)
 # Configure your collector to export to:
@@ -170,7 +170,7 @@ kubectl get endpoints occ
 
 # Test from another pod
 kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
-  curl http://occ:8080/api/v1/health
+  curl http://occ:8090/api/v1/health
 ```
 
 ### High memory usage

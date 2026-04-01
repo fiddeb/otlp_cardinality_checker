@@ -70,7 +70,7 @@ OTLP Cardinality Checker gives you visibility into your telemetry metadata struc
                │                          │
                ↓                          │
       ┌────────────────────┐    ┌─────────────────────────┐
-      │  REST API (8080)   │    │  Data Sources           │
+      │  REST API (8090)   │    │  Data Sources           │
       │  Web UI            │    │  (Kafka/Redis/Prom...)  │
       └────────────────────┘    └─────────────────────────┘
 ```
@@ -144,7 +144,7 @@ docker push your-registry/occ:latest
 kubectl apply -f k8s/
 
 # Port-forward to access locally
-kubectl port-forward svc/occ 8080:8080 4317:4317 4318:4318
+kubectl port-forward svc/occ 8090:8090 4317:4317 4318:4318
 ```
 
 See [k8s/README.md](k8s/README.md) for detailed Kubernetes deployment instructions.
@@ -152,8 +152,8 @@ See [k8s/README.md](k8s/README.md) for detailed Kubernetes deployment instructio
 The tool will start listening on:
 - **gRPC**: `localhost:4317` (OTLP gRPC endpoint)
 - **HTTP**: `localhost:4318` (OTLP HTTP endpoint)
-- **API**: `localhost:8080` (REST API)
-- **Web UI**: `http://localhost:8080` (Embedded React interface)
+- **API**: `localhost:8090` (REST API)
+- **Web UI**: `http://localhost:8090` (Embedded React interface)
 
 ### Web UI
 
@@ -195,19 +195,19 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
 ```bash
 # List all metrics
-curl http://localhost:8080/api/v1/metrics
+curl http://localhost:8090/api/v1/metrics
 
 # Get specific metric
-curl http://localhost:8080/api/v1/metrics/http_server_duration
+curl http://localhost:8090/api/v1/metrics/http_server_duration
 
 # List spans
-curl http://localhost:8080/api/v1/spans
+curl http://localhost:8090/api/v1/spans
 
 # Get log templates by severity (with autotemplate enabled)
-curl http://localhost:8080/api/v1/logs/INFO
+curl http://localhost:8090/api/v1/logs/INFO
 
 # Get span patterns (aggregated pattern analysis)
-curl http://localhost:8080/api/v1/span-patterns
+curl http://localhost:8090/api/v1/span-patterns
 
 ```
 
@@ -276,10 +276,10 @@ Run the checker in your CI/CD pipeline to validate instrumentation:
 go test ./...
 
 # Query metadata
-curl 'http://localhost:8080/api/v1/metrics' | jq '.' > metadata-report.json
+curl 'http://localhost:8090/api/v1/metrics' | jq '.' > metadata-report.json
 
 # Check for high cardinality (example)
-curl -s 'http://localhost:8080/api/v1/metrics' | \
+curl -s 'http://localhost:8090/api/v1/metrics' | \
   jq -r '.data[] | select(.attribute_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
 ```
 
@@ -292,10 +292,10 @@ Understand what's driving your observability costs:
 ./bin/occ
 
 # Export metadata to JSON
-curl -s 'http://localhost:8080/api/v1/metrics' | jq '.' > metrics.json
+curl -s 'http://localhost:8090/api/v1/metrics' | jq '.' > metrics.json
 
 # Or use jq to create CSV format
-curl -s 'http://localhost:8080/api/v1/metrics' | \
+curl -s 'http://localhost:8090/api/v1/metrics' | \
   jq -r '.data[] | [.name, .type, (.attribute_keys | length), .sample_count] | @csv' > metrics.csv
 
 # Analyze in Excel/SQL
@@ -307,7 +307,7 @@ Identify over-instrumented services:
 
 ```bash
 # Filter by service
-curl "http://localhost:8080/api/v1/metrics?service=payment-service"
+curl "http://localhost:8090/api/v1/metrics?service=payment-service"
 
 # Check for unusual attribute keys
 # Example: user_id in attributes = BAD (high cardinality)
@@ -324,8 +324,8 @@ export OTLP_GRPC_ADDR="0.0.0.0:4317"
 # OTLP HTTP endpoint address (default: 0.0.0.0:4318)
 export OTLP_HTTP_ADDR="0.0.0.0:4318"
 
-# REST API address (default: 0.0.0.0:8080)
-export API_ADDR="0.0.0.0:8080"
+# REST API address (default: 0.0.0.0:8090)
+export API_ADDR="0.0.0.0:8090"
 
 # Enable automatic log template extraction with Drain algorithm (default: true)
 export USE_AUTOTEMPLATE=true
@@ -382,10 +382,10 @@ Application:
 **Query templates from api:**
 ```bash
 # Get all INFO-level log templates
-curl http://localhost:8080/api/v1/logs/INFO | jq '.body_templates'
+curl http://localhost:8090/api/v1/logs/INFO | jq '.body_templates'
 
 # Get ERROR-level templates with sample counts
-curl http://localhost:8080/api/v1/logs/ERROR | jq '{severity, sample_count, body_templates}'
+curl http://localhost:8090/api/v1/logs/ERROR | jq '{severity, sample_count, body_templates}'
 ```
 
 ## Documentation
@@ -502,7 +502,7 @@ See [k8s/README.md](k8s/README.md) for complete deployment instructions includin
 docker build -t occ:latest .
 
 # Run container
-docker run -p 4317:4317 -p 4318:4318 -p 8080:8080 occ:latest
+docker run -p 4317:4317 -p 4318:4318 -p 8090:8090 occ:latest
 ```
 
 ## License

@@ -32,7 +32,7 @@ This document describes the architectural design for OCC's minimal operating mod
 │  ┌──────────────┐  ┌─────────────┐│
 │  │     OTLP     │  │     API     ││
 │  │   Receiver   │  │   Server    ││
-│  │  :4317,:4318 │  │    :8080    ││
+│  │  :4317,:4318 │  │    :8090    ││
 │  └──────┬───────┘  └──────▲──────┘│
 │         │                  │       │
 │         ▼                  │       │
@@ -110,7 +110,7 @@ Minimal Mode Flags (only applicable with --minimal):
 Standard Flags (still applicable):
   --otlp-grpc-port PORT   OTLP gRPC port (default: 4317)
   --otlp-http-port PORT   OTLP HTTP port (default: 4318)
-  --api-port PORT         API port (default: 8080)
+  --api-port PORT         API port (default: 8090)
   --log-level LEVEL       Log level (default: info)
 ```
 
@@ -592,7 +592,7 @@ See [REPORT-EXAMPLES.md](REPORT-EXAMPLES.md) for full realistic examples of:
 INFO: Starting OCC in minimal mode (duration: 5m)
 INFO: OTLP gRPC receiver listening on :4317
 INFO: OTLP HTTP receiver listening on :4318
-INFO: API server listening on :8080
+INFO: API server listening on :8090
 WARN: Memory usage 82% (420MB / 512MB)
 INFO: Duration timeout reached, initiating shutdown
 INFO: Report generated: /tmp/report.json

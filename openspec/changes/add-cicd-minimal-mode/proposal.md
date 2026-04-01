@@ -63,7 +63,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ./run-app-tests.sh
 
 # Wait for report or query API
-curl http://localhost:8080/api/v1/metrics/cardinality
+curl http://localhost:8090/api/v1/metrics/cardinality
 
 # Check report and fail CI if thresholds exceeded
 wait $OCC_PID
@@ -75,7 +75,7 @@ jq '.high_cardinality_metrics | length' /tmp/report.json
 occ start --minimal --api-only
 # API stays active, no auto-shutdown
 k6 run load-test.js  # Sends OTLP to OCC
-curl http://localhost:8080/api/v1/attributes/top-cardinality
+curl http://localhost:8090/api/v1/attributes/top-cardinality
 ```
 
 ### UC3: Post-CI Analysis in UI

@@ -23,7 +23,7 @@ spec:
           service:
             name: occ
             port:
-              number: 8080
+              number: 8090
   # Uncomment for TLS
   # tls:
   # - hosts:

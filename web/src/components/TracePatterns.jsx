@@ -129,7 +129,7 @@ function TracePatterns({ onViewDetails }) {
 
       <div className="flex gap-2 flex-wrap">
         <Badge variant="default" className="gap-1">Normalized — dynamic values replaced with placeholders</Badge>
-        <Badge variant="outline" className="gap-1">Original — no dynamic values detected</Badge>
+        <Badge variant="outline" className="gap-1">Static — no dynamic values detected</Badge>
       </div>
 
       {multiSpanPatterns.length > 0 && (
@@ -159,7 +159,7 @@ function TracePatterns({ onViewDetails }) {
                     <div className="flex flex-1 flex-col gap-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant={normalized ? 'default' : 'outline'}>
-                          {normalized ? 'Normalized' : 'Original'}
+                          {normalized ? 'Normalized' : 'Static'}
                         </Badge>
                         <code className="text-sm">{pg.pattern}</code>
                       </div>
@@ -243,7 +243,7 @@ function TracePatterns({ onViewDetails }) {
                     <TableRow key={idx}>
                       <TableCell>
                         <Badge variant={normalized ? 'default' : 'outline'} className="text-xs">
-                          {normalized ? 'Normalized' : 'Original'}
+                          {normalized ? 'Normalized' : 'Static'}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{pg.pattern}</TableCell>

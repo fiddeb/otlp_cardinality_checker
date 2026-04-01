@@ -12,7 +12,7 @@
 set -e
 
 MODE="${1:-comprehensive}"
-API_ENDPOINT="${API_ENDPOINT:-http://localhost:8080}"
+API_ENDPOINT="${API_ENDPOINT:-http://localhost:8090}"
 
 # ANSI colors
 RED='\033[0;31m'

@@ -60,7 +60,7 @@ This is expected behavior, not data loss.
 go test ./...
 
 # Query metadata to understand instrumentation
-curl http://localhost:8080/api/v1/metrics | jq '.data[] | .name'
+curl http://localhost:8090/api/v1/metrics | jq '.data[] | .name'
 
 # Stop when done - data not needed after analysis
 ```
@@ -74,7 +74,7 @@ curl http://localhost:8080/api/v1/metrics | jq '.data[] | .name'
 ./run-tests.sh
 
 # Capture metadata report
-curl http://localhost:8080/api/v1/metrics > instrumentation-report.json
+curl http://localhost:8090/api/v1/metrics > instrumentation-report.json
 
 # Check for cardinality issues
 ./check-cardinality.sh
@@ -86,7 +86,7 @@ curl http://localhost:8080/api/v1/metrics > instrumentation-report.json
 ```bash
 # Point staging collector at analyzer for a few hours
 # Query results
-curl http://localhost:8080/api/v1/cardinality/high
+curl http://localhost:8090/api/v1/cardinality/high
 
 # Make fixes to instrumentation
 # Restart analyzer with fresh state
@@ -109,9 +109,9 @@ If you need to preserve analysis results:
 ### Manual Export
 ```bash
 # Export current state to JSON
-curl http://localhost:8080/api/v1/metrics > metrics.json
-curl http://localhost:8080/api/v1/spans > spans.json
-curl http://localhost:8080/api/v1/logs > logs.json
+curl http://localhost:8090/api/v1/metrics > metrics.json
+curl http://localhost:8090/api/v1/spans > spans.json
+curl http://localhost:8090/api/v1/logs > logs.json
 ```
 
 ### Scripted Export
@@ -119,9 +119,9 @@ curl http://localhost:8080/api/v1/logs > logs.json
 #!/bin/bash
 # export-metadata.sh
 DATE=$(date +%Y%m%d-%H%M%S)
-curl -s http://localhost:8080/api/v1/metrics > "metadata-${DATE}-metrics.json"
-curl -s http://localhost:8080/api/v1/spans > "metadata-${DATE}-spans.json"
-curl -s http://localhost:8080/api/v1/logs > "metadata-${DATE}-logs.json"
+curl -s http://localhost:8090/api/v1/metrics > "metadata-${DATE}-metrics.json"
+curl -s http://localhost:8090/api/v1/spans > "metadata-${DATE}-spans.json"
+curl -s http://localhost:8090/api/v1/logs > "metadata-${DATE}-logs.json"
 echo "Exported to metadata-${DATE}-*.json"
 ```
 

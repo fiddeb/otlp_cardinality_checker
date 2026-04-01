@@ -314,7 +314,7 @@ The frontend is a single-page React application with multiple views for explorin
 
 ## REST API Endpoints
 
-The API layer exposes metadata via HTTP endpoints on port 8080:
+The API layer exposes metadata via HTTP endpoints on port 8090:
 
 ### Metrics
 - `GET /api/v1/metrics` - List all metrics (paginated)
@@ -454,7 +454,7 @@ go build -o bin/occ ./cmd/server
 # Server listens on:
 # - OTLP gRPC: :4317
 # - OTLP HTTP: :4318
-# - REST API: :8080
+# - REST API: :8090
 # - pprof: :6060
 ```
 

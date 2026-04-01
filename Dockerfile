@@ -34,8 +34,8 @@ COPY --from=builder /build/occ /occ
 # Expose ports
 # 4317: OTLP gRPC
 # 4318: OTLP HTTP  
-# 8080: REST API
-EXPOSE 4317 4318 8080
+# 8090: REST API
+EXPOSE 4317 4318 8090
 
 # Run as non-root user
 USER 65534:65534
