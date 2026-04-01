@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/fidde/otlp_cardinality_checker/internal/analyzer"
@@ -27,6 +29,10 @@ import (
 
 // Log level configuration
 var verboseLogging = strings.ToLower(os.Getenv("VERBOSE_LOGGING")) == "true"
+
+// maxBodyBytes is the maximum allowed size for a raw or decompressed request
+// body. 32 MiB is sufficient for any realistic OTLP batch.
+const maxBodyBytes int64 = 32 << 20
 
 // bodyBufPool reuses bytes.Buffer allocations for reading HTTP request bodies.
 // Each OTLP batch is typically 50–200 KB; pooling avoids allocating a fresh
@@ -76,10 +82,18 @@ func readAndDecompressBody(req *http.Request) (data []byte, release func(), err 
 		// Decompress into a second pooled buffer.
 		decompBuf := bodyBufPool.Get().(*bytes.Buffer)
 		decompBuf.Reset()
-		if _, err = decompBuf.ReadFrom(gzr); err != nil {
+		// Limit decompressed output to prevent gzip bombs.
+		lr := &io.LimitedReader{R: gzr, N: maxBodyBytes + 1}
+		if _, err = decompBuf.ReadFrom(lr); err != nil {
 			bodyBufPool.Put(buf)
 			bodyBufPool.Put(decompBuf)
 			return nil, nil, fmt.Errorf("decompress: %w", err)
+		}
+		if lr.N == 0 {
+			// Decompressed size exceeds maxBodyBytes — reject as zip bomb.
+			bodyBufPool.Put(buf)
+			bodyBufPool.Put(decompBuf)
+			return nil, nil, &http.MaxBytesError{Limit: maxBodyBytes}
 		}
 		bodyBufPool.Put(buf) // raw (compressed) buffer no longer needed
 		return decompBuf.Bytes(), func() { bodyBufPool.Put(decompBuf) }, nil
@@ -104,6 +118,16 @@ func sanitizeUTF8(b []byte) []byte {
 // JSON-encoded OTLP (e.g. "application/json").
 func isJSONContentType(contentType string) bool {
 	return strings.Contains(strings.ToLower(contentType), "json")
+}
+
+// rejectIfBodyTooLarge writes HTTP 413 and returns true when Content-Length
+// exceeds maxBodyBytes. Call before reading any body bytes.
+func rejectIfBodyTooLarge(w http.ResponseWriter, req *http.Request) bool {
+	if req.ContentLength > maxBodyBytes {
+		http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+		return true
+	}
+	return false
 }
 
 // HTTPReceiver handles OTLP HTTP requests.
@@ -149,8 +173,11 @@ func NewHTTPReceiver(addr string, store storage.Storage) *HTTPReceiver {
 	mux.HandleFunc("/health", r.handleHealth)
 
 	r.server = &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	return r
@@ -172,11 +199,20 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if rejectIfBodyTooLarge(w, req) {
+		return
+	}
+	req.Body = http.MaxBytesReader(w, req.Body, maxBodyBytes)
 
 	ctx := req.Context()
 
 	body, releaseBody, err := readAndDecompressBody(req)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -264,11 +300,20 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if rejectIfBodyTooLarge(w, req) {
+		return
+	}
+	req.Body = http.MaxBytesReader(w, req.Body, maxBodyBytes)
 
 	ctx := req.Context()
 
 	body, releaseBody, err := readAndDecompressBody(req)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -341,11 +386,20 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if rejectIfBodyTooLarge(w, req) {
+		return
+	}
+	req.Body = http.MaxBytesReader(w, req.Body, maxBodyBytes)
 
 	ctx := req.Context()
 
 	body, releaseBody, err := readAndDecompressBody(req)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, fmt.Sprintf("Failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}

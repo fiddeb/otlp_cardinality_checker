@@ -249,8 +249,11 @@ func NewServer(addr string, store storage.Storage) *Server {
 	}
 
 	s.server = &http.Server{
-		Addr:    addr,
-		Handler: s.router,
+		Addr:         addr,
+		Handler:      s.router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	return s
