@@ -30,7 +30,7 @@ export const options = {
 
 // Test configuration
 const OTLP_ENDPOINT = __ENV.OTLP_ENDPOINT || 'http://localhost:4318';
-const API_ENDPOINT = __ENV.API_ENDPOINT || 'http://localhost:8080';
+const API_ENDPOINT = __ENV.API_ENDPOINT || 'http://localhost:8090';
 const NUM_MODULES = parseInt(__ENV.NUM_MODULES || '100');
 const CARDINALITY = parseInt(__ENV.CARDINALITY || '10000'); // Increased from 50 to 10000
 

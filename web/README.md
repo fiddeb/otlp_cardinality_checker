@@ -19,7 +19,7 @@ Simple React UI for analyzing OpenTelemetry cardinality.
 # Install dependencies
 npm install
 
-# Start dev server (proxies API to localhost:8080)
+# Start dev server (proxies API to localhost:8090)
 npm run dev
 
 # Build for production

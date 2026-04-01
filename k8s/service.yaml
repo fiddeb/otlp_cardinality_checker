@@ -16,7 +16,7 @@ spec:
     targetPort: otlp-http
     protocol: TCP
   - name: api
-    port: 8080
+    port: 8090
     targetPort: api
     protocol: TCP
   selector:

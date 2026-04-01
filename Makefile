@@ -57,7 +57,7 @@ build: ui backend
 # Development mode (runs both servers)
 dev:
 	@echo "🚀 Starting development servers..."
-	@echo "   Backend will run on: http://localhost:8080"
+	@echo "   Backend will run on: http://localhost:8090"
 	@echo "   Frontend will run on: http://localhost:5173"
 	@echo ""
 	@echo "Press Ctrl+C to stop both servers"
