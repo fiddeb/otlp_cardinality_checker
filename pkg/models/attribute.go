@@ -26,7 +26,9 @@ type AttributeMetadata struct {
 	// EstimatedCardinality is the HLL-estimated number of unique values
 	EstimatedCardinality int64 `json:"estimated_cardinality"`
 
-	// ValueSamples contains up to MaxSamples example values
+	// ValueSamples holds the first N unique values observed (insertion-order, not random).
+	// Once the limit (MaxSamples=10) is reached, new unique values are silently discarded.
+	// For high-cardinality attributes this is biased toward early observations.
 	ValueSamples []string `json:"value_samples"`
 
 	// SignalTypes tracks which signal types use this attribute (metric, span, log)

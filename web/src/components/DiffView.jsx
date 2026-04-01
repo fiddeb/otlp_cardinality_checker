@@ -123,7 +123,7 @@ function DiffView({ initialFrom, onBack }) {
             : <ChevronRightIcon className="h-4 w-4 text-muted-foreground shrink-0" />}
           <Badge variant={getSignalBadgeVariant(change.signal_type)} className="shrink-0">{change.signal_type}</Badge>
           <span className="font-mono text-sm flex-1 truncate">{change.name}</span>
-          <Badge variant={getChangeTypeBadgeVariant(change.type)} className="shrink-0">{change.type}</Badge>
+          <Badge variant={getChangeTypeBadgeVariant(change.type)} className="shrink-0">{change.type === 'added' ? 'NEW' : change.type}</Badge>
           <Badge variant={getSeverityBadgeVariant(change.severity)} className="shrink-0">{change.severity}</Badge>
         </div>
         {isExpanded && (
@@ -155,8 +155,8 @@ function DiffView({ initialFrom, onBack }) {
                     {change.details.map((detail, idx) => (
                       <TableRow key={idx}>
                         <TableCell><code className="font-mono text-xs">{detail.field}</code></TableCell>
-                        <TableCell className="font-mono text-xs">{detail.from !== null ? JSON.stringify(detail.from) : '–'}</TableCell>
-                        <TableCell className="font-mono text-xs">{detail.to !== null ? JSON.stringify(detail.to) : '–'}</TableCell>
+                        <TableCell className="font-mono text-xs">{detail.from !== null && detail.from !== undefined ? JSON.stringify(detail.from) : '–'}</TableCell>
+                        <TableCell className="font-mono text-xs">{detail.to !== null && detail.to !== undefined ? JSON.stringify(detail.to) : '–'}</TableCell>
                         <TableCell className="text-right">
                           {detail.change_pct !== undefined && detail.change_pct !== 0
                             ? <span className={detail.change_pct > 0 ? 'text-destructive' : 'text-green-600'}>
