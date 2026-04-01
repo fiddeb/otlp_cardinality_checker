@@ -107,8 +107,8 @@ function AttributesView() {
         if (res.ok) setExplorerKey(key)
       }
       fetchAttributes()
-    } catch (_) {
-      // ignore
+    } catch (err) {
+      console.error('[watch] toggle failed:', err)
     } finally {
       setWatchToggling(prev => ({ ...prev, [key]: false }))
     }

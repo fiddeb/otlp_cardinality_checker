@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { fetchJSON } from '@/lib/fetchJSON'
 
 function NoisyNeighbors() {
   const [serviceVolumes, setServiceVolumes] = useState([])
@@ -31,9 +32,9 @@ function NoisyNeighbors() {
 
     try {
       const [metricsRes, spansRes, logsRes] = await Promise.all([
-        fetch('/api/v1/metrics?limit=1000').then(r => r.json()),
-        fetch('/api/v1/spans?limit=1000').then(r => r.json()),
-        fetch('/api/v1/logs?limit=1000').then(r => r.json()),
+        fetchJSON('/api/v1/metrics?limit=1000'),
+        fetchJSON('/api/v1/spans?limit=1000'),
+        fetchJSON('/api/v1/logs?limit=1000'),
       ])
 
       // 1. Service volumes

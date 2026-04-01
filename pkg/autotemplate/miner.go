@@ -35,6 +35,7 @@ type cluster struct {
 	size        int64    // Number of logs matched
 	lastUsed    uint64   // Timestamp for LRU
 	exampleBody string   // Example log body that matches this template
+	leafNode    *node    // Back-reference to owning tree node for eviction
 }
 
 // node is an internal tree node
@@ -231,6 +232,7 @@ func (s *MinerShard) add(tokens []string, originalMessage string) (string, bool)
 			size:        1,
 			lastUsed:    tick,
 			exampleBody: originalMessage,
+			leafNode:    current,
 		}
 		copy(newCluster.tokens, tokens)
 		
@@ -240,12 +242,60 @@ func (s *MinerShard) add(tokens []string, originalMessage string) (string, bool)
 		templateStr := tokensToString(tokens)
 		s.clusterMap[templateStr] = newCluster
 		
-		// TODO: implement LRU eviction if len(s.clusters) > maxClusters
+		// Evict LRU cluster when per-shard limit is exceeded.
+		maxPerShard := s.cfg.MaxClusters / s.cfg.Shards
+		if maxPerShard < 1 {
+			maxPerShard = 1
+		}
+		if len(s.clusters) > maxPerShard {
+			s.evictLRU()
+		}
 		
 		return templateStr, false
 	}
 	
 	return "", false
+}
+
+// evictLRU removes the least-recently-used cluster from the shard.
+// Must be called with s.mu held (write lock).
+func (s *MinerShard) evictLRU() {
+	if len(s.clusters) == 0 {
+		return
+	}
+
+	// Find cluster with smallest lastUsed.
+	minIdx := 0
+	minUsed := atomic.LoadUint64(&s.clusters[0].lastUsed)
+	for i := 1; i < len(s.clusters); i++ {
+		used := atomic.LoadUint64(&s.clusters[i].lastUsed)
+		if used < minUsed {
+			minUsed = used
+			minIdx = i
+		}
+	}
+
+	victim := s.clusters[minIdx]
+
+	// Remove from leaf node's clusters slice.
+	if victim.leafNode != nil {
+		nodeClusters := victim.leafNode.clusters
+		for i, c := range nodeClusters {
+			if c == victim {
+				victim.leafNode.clusters = append(nodeClusters[:i], nodeClusters[i+1:]...)
+				break
+			}
+		}
+	}
+
+	// Remove from clusterMap.
+	delete(s.clusterMap, tokensToString(victim.tokens))
+
+	// Swap-remove from clusters slice.
+	last := len(s.clusters) - 1
+	s.clusters[minIdx] = s.clusters[last]
+	s.clusters[last] = nil
+	s.clusters = s.clusters[:last]
 }
 
 // match attempts to match tokens against existing clusters (inference mode)
