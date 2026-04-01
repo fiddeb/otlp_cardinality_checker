@@ -276,3 +276,86 @@ func TestLongPayloadClustering(t *testing.T) {
 		t.Errorf("merged template should contain a wildcard; got %q", tmpl2)
 	}
 }
+
+// TestLRUEviction verifies that cluster count stays bounded at MaxClusters.
+func TestLRUEviction(t *testing.T) {
+	cfg := Config{
+		Shards:       1,
+		MaxDepth:     4,
+		MaxChildren:  100,
+		MaxClusters:  5, // very small to trigger eviction quickly
+		SimThreshold: 0.99, // high threshold → almost nothing merges
+		Training:     true,
+	}
+	miner := NewShardedMiner(cfg)
+
+	// Add many completely distinct messages (different token counts to avoid merging)
+	messages := []string{
+		"alpha",
+		"bravo charlie",
+		"delta echo foxtrot",
+		"golf hotel india juliet",
+		"kilo lima mike november oscar",
+		"papa quebec romeo sierra tango uniform",
+		"victor whiskey xray yankee zulu one two",
+		"two three four five six seven eight nine",
+		"ten eleven twelve thirteen fourteen fifteen sixteen seventeen",
+		"aa bb cc dd ee ff gg hh ii jj",
+	}
+	for _, msg := range messages {
+		miner.Add(msg)
+	}
+
+	clusters := miner.GetClusters()
+	maxPerShard := cfg.MaxClusters / cfg.Shards
+	if len(clusters) > maxPerShard {
+		t.Errorf("expected at most %d clusters after eviction, got %d", maxPerShard, len(clusters))
+	}
+
+	// Verify that the miner is still functional after evictions.
+	tmpl, matched := miner.Add("victor whiskey xray yankee zulu one two")
+	if !matched {
+		t.Logf("post-eviction add returned new template (the original may have been evicted): %s", tmpl)
+	}
+}
+
+// TestLRUEvictionPreservesRecentClusters checks that recently used clusters survive eviction.
+func TestLRUEvictionPreservesRecentClusters(t *testing.T) {
+	cfg := Config{
+		Shards:       1,
+		MaxDepth:     4,
+		MaxChildren:  100,
+		MaxClusters:  3,
+		SimThreshold: 0.99,
+		Training:     true,
+	}
+	miner := NewShardedMiner(cfg)
+
+	// Add 3 clusters (at limit)
+	miner.Add("aaa bbb ccc")
+	miner.Add("ddd eee fff")
+	miner.Add("ggg hhh iii")
+
+	// Re-touch the first cluster to make it recent
+	miner.Add("aaa bbb ccc")
+
+	// Add a 4th cluster, triggering eviction. The 2nd (oldest untouched) should be evicted.
+	miner.Add("jjj kkk lll")
+
+	clusters := miner.GetClusters()
+	if len(clusters) > 3 {
+		t.Errorf("expected at most 3 clusters, got %d", len(clusters))
+	}
+
+	// The first cluster ("aaa bbb ccc") was recently used, should still exist
+	found := false
+	for _, c := range clusters {
+		if strings.Contains(c.Template, "aaa") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("recently used cluster 'aaa bbb ccc' was evicted, expected it to survive")
+	}
+}

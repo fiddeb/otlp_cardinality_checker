@@ -1099,7 +1099,7 @@ func (s *Server) getAttribute(w http.ResponseWriter, r *http.Request) {
 
 // handleWatchAttribute enables deep watch for a specific attribute key.
 // POST /api/v1/attributes/{key}/watch
-// Returns 200 (already watching), 201 (newly activated), 409 (conflict), 429 (limit).
+// Returns 200 with WatchedAttribute JSON on success, 409 if already watched, 429 if limit reached.
 func (s *Server) handleWatchAttribute(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	key := chi.URLParam(r, "key")
@@ -1108,6 +1108,15 @@ func (s *Server) handleWatchAttribute(w http.ResponseWriter, r *http.Request) {
 	if err != nil || decodedKey == "" {
 		s.respondError(w, http.StatusBadRequest, "invalid attribute key")
 		return
+	}
+
+	// Spec: POST MUST return 409 if the key is already being watched.
+	if wa, err := s.store.GetWatchedAttribute(ctx, decodedKey); err == nil {
+		_, _, _, _, active, _, _ := wa.Snapshot()
+		if active {
+			s.respondError(w, http.StatusConflict, "already watched")
+			return
+		}
 	}
 
 	if err := s.store.WatchAttribute(ctx, decodedKey); err != nil {
@@ -1120,9 +1129,18 @@ func (s *Server) handleWatchAttribute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.respondJSON(w, http.StatusOK, map[string]string{
-		"message": fmt.Sprintf("deep watch activated for %q", decodedKey),
-		"key":     decodedKey,
+	// Return WatchedAttribute JSON per spec.
+	wa, err := s.store.GetWatchedAttribute(ctx, decodedKey)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	waKey, _, uniqueCount, _, _, overflow, since := wa.Snapshot()
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"key":            waKey,
+		"watching_since": since,
+		"unique_count":   uniqueCount,
+		"overflow":       overflow,
 	})
 }
 
