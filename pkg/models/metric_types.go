@@ -132,6 +132,11 @@ func (s *SummaryMetric) GetDataPointCount() int64 {
 	return s.DataPointCount
 }
 
+// maxExpHistBuckets is the default maximum bucket count used by the OTel SDK
+// for exponential histograms (max_size parameter). Used as an upper bound
+// when estimating Prometheus series from exponential histograms.
+const maxExpHistBuckets = 160
+
 // EstimatePrometheusActiveSeries estimates Prometheus series count based on OTLP series.
 // For histograms, this accounts for bucket series plus _sum and _count.
 func EstimatePrometheusActiveSeries(activeSeriesOTLP int64, data MetricData) int64 {
@@ -147,9 +152,39 @@ func EstimatePrometheusActiveSeries(activeSeriesOTLP int64, data MetricData) int
 		bucketCount := len(metric.ExplicitBounds) + 1
 		return activeSeriesOTLP * int64(bucketCount+2)
 	case *ExponentialHistogramMetric:
-		bucketCount := len(metric.Scales) * 10
+		bucketCount := estimateExpHistBuckets(metric.Scales)
 		return activeSeriesOTLP * int64(bucketCount+2)
 	default:
 		return activeSeriesOTLP
 	}
+}
+
+// estimateExpHistBuckets estimates the Prometheus bucket count for an exponential
+// histogram based on observed scales. Uses the maximum scale to compute resolution:
+// buckets = 2^(maxScale+1), capped at the OTel SDK default max_size (160).
+// Returns at least 1 bucket if any scales are present.
+func estimateExpHistBuckets(scales []int32) int {
+	if len(scales) == 0 {
+		return 1
+	}
+
+	// Find maximum scale
+	maxScale := scales[0]
+	for _, s := range scales[1:] {
+		if s > maxScale {
+			maxScale = s
+		}
+	}
+
+	// For negative or zero scales, use minimal bucket count
+	if maxScale <= 0 {
+		return 1
+	}
+
+	// 2^(maxScale+1), capped at OTel SDK default
+	buckets := 1 << (maxScale + 1)
+	if buckets > maxExpHistBuckets {
+		buckets = maxExpHistBuckets
+	}
+	return buckets
 }

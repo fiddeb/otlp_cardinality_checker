@@ -220,7 +220,7 @@ Example response:
       "name": "http_server_duration",
       "type": "Histogram",
       "unit": "ms",
-      "attribute_keys": {
+      "label_keys": {
         "method": {
           "count": 15420,
           "estimated_cardinality": 7,
@@ -280,7 +280,7 @@ curl 'http://localhost:8090/api/v1/metrics' | jq '.' > metadata-report.json
 
 # Check for high cardinality (example)
 curl -s 'http://localhost:8090/api/v1/metrics' | \
-  jq -r '.data[] | select(.attribute_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
+  jq -r '.data[] | select(.label_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
 ```
 
 ### 2. Cost Analysis
@@ -296,7 +296,7 @@ curl -s 'http://localhost:8090/api/v1/metrics' | jq '.' > metrics.json
 
 # Or use jq to create CSV format
 curl -s 'http://localhost:8090/api/v1/metrics' | \
-  jq -r '.data[] | [.name, .type, (.attribute_keys | length), .sample_count] | @csv' > metrics.csv
+  jq -r '.data[] | [.name, .type, (.label_keys | length), .sample_count] | @csv' > metrics.csv
 
 # Analyze in Excel/SQL
 ```

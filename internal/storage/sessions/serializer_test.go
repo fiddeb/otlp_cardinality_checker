@@ -179,11 +179,11 @@ func TestSerializer_ExponentialHistogramScalesPreservedOnRoundTrip(t *testing.T)
 		t.Fatalf("Scales lost after round-trip: got %v, want %v", expData.Scales, scales)
 	}
 
-	// 3 scales × 10 = 30 buckets; 3 OTLP series × (30+2) = 96
+	// maxScale=2, buckets=2^(2+1)=8; 3 OTLP series × (8+2) = 30
 	otlpSeries2 := rm.GetActiveSeries()
 	promSeries2 := models.EstimatePrometheusActiveSeries(otlpSeries2, rm.Data)
-	if promSeries2 != 96 {
-		t.Errorf("EstimatePrometheusActiveSeries after round-trip: got %d, want 96", promSeries2)
+	if promSeries2 != 30 {
+		t.Errorf("EstimatePrometheusActiveSeries after round-trip: got %d, want 30", promSeries2)
 	}
 }
 
