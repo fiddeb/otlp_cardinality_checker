@@ -39,7 +39,7 @@ k6 run --vus 50 --duration 120s \
 
 **Environment variables:**
 - `OTLP_ENDPOINT` - OTLP endpoint (default: `http://localhost:4218`)
-- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8080`)
+- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8090`)
 - `NUM_METRICS` - Number of unique metric names (default: 1000)
 - `CARDINALITY` - Number of unique values per label (default: 50)
 
@@ -67,7 +67,7 @@ k6 run --vus 50 --duration 120s \
 
 **Environment variables:**
 - `OTLP_ENDPOINT` - OTLP endpoint (default: `http://localhost:4318`)
-- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8080`)
+- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8090`)
 - `NUM_SPANS` - Number of unique span operations (default: 100)
 - `CARDINALITY` - Number of unique values per attribute (default: 50)
 
@@ -95,7 +95,7 @@ k6 run --vus 50 --duration 120s \
 
 **Environment variables:**
 - `OTLP_ENDPOINT` - OTLP endpoint (default: `http://localhost:4318`)
-- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8080`)
+- `API_ENDPOINT` - REST API endpoint (default: `http://localhost:8090`)
 - `NUM_MODULES` - Number of unique modules (default: 100)
 - `CARDINALITY` - Number of unique values per attribute (default: 50)
 
@@ -139,11 +139,11 @@ Identifies services causing high cardinality or high volume.
 
 **Custom endpoint and threshold:**
 ```bash
-./scripts/find-noisy-neighbors.sh http://localhost:8080 50
+./scripts/find-noisy-neighbors.sh http://localhost:8090 50
 ```
 
 **Parameters:**
-- First argument: API endpoint (default: `http://localhost:8080`)
+- First argument: API endpoint (default: `http://localhost:8090`)
 - Second argument: Cardinality threshold (default: 30)
 
 **Features:**
@@ -220,11 +220,11 @@ k6 run --vus 10 --duration 60s \
 ./scripts/find-noisy-neighbors.sh
 
 # 5. Check overall stats
-echo "Metrics: $(curl -s http://localhost:8080/api/v1/metrics | jq -r '.total')"
-echo "Spans: $(curl -s http://localhost:8080/api/v1/spans | jq -r '.total')"
-echo "Logs: $(curl -s http://localhost:8080/api/v1/logs | jq -r '.total')"
-echo "Services: $(curl -s http://localhost:8080/api/v1/services | jq -r '.total')"
-curl -s http://localhost:8080/api/v1/health | jq '.memory'
+echo "Metrics: $(curl -s http://localhost:8090/api/v1/metrics | jq -r '.total')"
+echo "Spans: $(curl -s http://localhost:8090/api/v1/spans | jq -r '.total')"
+echo "Logs: $(curl -s http://localhost:8090/api/v1/logs | jq -r '.total')"
+echo "Services: $(curl -s http://localhost:8090/api/v1/services | jq -r '.total')"
+curl -s http://localhost:8090/api/v1/health | jq '.memory'
 ```
 
 ### Automated Test Script
@@ -269,11 +269,11 @@ echo "🔎 Analyzing for noisy neighbors..."
 
 # Show final stats
 echo "📈 Final Statistics:"
-echo "  Metrics: $(curl -s http://localhost:8080/api/v1/metrics | jq -r '.total')"
-echo "  Spans: $(curl -s http://localhost:8080/api/v1/spans | jq -r '.total')"
-echo "  Logs: $(curl -s http://localhost:8080/api/v1/logs | jq -r '.total')"
-echo "  Services: $(curl -s http://localhost:8080/api/v1/services | jq -r '.total')"
-curl -s http://localhost:8080/api/v1/health | jq '{
+echo "  Metrics: $(curl -s http://localhost:8090/api/v1/metrics | jq -r '.total')"
+echo "  Spans: $(curl -s http://localhost:8090/api/v1/spans | jq -r '.total')"
+echo "  Logs: $(curl -s http://localhost:8090/api/v1/logs | jq -r '.total')"
+echo "  Services: $(curl -s http://localhost:8090/api/v1/services | jq -r '.total')"
+curl -s http://localhost:8090/api/v1/health | jq '{
   memory_mb: .memory.sys_mb,
   uptime: .uptime
 }'
@@ -372,16 +372,16 @@ watch -n 1 'ps aux | grep occ | grep -v grep | awk "{print \$6/1024 \" MB\"}"'
 ### API Performance
 ```bash
 # Check API response time
-time curl -s "http://localhost:8080/api/v1/metrics?limit=100" | jq '.total'
+time curl -s "http://localhost:8090/api/v1/metrics?limit=100" | jq '.total'
 ```
 
 ### Current State
 ```bash
 # Get metrics count
-curl -s "http://localhost:8080/api/v1/metrics" | jq '{total, limit, has_more}'
+curl -s "http://localhost:8090/api/v1/metrics" | jq '{total, limit, has_more}'
 
 # Get high cardinality metrics
-curl -s "http://localhost:8080/api/v1/metrics?limit=100" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=100" | \
   jq '.data[] | select(.label_keys | to_entries[] | .value.estimated_cardinality > 50) | .name'
 ```
 
@@ -439,7 +439,7 @@ Based on hardware and configuration:
 
 ### Connection Errors
 - Verify server is running
-- Check ports (4318 for OTLP, 8080 for API)
+- Check ports (4318 for OTLP, 8090 for API)
 - Increase file descriptors: `ulimit -n 10000`
 
 ## Next Steps

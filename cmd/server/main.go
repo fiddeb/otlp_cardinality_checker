@@ -107,7 +107,7 @@ func main() {
 	grpcReceiver := receiver.NewGRPCReceiver(otlpGRPCAddr, store)
 
 	// Create REST API server
-	apiAddr := getEnv("API_ADDR", "0.0.0.0:8080")
+	apiAddr := getEnv("API_ADDR", "0.0.0.0:8090")
 	apiServer := api.NewServer(apiAddr, store)
 
 	// Start pprof server for profiling (separate port)

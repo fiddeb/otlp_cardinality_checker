@@ -15,7 +15,7 @@ make build
 # Server starts on:
 #   OTLP gRPC: localhost:4317
 #   OTLP HTTP: http://localhost:4318
-#   REST API:  http://localhost:8080
+#   REST API:  http://localhost:8090
 ```
 
 ### 2. Send Telemetry Data
@@ -70,23 +70,23 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
 ```bash
 # Check if data is arriving
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8090/api/v1/health
 
 # List all metrics
-curl http://localhost:8080/api/v1/metrics?limit=5
+curl http://localhost:8090/api/v1/metrics?limit=5
 
 # Get details for a specific metric
-curl http://localhost:8080/api/v1/metrics/your_metric_name
+curl http://localhost:8090/api/v1/metrics/your_metric_name
 ```
 
 ### 4. Quick Test - Check Your Metric
 
 ```bash
 # Step 1: Find a metric name
-curl -s "http://localhost:8080/api/v1/metrics?limit=5" | jq -r '.data[].name'
+curl -s "http://localhost:8090/api/v1/metrics?limit=5" | jq -r '.data[].name'
 
 # Step 2: Check its labels and cardinality
-curl -s "http://localhost:8080/api/v1/metrics/YOUR_METRIC_NAME" | \
+curl -s "http://localhost:8090/api/v1/metrics/YOUR_METRIC_NAME" | \
   jq '.label_keys | to_entries[] | {
     label: .key,
     cardinality: .value.estimated_cardinality,
@@ -126,7 +126,7 @@ This section covers real-world scenarios for analyzing metrics, traces, and logs
 What metrics does `my-service` produce?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/metrics?service=my-service" | \
+curl -s "http://localhost:8090/api/v1/metrics?service=my-service" | \
   jq -r '.data[] | .name'
 ```
 
@@ -145,7 +145,7 @@ database_queries_total
 What labels does `http_requests_total` have?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '.label_keys | keys'
 ```
 
@@ -161,7 +161,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 **With cardinality info:**
 
 ```bash
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq -r '.label_keys | to_entries[] | "\(.key): \(.value.estimated_cardinality) unique values"'
 ```
 
@@ -180,7 +180,7 @@ Which metric labels have too many unique values?
 
 ```bash
 # Find labels with >20 unique values (adjust threshold as needed)
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '.label_keys | to_entries[] | select(.value.estimated_cardinality > 20) | {
     label: .key,
     cardinality: .value.estimated_cardinality,
@@ -212,7 +212,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 Which metrics receive the most samples?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/metrics?limit=100" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=100" | \
   jq -r '.data[] | "\(.name): \(.sample_count) samples"' | \
   sort -t: -k2 -nr | head -10
 ```
@@ -231,7 +231,7 @@ memory_bytes: 10000 samples
 What resource attributes (like `service.name`, `host.name`) are attached to metrics?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '.resource_keys | to_entries[] | {
     key: .key,
     cardinality: .value.estimated_cardinality,
@@ -262,7 +262,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 What span operations are being traced?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=100" | \
   jq -r '.data[] | .name'
 ```
 
@@ -282,7 +282,7 @@ external_api_call
 What attributes does the `HTTP GET /api/users` span have?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+curl -s "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
   jq '{
     name,
     kind,
@@ -313,7 +313,7 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 Which span attributes have too many unique values?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+curl -s "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
   jq '.attribute_keys | to_entries[] | select(.value.estimated_cardinality > 50) | {
     attribute: .key,
     cardinality: .value.estimated_cardinality,
@@ -345,7 +345,7 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 What operations does `api-server` trace?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans?service=api-server" | \
+curl -s "http://localhost:8090/api/v1/spans?service=api-server" | \
   jq -r '.data[] | .name'
 ```
 
@@ -364,7 +364,7 @@ database_query
 What resource attributes are attached to spans?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans/database_query" | \
+curl -s "http://localhost:8090/api/v1/spans/database_query" | \
   jq '.resource_keys | to_entries[] | {
     key: .key,
     cardinality: .value.estimated_cardinality,
@@ -393,7 +393,7 @@ curl -s "http://localhost:8080/api/v1/spans/database_query" | \
 Which span operations are most frequently traced?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=100" | \
   jq -r '.data[] | "\(.name): \(.sample_count) samples"' | \
   sort -t: -k2 -nr | head -10
 ```
@@ -412,7 +412,7 @@ cache_lookup: 4800 samples
 What patterns exist in span names? Are there dynamic values like IDs or timestamps?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+curl -s "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
   jq '.name_patterns[] | {
     template,
     count,
@@ -446,7 +446,7 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 Which spans have dynamic values in their names causing cardinality issues?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans?limit=100" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=100" | \
   jq '.data[] | select(.name_patterns != null and (.name_patterns | length) > 1) | {
     name,
     pattern_count: (.name_patterns | length),
@@ -476,7 +476,7 @@ Span names contain batch IDs. This creates many unique span names and fragments 
 What log severity levels are being collected?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/logs" | \
+curl -s "http://localhost:8090/api/v1/logs" | \
   jq -r '.data[] | .severity'
 ```
 
@@ -495,7 +495,7 @@ DEBUG
 What attributes do ERROR logs have?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
+curl -s "http://localhost:8090/api/v1/logs/ERROR" | \
   jq '{
     severity,
     attribute_keys: (.attribute_keys | keys),
@@ -524,7 +524,7 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 Which log attributes have too many unique values?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
+curl -s "http://localhost:8090/api/v1/logs/ERROR" | \
   jq '.attribute_keys | to_entries[] | select(.value.estimated_cardinality > 30) | {
     attribute: .key,
     cardinality: .value.estimated_cardinality,
@@ -556,7 +556,7 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 What log severities does `api-server` produce?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/logs?service=api-server" | \
+curl -s "http://localhost:8090/api/v1/logs?service=api-server" | \
   jq -r '.data[] | .severity'
 ```
 
@@ -574,7 +574,7 @@ ERROR
 What resource attributes are attached to logs?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
+curl -s "http://localhost:8090/api/v1/logs/ERROR" | \
   jq '.resource_keys | to_entries[] | {
     key: .key,
     cardinality: .value.estimated_cardinality,
@@ -603,7 +603,7 @@ curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
 Which log severities have the most samples?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/logs?limit=100" | \
+curl -s "http://localhost:8090/api/v1/logs?limit=100" | \
   jq -r '.data[] | "\(.severity): \(.sample_count) samples"' | \
   sort -t: -k2 -nr
 ```
@@ -626,7 +626,7 @@ What telemetry does `api-server` produce across all signal types?
 
 ```bash
 # Get overview for a service
-curl -s "http://localhost:8080/api/v1/services/api-server/overview" | \
+curl -s "http://localhost:8090/api/v1/services/api-server/overview" | \
   jq '{
     metrics: [.metrics[] | .name],
     spans: [.spans[] | .name],
@@ -687,7 +687,7 @@ Which metric labels are rarely used?
 
 ```bash
 # Find labels present in <50% of samples
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '.label_keys | to_entries[] | select(.value.percentage < 50) | {
     label: .key,
     usage: "\(.value.percentage)%",
@@ -713,7 +713,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 Which span attributes are rarely used?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+curl -s "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
   jq '.attribute_keys | to_entries[] | select(.value.percentage < 50) | {
     attribute: .key,
     usage: "\(.value.percentage)%"
@@ -735,7 +735,7 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 Which log attributes are rarely populated?
 
 ```bash
-curl -s "http://localhost:8080/api/v1/logs/ERROR" | \
+curl -s "http://localhost:8090/api/v1/logs/ERROR" | \
   jq '.attribute_keys | to_entries[] | select(.value.percentage < 50) | {
     attribute: .key,
     usage: "\(.value.percentage)%"
@@ -752,7 +752,7 @@ How does telemetry differ between services?
 # Get overview for each service
 for service in service-a service-b; do
   echo "=== $service ==="
-  curl -s "http://localhost:8080/api/v1/services/$service/overview" | \
+  curl -s "http://localhost:8090/api/v1/services/$service/overview" | \
     jq '{
       metrics: [.metrics[] | .name],
       spans: [.spans[] | .name],
@@ -769,14 +769,14 @@ Is metric cardinality increasing over time?
 
 ```bash
 # Take snapshot
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '.label_keys.user_id.estimated_cardinality' > snapshot1.txt
 
 # Wait some time...
 sleep 3600
 
 # Compare
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '.label_keys.user_id.estimated_cardinality' > snapshot2.txt
 
 # Show growth
@@ -791,12 +791,12 @@ Is span attribute cardinality increasing?
 
 ```bash
 # Initial snapshot
-curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+curl -s "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
   jq '.attribute_keys."http.target".estimated_cardinality' > span_snapshot1.txt
 
 # Wait and compare
 sleep 3600
-curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+curl -s "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
   jq '.attribute_keys."http.target".estimated_cardinality' > span_snapshot2.txt
 
 echo "Growth: $(($(cat span_snapshot2.txt) - $(cat span_snapshot1.txt))) new unique values"
@@ -814,7 +814,7 @@ GET /api/v1/health
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/health"
+curl "http://localhost:8090/api/v1/health"
 ```
 
 **Response:**
@@ -850,7 +850,7 @@ GET /api/v1/metrics?service={name}&limit={N}&offset={M}
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/metrics?limit=10&offset=0"
+curl "http://localhost:8090/api/v1/metrics?limit=10&offset=0"
 ```
 
 **Response:**
@@ -882,7 +882,7 @@ GET /api/v1/metrics/{name}
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/metrics/http_requests_total"
+curl "http://localhost:8090/api/v1/metrics/http_requests_total"
 ```
 
 **Response:**
@@ -941,7 +941,7 @@ GET /api/v1/spans?service={name}&limit={N}&offset={M}
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/spans?service=api-server&limit=10"
+curl "http://localhost:8090/api/v1/spans?service=api-server&limit=10"
 ```
 
 **Response:**
@@ -972,7 +972,7 @@ GET /api/v1/spans/{name}
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers"
+curl "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers"
 ```
 
 **Response:**
@@ -1036,7 +1036,7 @@ GET /api/v1/logs?service={name}&limit={N}&offset={M}
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/logs?service=api-server"
+curl "http://localhost:8090/api/v1/logs?service=api-server"
 ```
 
 **Response:**
@@ -1075,7 +1075,7 @@ GET /api/v1/logs/{severity}
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/logs/ERROR"
+curl "http://localhost:8090/api/v1/logs/ERROR"
 ```
 
 **Response:**
@@ -1134,7 +1134,7 @@ GET /api/v1/services
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/services"
+curl "http://localhost:8090/api/v1/services"
 ```
 
 **Response:**
@@ -1158,7 +1158,7 @@ GET /api/v1/services/{name}/overview
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/v1/services/api-server/overview"
+curl "http://localhost:8090/api/v1/services/api-server/overview"
 ```
 
 **Response:**
@@ -1211,38 +1211,38 @@ curl "http://localhost:8080/api/v1/services/api-server/overview"
 **Metrics:**
 ```bash
 # Just metric names
-curl -s "http://localhost:8080/api/v1/metrics" | jq -r '.data[] | .name'
+curl -s "http://localhost:8090/api/v1/metrics" | jq -r '.data[] | .name'
 
 # Metric names with sample counts
-curl -s "http://localhost:8080/api/v1/metrics" | \
+curl -s "http://localhost:8090/api/v1/metrics" | \
   jq -r '.data[] | "\(.name): \(.sample_count) samples"'
 
 # Metrics grouped by type
-curl -s "http://localhost:8080/api/v1/metrics" | \
+curl -s "http://localhost:8090/api/v1/metrics" | \
   jq '[.data[] | {type, name}] | group_by(.type) | map({type: .[0].type, count: length, metrics: [.[].name]})'
 ```
 
 **Spans:**
 ```bash
 # Just span names
-curl -s "http://localhost:8080/api/v1/spans" | jq -r '.data[] | .name'
+curl -s "http://localhost:8090/api/v1/spans" | jq -r '.data[] | .name'
 
 # Spans with their kinds
-curl -s "http://localhost:8080/api/v1/spans" | \
+curl -s "http://localhost:8090/api/v1/spans" | \
   jq -r '.data[] | "\(.name) (\(.kind))"'
 
 # Spans grouped by kind
-curl -s "http://localhost:8080/api/v1/spans" | \
+curl -s "http://localhost:8090/api/v1/spans" | \
   jq '[.data[] | {kind, name}] | group_by(.kind) | map({kind: .[0].kind, count: length})'
 ```
 
 **Logs:**
 ```bash
 # Just severities
-curl -s "http://localhost:8080/api/v1/logs" | jq -r '.data[] | .severity'
+curl -s "http://localhost:8090/api/v1/logs" | jq -r '.data[] | .severity'
 
 # Severities with sample counts
-curl -s "http://localhost:8080/api/v1/logs" | \
+curl -s "http://localhost:8090/api/v1/logs" | \
   jq -r '.data[] | "\(.severity): \(.sample_count) samples"'
 ```
 
@@ -1253,41 +1253,41 @@ curl -s "http://localhost:8080/api/v1/logs" | \
 **Metrics:**
 ```bash
 # Metrics with >1000 samples
-curl -s "http://localhost:8080/api/v1/metrics" | \
+curl -s "http://localhost:8090/api/v1/metrics" | \
   jq '.data[] | select(.sample_count > 1000)'
 
 # Top 10 metrics by sample count
-curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=1000" | \
   jq '.data | sort_by(.sample_count) | reverse | .[0:10] | .[] | {name, sample_count}'
 
 # Metrics with high cardinality labels
-curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=1000" | \
   jq '.data[] | select(.label_keys | to_entries[] | .value.estimated_cardinality > 50) | .name'
 ```
 
 **Spans:**
 ```bash
 # Spans with >5000 samples
-curl -s "http://localhost:8080/api/v1/spans" | \
+curl -s "http://localhost:8090/api/v1/spans" | \
   jq '.data[] | select(.sample_count > 5000)'
 
 # Top 10 spans by sample count
-curl -s "http://localhost:8080/api/v1/spans?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=1000" | \
   jq '.data | sort_by(.sample_count) | reverse | .[0:10] | .[] | {name, kind, sample_count}'
 
 # Spans with high cardinality attributes
-curl -s "http://localhost:8080/api/v1/spans?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=1000" | \
   jq '.data[] | select(.attribute_keys | to_entries[] | .value.estimated_cardinality > 100) | .name'
 ```
 
 **Logs:**
 ```bash
 # Logs with >10000 samples
-curl -s "http://localhost:8080/api/v1/logs" | \
+curl -s "http://localhost:8090/api/v1/logs" | \
   jq '.data[] | select(.sample_count > 10000)'
 
 # Severities sorted by volume
-curl -s "http://localhost:8080/api/v1/logs" | \
+curl -s "http://localhost:8090/api/v1/logs" | \
   jq '.data | sort_by(.sample_count) | reverse | .[] | {severity, sample_count}'
 ```
 
@@ -1297,7 +1297,7 @@ curl -s "http://localhost:8080/api/v1/logs" | \
 
 **Metrics Cardinality Report:**
 ```bash
-curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=1000" | \
   jq -r '.data[] | .name as $metric | .label_keys | to_entries[] | 
     select(.value.estimated_cardinality > 20) | 
     "\($metric).\(.key): \(.value.estimated_cardinality)"' | \
@@ -1314,7 +1314,7 @@ cache_operations.cache_key: 234
 
 **Spans Cardinality Report:**
 ```bash
-curl -s "http://localhost:8080/api/v1/spans?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=1000" | \
   jq -r '.data[] | .name as $span | .attribute_keys | to_entries[] | 
     select(.value.estimated_cardinality > 50) | 
     "\($span).\(.key): \(.value.estimated_cardinality)"' | \
@@ -1330,7 +1330,7 @@ external_api_call.url: 89
 
 **Logs Cardinality Report:**
 ```bash
-curl -s "http://localhost:8080/api/v1/logs?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/logs?limit=1000" | \
   jq -r '.data[] | .severity as $sev | .attribute_keys | to_entries[] | 
     select(.value.estimated_cardinality > 30) | 
     "\($sev).\(.key): \(.value.estimated_cardinality)"' | \
@@ -1350,10 +1350,10 @@ INFO.trace_id: 10523
 
 **Services with all three signal types:**
 ```bash
-curl -s "http://localhost:8080/api/v1/services" | jq -r '.data[]' | while read service; do
-  metrics=$(curl -s "http://localhost:8080/api/v1/metrics?service=$service" | jq -r '.total')
-  spans=$(curl -s "http://localhost:8080/api/v1/spans?service=$service" | jq -r '.total')
-  logs=$(curl -s "http://localhost:8080/api/v1/logs?service=$service" | jq -r '.total')
+curl -s "http://localhost:8090/api/v1/services" | jq -r '.data[]' | while read service; do
+  metrics=$(curl -s "http://localhost:8090/api/v1/metrics?service=$service" | jq -r '.total')
+  spans=$(curl -s "http://localhost:8090/api/v1/spans?service=$service" | jq -r '.total')
+  logs=$(curl -s "http://localhost:8090/api/v1/logs?service=$service" | jq -r '.total')
   echo "$service: metrics=$metrics spans=$spans logs=$logs"
 done
 ```
@@ -1374,7 +1374,7 @@ cache: metrics=15 spans=5 logs=2
 **Check OTLP endpoint:**
 ```bash
 # Verify server is running
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8090/api/v1/health
 
 # Check OTLP endpoint
 curl -X POST http://localhost:4318/v1/metrics \
@@ -1394,7 +1394,7 @@ exporters:
 
 **Check metrics count:**
 ```bash
-curl -s "http://localhost:8080/api/v1/metrics" | jq '.total'
+curl -s "http://localhost:8090/api/v1/metrics" | jq '.total'
 ```
 
 **Expected memory:**
@@ -1412,16 +1412,16 @@ curl -s "http://localhost:8080/api/v1/metrics" | jq '.total'
 **Use pagination:**
 ```bash
 # BAD: Returns all 50,000 metrics
-curl "http://localhost:8080/api/v1/metrics"
+curl "http://localhost:8090/api/v1/metrics"
 
 # GOOD: Returns 100 at a time
-curl "http://localhost:8080/api/v1/metrics?limit=100"
+curl "http://localhost:8090/api/v1/metrics?limit=100"
 ```
 
 **Filter by service:**
 ```bash
 # Instead of getting all and filtering client-side
-curl "http://localhost:8080/api/v1/metrics?service=my-service"
+curl "http://localhost:8090/api/v1/metrics?service=my-service"
 ```
 
 ---
@@ -1436,7 +1436,7 @@ curl "http://localhost:8080/api/v1/metrics?service=my-service"
 
 MAX_CARDINALITY=100
 
-high_card=$(curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
+high_card=$(curl -s "http://localhost:8090/api/v1/metrics?limit=1000" | \
   jq "[.data[] | .label_keys | to_entries[] | select(.value.estimated_cardinality > $MAX_CARDINALITY)] | length")
 
 if [ "$high_card" -gt 0 ]; then
@@ -1461,7 +1461,7 @@ fi
 
 ```bash
 # Export data for Grafana
-curl -s "http://localhost:8080/api/v1/metrics?service=my-service" | \
+curl -s "http://localhost:8090/api/v1/metrics?service=my-service" | \
   jq '.data[] | {
     metric: .name,
     cardinality: ([.label_keys[] | .estimated_cardinality] | add),
@@ -1478,7 +1478,7 @@ curl -s "http://localhost:8080/api/v1/metrics?service=my-service" | \
 Run cardinality checks daily:
 ```bash
 # Save to file with timestamp
-curl -s "http://localhost:8080/api/v1/metrics?limit=10000" > \
+curl -s "http://localhost:8090/api/v1/metrics?limit=10000" > \
   "metrics_$(date +%Y%m%d).json"
 
 # Compare with previous day
@@ -1498,7 +1498,7 @@ Define limits per team/service:
 
 Always filter by service to reduce noise:
 ```bash
-curl "http://localhost:8080/api/v1/metrics?service=my-service&limit=100"
+curl "http://localhost:8090/api/v1/metrics?service=my-service&limit=100"
 ```
 
 ### 4. Document your metrics
@@ -1516,7 +1516,7 @@ When you find a metric with high cardinality:
 
 ```bash
 # Find metrics missing 'service.name' resource attribute
-curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=1000" | \
   jq -r '.data[] | select(.resource_keys["service.name"] == null or .resource_keys["service.name"].count == 0) | .name'
 ```
 
@@ -1526,7 +1526,7 @@ curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
 
 ```bash
 # Find spans missing 'http.status_code' attribute
-curl -s "http://localhost:8080/api/v1/spans?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=1000" | \
   jq -r '.data[] | select(.attribute_keys["http.status_code"] == null) | .name'
 ```
 
@@ -1536,7 +1536,7 @@ curl -s "http://localhost:8080/api/v1/spans?limit=1000" | \
 
 ```bash
 # Find log severities where trace_id is rarely present
-curl -s "http://localhost:8080/api/v1/logs?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/logs?limit=1000" | \
   jq -r '.data[] | select(.attribute_keys.trace_id.percentage < 10) | .severity'
 ```
 
@@ -1547,7 +1547,7 @@ curl -s "http://localhost:8080/api/v1/logs?limit=1000" | \
 **For Metrics:**
 ```bash
 # Total cardinality across all labels for a metric (multiplicative)
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '[.label_keys[] | .estimated_cardinality] | reduce .[] as $item (1; . * $item)'
 ```
 
@@ -1556,7 +1556,7 @@ curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
 **For Spans:**
 ```bash
 # Total cardinality across all attributes for a span
-curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
+curl -s "http://localhost:8090/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
   jq '[.attribute_keys[] | .estimated_cardinality] | reduce .[] as $item (1; . * $item)'
 ```
 
@@ -1567,7 +1567,7 @@ curl -s "http://localhost:8080/api/v1/spans/HTTP%20GET%20%2Fapi%2Fusers" | \
 **Metrics to CSV:**
 ```bash
 echo "metric,label,cardinality,percentage" > metrics_cardinality.csv
-curl -s "http://localhost:8080/api/v1/metrics?limit=10000" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=10000" | \
   jq -r '.data[] | .name as $m | .label_keys | to_entries[] | 
     "\($m),\(.key),\(.value.estimated_cardinality),\(.value.percentage)"' \
   >> metrics_cardinality.csv
@@ -1576,7 +1576,7 @@ curl -s "http://localhost:8080/api/v1/metrics?limit=10000" | \
 **Spans to CSV:**
 ```bash
 echo "span,attribute,cardinality,percentage" > spans_cardinality.csv
-curl -s "http://localhost:8080/api/v1/spans?limit=10000" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=10000" | \
   jq -r '.data[] | .name as $s | .attribute_keys | to_entries[] | 
     "\($s),\(.key),\(.value.estimated_cardinality),\(.value.percentage)"' \
   >> spans_cardinality.csv
@@ -1585,7 +1585,7 @@ curl -s "http://localhost:8080/api/v1/spans?limit=10000" | \
 **Logs to CSV:**
 ```bash
 echo "severity,attribute,cardinality,percentage" > logs_cardinality.csv
-curl -s "http://localhost:8080/api/v1/logs?limit=10000" | \
+curl -s "http://localhost:8090/api/v1/logs?limit=10000" | \
   jq -r '.data[] | .severity as $s | .attribute_keys | to_entries[] | 
     "\($s),\(.key),\(.value.estimated_cardinality),\(.value.percentage)"' \
   >> logs_cardinality.csv
@@ -1598,19 +1598,19 @@ curl -s "http://localhost:8080/api/v1/logs?limit=10000" | \
 ```bash
 # Get highest cardinality attribute from each signal type
 echo "=== Highest Cardinality Metrics ==="
-curl -s "http://localhost:8080/api/v1/metrics?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/metrics?limit=1000" | \
   jq -r '[.data[] | .name as $m | .label_keys | to_entries[] | {metric: $m, label: .key, card: .value.estimated_cardinality}] | 
     sort_by(.card) | reverse | .[0:5] | .[] | "\(.metric).\(.label): \(.card)"'
 
 echo ""
 echo "=== Highest Cardinality Spans ==="
-curl -s "http://localhost:8080/api/v1/spans?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/spans?limit=1000" | \
   jq -r '[.data[] | .name as $s | .attribute_keys | to_entries[] | {span: $s, attr: .key, card: .value.estimated_cardinality}] | 
     sort_by(.card) | reverse | .[0:5] | .[] | "\(.span).\(.attr): \(.card)"'
 
 echo ""
 echo "=== Highest Cardinality Logs ==="
-curl -s "http://localhost:8080/api/v1/logs?limit=1000" | \
+curl -s "http://localhost:8090/api/v1/logs?limit=1000" | \
   jq -r '[.data[] | .severity as $s | .attribute_keys | to_entries[] | {severity: $s, attr: .key, card: .value.estimated_cardinality}] | 
     sort_by(.card) | reverse | .[0:5] | .[] | "\(.severity).\(.attr): \(.card)"'
 ```
@@ -1637,7 +1637,7 @@ Sessions allow you to save snapshots of metadata state, compare versions, and an
 #### Save current state as a session
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -H "Content-Type: application/json" \
   -d '{
     "name": "baseline-2026-01-25",
@@ -1668,7 +1668,7 @@ curl -X POST http://localhost:8080/api/v1/sessions \
 #### List all sessions
 
 ```bash
-curl http://localhost:8080/api/v1/sessions
+curl http://localhost:8090/api/v1/sessions
 ```
 
 **Response:**
@@ -1695,7 +1695,7 @@ curl http://localhost:8080/api/v1/sessions
 #### Load a session (replaces current data)
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/load
+curl -X POST http://localhost:8090/api/v1/sessions/baseline-2026-01-25/load
 ```
 
 This **clears** the current in-memory state and loads the session data.
@@ -1705,7 +1705,7 @@ This **clears** the current in-memory state and loads the session data.
 #### Merge a session (additive)
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/merge
+curl -X POST http://localhost:8090/api/v1/sessions/baseline-2026-01-25/merge
 ```
 
 This **combines** the session data with the current state (HyperLogLog union for cardinality, sum for counts).
@@ -1715,7 +1715,7 @@ This **combines** the session data with the current state (HyperLogLog union for
 #### Compare two sessions (diff)
 
 ```bash
-curl "http://localhost:8080/api/v1/sessions/diff?from=baseline-2026-01-25&to=post-deploy-v2"
+curl "http://localhost:8090/api/v1/sessions/diff?from=baseline-2026-01-25&to=post-deploy-v2"
 ```
 
 **Response:**
@@ -1764,7 +1764,7 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=baseline-2026-01-25&to=pos
 
 ```bash
 # Save only metrics and traces
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d '{"name": "metrics-only", "signals": ["metrics"]}'
 ```
 
@@ -1772,14 +1772,14 @@ curl -X POST http://localhost:8080/api/v1/sessions \
 
 ```bash
 # Load only traces from a session
-curl -X POST "http://localhost:8080/api/v1/sessions/full-session/load?signals=traces"
+curl -X POST "http://localhost:8090/api/v1/sessions/full-session/load?signals=traces"
 ```
 
 #### Filter by service
 
 ```bash
 # Save only one service's data
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d '{"name": "payment-service", "services": ["payment-service"]}'
 ```
 
@@ -1790,13 +1790,13 @@ curl -X POST http://localhost:8080/api/v1/sessions \
 #### Export session to JSON
 
 ```bash
-curl http://localhost:8080/api/v1/sessions/baseline-2026-01-25/export > backup.json
+curl http://localhost:8090/api/v1/sessions/baseline-2026-01-25/export > backup.json
 ```
 
 #### Import session from JSON
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions/import \
+curl -X POST http://localhost:8090/api/v1/sessions/import \
   -H "Content-Type: application/json" \
   -d @backup.json
 ```
@@ -1822,7 +1822,7 @@ By default, sessions are stored as gzip-compressed JSON files in `data/sessions/
 ```bash
 #!/bin/bash
 # 1. Before deploy - save baseline
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d '{"name": "pre-deploy-v2.1", "description": "Before v2.1 deployment"}'
 
 # ... deploy happens ...
@@ -1832,11 +1832,11 @@ echo "Waiting for new telemetry..."
 sleep 300
 
 # 3. Save post-deploy snapshot
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d '{"name": "post-deploy-v2.1", "description": "After v2.1 deployment"}'
 
 # 4. Compare sessions
-curl -s "http://localhost:8080/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post-deploy-v2.1" | \
+curl -s "http://localhost:8090/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post-deploy-v2.1" | \
   jq '{
     total_changes: .summary.total_changes,
     critical: [.critical_changes[] | {name, severity, details}]
@@ -1872,20 +1872,20 @@ Collect different signal types on different days, then merge them:
 ```bash
 # Day 1: Collect metrics
 curl -X POST -d '{"name": "metrics-jan25", "signals": ["metrics"]}' \
-  http://localhost:8080/api/v1/sessions
+  http://localhost:8090/api/v1/sessions
 
 # Day 2: Clear data and collect traces
-curl -X POST http://localhost:8080/api/v1/admin/clear
+curl -X POST http://localhost:8090/api/v1/admin/clear
 # ... collect traces ...
 curl -X POST -d '{"name": "traces-jan26", "signals": ["traces"]}' \
-  http://localhost:8080/api/v1/sessions
+  http://localhost:8090/api/v1/sessions
 
 # Day 3: Merge both sessions
-curl -X POST http://localhost:8080/api/v1/sessions/metrics-jan25/load
-curl -X POST http://localhost:8080/api/v1/sessions/traces-jan26/merge
+curl -X POST http://localhost:8090/api/v1/sessions/metrics-jan25/load
+curl -X POST http://localhost:8090/api/v1/sessions/traces-jan26/merge
 
 # Analyze the combined data
-curl http://localhost:8080/api/v1/services
+curl http://localhost:8090/api/v1/services
 ```
 
 ---
@@ -1895,12 +1895,12 @@ curl http://localhost:8080/api/v1/services
 ```bash
 # Save each service separately
 for service in api-server worker cache; do
-  curl -X POST http://localhost:8080/api/v1/sessions \
+  curl -X POST http://localhost:8090/api/v1/sessions \
     -d "{\"name\": \"${service}-snapshot\", \"services\": [\"$service\"]}"
 done
 
 # Later: Compare two services
-curl "http://localhost:8080/api/v1/sessions/diff?from=api-server-snapshot&to=worker-snapshot" | \
+curl "http://localhost:8090/api/v1/sessions/diff?from=api-server-snapshot&to=worker-snapshot" | \
   jq '.changes.metrics | {added, removed}'
 ```
 
@@ -1919,12 +1919,12 @@ for day in {1..7}; do
   sleep 86400
   
   # Save snapshot
-  curl -X POST http://localhost:8080/api/v1/sessions \
+  curl -X POST http://localhost:8090/api/v1/sessions \
     -d "{\"name\": \"day-$day\", \"description\": \"Day $day snapshot\"}"
 done
 
 # Compare first and last day
-curl -s "http://localhost:8080/api/v1/sessions/diff?from=day-1&to=day-7&min_severity=warning" | \
+curl -s "http://localhost:8090/api/v1/sessions/diff?from=day-1&to=day-7&min_severity=warning" | \
   jq '.changes.metrics.changed[] | select(.details[].field | contains("cardinality"))'
 ```
 
@@ -1940,16 +1940,16 @@ BASELINE="known-good-baseline"
 CANDIDATE="ci-build-$BUILD_ID"
 
 # Save current state
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d "{\"name\": \"$CANDIDATE\"}"
 
 # Diff against baseline
-critical_count=$(curl -s "http://localhost:8080/api/v1/sessions/diff?from=$BASELINE&to=$CANDIDATE&min_severity=critical" | \
+critical_count=$(curl -s "http://localhost:8090/api/v1/sessions/diff?from=$BASELINE&to=$CANDIDATE&min_severity=critical" | \
   jq '.summary.total_changes')
 
 if [ "$critical_count" -gt 0 ]; then
   echo "❌ Critical cardinality changes detected!"
-  curl -s "http://localhost:8080/api/v1/sessions/diff?from=$BASELINE&to=$CANDIDATE&min_severity=critical" | \
+  curl -s "http://localhost:8090/api/v1/sessions/diff?from=$BASELINE&to=$CANDIDATE&min_severity=critical" | \
     jq '.critical_changes'
   exit 1
 else
@@ -1963,14 +1963,14 @@ fi
 
 ```bash
 # Delete a specific session
-curl -X DELETE http://localhost:8080/api/v1/sessions/old-session-name
+curl -X DELETE http://localhost:8090/api/v1/sessions/old-session-name
 
 # Delete all sessions older than 30 days (requires jq)
-curl -s http://localhost:8080/api/v1/sessions | \
+curl -s http://localhost:8090/api/v1/sessions | \
   jq -r ".sessions[] | select(.created_at | fromdateiso8601 < (now - 2592000)) | .name" | \
   while read name; do
     echo "Deleting old session: $name"
-    curl -X DELETE "http://localhost:8080/api/v1/sessions/$name"
+    curl -X DELETE "http://localhost:8090/api/v1/sessions/$name"
   done
 ```
 
@@ -1982,31 +1982,31 @@ curl -s http://localhost:8080/api/v1/sessions | \
 
 ```bash
 # Show only metric changes
-curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric"
+curl "http://localhost:8090/api/v1/sessions/diff?from=A&to=B&signal_type=metric"
 
 # Show only span changes
-curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=span"
+curl "http://localhost:8090/api/v1/sessions/diff?from=A&to=B&signal_type=span"
 ```
 
 #### Filter by service
 
 ```bash
 # Show only changes affecting payment-service
-curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&service=payment-service"
+curl "http://localhost:8090/api/v1/sessions/diff?from=A&to=B&service=payment-service"
 ```
 
 #### Filter by severity
 
 ```bash
 # Show only critical and warning changes
-curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&min_severity=warning"
+curl "http://localhost:8090/api/v1/sessions/diff?from=A&to=B&min_severity=warning"
 ```
 
 #### Combine filters
 
 ```bash
 # Critical metric changes for payment-service only
-curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric&service=payment-service&min_severity=critical"
+curl "http://localhost:8090/api/v1/sessions/diff?from=A&to=B&signal_type=metric&service=payment-service&min_severity=critical"
 ```
 
 ---
@@ -2030,7 +2030,7 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&signal_type=metric&
 #### Add descriptions
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d '{
     "name": "load-test-baseline",
     "description": "Baseline at 500 RPS, all services, before optimization"
@@ -2043,7 +2043,7 @@ Smaller sessions load faster:
 ```bash
 # If you only need metrics
 curl -X POST -d '{"name": "metrics-only", "signals": ["metrics"]}' \
-  http://localhost:8080/api/v1/sessions
+  http://localhost:8090/api/v1/sessions
 ```
 
 #### Clean up old sessions
@@ -2058,7 +2058,7 @@ Set up a cron job to delete old sessions:
 
 ```bash
 # Export production baselines regularly
-curl http://localhost:8080/api/v1/sessions/production-baseline/export > \
+curl http://localhost:8090/api/v1/sessions/production-baseline/export > \
   /backups/production-baseline-$(date +%Y%m%d).json
 ```
 
@@ -2071,46 +2071,46 @@ curl http://localhost:8080/api/v1/sessions/production-baseline/export > \
 **Error: "Session already exists"**
 ```bash
 # Use ?force=true to overwrite
-curl -X POST "http://localhost:8080/api/v1/sessions?force=true" \
+curl -X POST "http://localhost:8090/api/v1/sessions?force=true" \
   -d '{"name": "existing-session"}'
 ```
 
 **Error: "Maximum number of sessions reached"**
 ```bash
 # Delete old sessions first
-curl -X DELETE http://localhost:8080/api/v1/sessions/old-session
+curl -X DELETE http://localhost:8090/api/v1/sessions/old-session
 ```
 
 **Error: "Session data too large"**
 ```bash
 # Filter by service or signal type to reduce size
 curl -X POST -d '{"name": "large-session", "services": ["api-server"]}' \
-  http://localhost:8080/api/v1/sessions
+  http://localhost:8090/api/v1/sessions
 ```
 
 #### Session load/merge fails
 
 **Check session exists:**
 ```bash
-curl http://localhost:8080/api/v1/sessions/my-session
+curl http://localhost:8090/api/v1/sessions/my-session
 ```
 
 **Verify session is not corrupted:**
 ```bash
-curl http://localhost:8080/api/v1/sessions/my-session/export | jq .
+curl http://localhost:8090/api/v1/sessions/my-session/export | jq .
 ```
 
 #### Diff shows unexpected changes
 
 **Verify both sessions exist:**
 ```bash
-curl http://localhost:8080/api/v1/sessions | jq '.sessions[].name'
+curl http://localhost:8090/api/v1/sessions | jq '.sessions[].name'
 ```
 
 **Check if sessions cover different time periods:**
 ```bash
-curl http://localhost:8080/api/v1/sessions/session-a | jq '.created_at'
-curl http://localhost:8080/api/v1/sessions/session-b | jq '.created_at'
+curl http://localhost:8090/api/v1/sessions/session-a | jq '.created_at'
+curl http://localhost:8090/api/v1/sessions/session-b | jq '.created_at'
 ```
 
 ---

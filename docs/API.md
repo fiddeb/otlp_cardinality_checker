@@ -26,17 +26,17 @@ All list endpoints support pagination for large datasets.
 
 #### Get first page (default 100 items)
 ```bash
-curl http://localhost:8080/api/v1/metrics
+curl http://localhost:8090/api/v1/metrics
 ```
 
 #### Get specific page
 ```bash
-curl "http://localhost:8080/api/v1/metrics?limit=50&offset=100"
+curl "http://localhost:8090/api/v1/metrics?limit=50&offset=100"
 ```
 
 #### Filter by service with pagination
 ```bash
-curl "http://localhost:8080/api/v1/metrics?service=my-service&limit=100&offset=0"
+curl "http://localhost:8090/api/v1/metrics?service=my-service&limit=100&offset=0"
 ```
 
 #### Navigate pages programmatically
@@ -46,7 +46,7 @@ offset=0
 limit=100
 
 while true; do
-  response=$(curl -s "http://localhost:8080/api/v1/metrics?limit=$limit&offset=$offset")
+  response=$(curl -s "http://localhost:8090/api/v1/metrics?limit=$limit&offset=$offset")
   echo "$response" | jq '.data[].name'
   
   has_more=$(echo "$response" | jq -r '.has_more')
@@ -194,7 +194,7 @@ Response: Complete telemetry footprint for a service
 
 Note: Service overview is not paginated since it shows the complete footprint. For large services with many metrics, use the filtered list endpoints instead:
 ```bash
-curl "http://localhost:8080/api/v1/metrics?service=my-service&limit=100"
+curl "http://localhost:8090/api/v1/metrics?service=my-service&limit=100"
 ```
 
 ### Health
@@ -259,7 +259,7 @@ Offset-based pagination works fine for simple navigation. For very large dataset
 
 ```bash
 # Find metrics with high cardinality labels
-curl -s "http://localhost:8080/api/v1/metrics" | \
+curl -s "http://localhost:8090/api/v1/metrics" | \
   jq '.data[] | select(.label_keys | to_entries[] | .value.estimated_cardinality > 100) | {name, high_card_labels: [.label_keys | to_entries[] | select(.value.estimated_cardinality > 100) | .key]}'
 ```
 
@@ -267,7 +267,7 @@ curl -s "http://localhost:8080/api/v1/metrics" | \
 
 ```bash
 # Find labels that are not always present
-curl -s "http://localhost:8080/api/v1/metrics/http_requests_total" | \
+curl -s "http://localhost:8090/api/v1/metrics/http_requests_total" | \
   jq '.label_keys | to_entries[] | select(.value.percentage < 100) | {key: .key, percentage: .value.percentage}'
 ```
 
@@ -315,27 +315,27 @@ Response:
 
 **List all high-cardinality attributes (>1000 unique values):**
 ```bash
-curl "http://localhost:8080/api/v1/attributes?min_cardinality=1000&sort_by=cardinality&sort_direction=desc"
+curl "http://localhost:8090/api/v1/attributes?min_cardinality=1000&sort_by=cardinality&sort_direction=desc"
 ```
 
 **Find attributes only used in metrics:**
 ```bash
-curl "http://localhost:8080/api/v1/attributes?signal_type=metric"
+curl "http://localhost:8090/api/v1/attributes?signal_type=metric"
 ```
 
 **Find resource attributes with high cardinality:**
 ```bash
-curl "http://localhost:8080/api/v1/attributes?scope=resource&min_cardinality=100"
+curl "http://localhost:8090/api/v1/attributes?scope=resource&min_cardinality=100"
 ```
 
 **Get second page of attributes sorted by count:**
 ```bash
-curl "http://localhost:8080/api/v1/attributes?sort_by=count&sort_direction=desc&page=2&page_size=20"
+curl "http://localhost:8090/api/v1/attributes?sort_by=count&sort_direction=desc&page=2&page_size=20"
 ```
 
 **Identify cross-signal attributes (used in all signal types):**
 ```bash
-curl -s "http://localhost:8080/api/v1/attributes" | \
+curl -s "http://localhost:8090/api/v1/attributes" | \
   jq '.attributes[] | select(.signal_types | length == 3) | {key, cardinality: .estimated_cardinality, signals: .signal_types}'
 ```
 
@@ -363,18 +363,18 @@ Response:
 
 **Get details for a specific attribute:**
 ```bash
-curl "http://localhost:8080/api/v1/attributes/http.method"
+curl "http://localhost:8090/api/v1/attributes/http.method"
 ```
 
 **Check if an attribute exists:**
 ```bash
-curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/attributes/user_id"
+curl -s -o /dev/null -w "%{http_code}" "http://localhost:8090/api/v1/attributes/user_id"
 # Returns 200 if exists, 404 if not found
 ```
 
 **Get cardinality for specific attribute:**
 ```bash
-curl -s "http://localhost:8080/api/v1/attributes/user_id" | jq '.estimated_cardinality'
+curl -s "http://localhost:8090/api/v1/attributes/user_id" | jq '.estimated_cardinality'
 ```
 
 ### Understanding Attribute Catalog Fields
@@ -416,35 +416,35 @@ Timestamps for when this attribute key was first/last observed
 #### 1. Identify High-Cardinality Attributes
 Find attributes that may be causing storage or performance issues:
 ```bash
-curl -s "http://localhost:8080/api/v1/attributes?min_cardinality=10000&sort_by=cardinality&sort_direction=desc" | \
+curl -s "http://localhost:8090/api/v1/attributes?min_cardinality=10000&sort_by=cardinality&sort_direction=desc" | \
   jq '.attributes[] | {key, cardinality: .estimated_cardinality, signals: .signal_types}'
 ```
 
 #### 2. Find Unused Attributes
 Identify attributes that are rarely used (low count):
 ```bash
-curl -s "http://localhost:8080/api/v1/attributes?sort_by=count&sort_direction=asc&page_size=20" | \
+curl -s "http://localhost:8090/api/v1/attributes?sort_by=count&sort_direction=asc&page_size=20" | \
   jq '.attributes[] | {key, count, cardinality: .estimated_cardinality}'
 ```
 
 #### 3. Audit Attribute Naming Conventions
 Find attributes that don't follow semantic conventions:
 ```bash
-curl -s "http://localhost:8080/api/v1/attributes" | \
+curl -s "http://localhost:8090/api/v1/attributes" | \
   jq '.attributes[] | select(.key | test("^[a-z]") | not) | .key'
 ```
 
 #### 4. Identify Resource vs Data Attributes
 See which attributes are mixed between resource and data scopes:
 ```bash
-curl -s "http://localhost:8080/api/v1/attributes?scope=both" | \
+curl -s "http://localhost:8090/api/v1/attributes?scope=both" | \
   jq '.attributes[] | {key, scope, signals: .signal_types}'
 ```
 
 #### 5. Cross-Signal Attribute Analysis
 Find attributes used across all three signal types:
 ```bash
-curl -s "http://localhost:8080/api/v1/attributes" | \
+curl -s "http://localhost:8090/api/v1/attributes" | \
   jq '[.attributes[] | select(.signal_types | length == 3)] | length'
 ```
 
@@ -484,7 +484,7 @@ Sessions allow you to save, load, and compare snapshots of metadata state.
 ### Create Session
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -H "Content-Type: application/json" \
   -d '{
     "name": "baseline-2026-01-25",
@@ -517,7 +517,7 @@ Response:
 ### List Sessions
 
 ```bash
-curl http://localhost:8080/api/v1/sessions
+curl http://localhost:8090/api/v1/sessions
 ```
 
 Response:
@@ -544,7 +544,7 @@ Response:
 ### Compare Sessions (Diff)
 
 ```bash
-curl "http://localhost:8080/api/v1/sessions/diff?from=baseline-2026-01-25&to=post-deploy-v2"
+curl "http://localhost:8090/api/v1/sessions/diff?from=baseline-2026-01-25&to=post-deploy-v2"
 ```
 
 Response:
@@ -596,7 +596,7 @@ Response:
 ### Filter Diff by Severity
 
 ```bash
-curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&min_severity=warning"
+curl "http://localhost:8090/api/v1/sessions/diff?from=A&to=B&min_severity=warning"
 ```
 
 ### Load Session
@@ -604,7 +604,7 @@ curl "http://localhost:8080/api/v1/sessions/diff?from=A&to=B&min_severity=warnin
 Load a session, replacing the current in-memory data:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/load
+curl -X POST http://localhost:8090/api/v1/sessions/baseline-2026-01-25/load
 ```
 
 ### Merge Session
@@ -612,19 +612,19 @@ curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/load
 Merge a session into the current data (additive):
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions/baseline-2026-01-25/merge
+curl -X POST http://localhost:8090/api/v1/sessions/baseline-2026-01-25/merge
 ```
 
 ### Export/Import Sessions
 
 Export for backup or sharing:
 ```bash
-curl http://localhost:8080/api/v1/sessions/baseline-2026-01-25/export > backup.json
+curl http://localhost:8090/api/v1/sessions/baseline-2026-01-25/export > backup.json
 ```
 
 Import from file:
 ```bash
-curl -X POST http://localhost:8080/api/v1/sessions/import \
+curl -X POST http://localhost:8090/api/v1/sessions/import \
   -H "Content-Type: application/json" \
   -d @backup.json
 ```
@@ -643,17 +643,17 @@ curl -X POST http://localhost:8080/api/v1/sessions/import \
 
 ```bash
 # Before deploy
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d '{"name": "pre-deploy-v2.1"}'
 
 # ... deploy happens ...
 
 # After deploy (wait for new telemetry)
-curl -X POST http://localhost:8080/api/v1/sessions \
+curl -X POST http://localhost:8090/api/v1/sessions \
   -d '{"name": "post-deploy-v2.1"}'
 
 # Compare
-curl "http://localhost:8080/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post-deploy-v2.1"
+curl "http://localhost:8090/api/v1/sessions/diff?from=pre-deploy-v2.1&to=post-deploy-v2.1"
 ```
 
 #### Multi-Signal Analysis
@@ -663,17 +663,17 @@ Save different signals from separate test runs and merge them:
 ```bash
 # Day 1: Collect metrics
 curl -X POST -d '{"name": "metrics-jan25", "signals": ["metrics"]}' \
-  http://localhost:8080/api/v1/sessions
+  http://localhost:8090/api/v1/sessions
 
 # Day 2: Collect traces
 curl -X POST -d '{"name": "traces-jan26", "signals": ["traces"]}' \
-  http://localhost:8080/api/v1/sessions
+  http://localhost:8090/api/v1/sessions
 
 # Merge traces into metrics session view
-curl -X POST http://localhost:8080/api/v1/sessions/metrics-jan25/load
-curl -X POST http://localhost:8080/api/v1/sessions/traces-jan26/merge
+curl -X POST http://localhost:8090/api/v1/sessions/metrics-jan25/load
+curl -X POST http://localhost:8090/api/v1/sessions/traces-jan26/merge
 
 # Save combined view
 curl -X POST -d '{"name": "combined-jan25-26"}' \
-  http://localhost:8080/api/v1/sessions
+  http://localhost:8090/api/v1/sessions
 ```

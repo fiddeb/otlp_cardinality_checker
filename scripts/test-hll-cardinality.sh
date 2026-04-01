@@ -60,7 +60,7 @@ echo "Querying metric to see HLL estimation..."
 sleep 1
 
 # Query the metric
-curl -s "http://localhost:8080/api/v1/metrics/hll_test_metric" | jq '{
+curl -s "http://localhost:8090/api/v1/metrics/hll_test_metric" | jq '{
   metric_name: .name,
   sample_count: .sample_count,
   high_cardinality_label: {
