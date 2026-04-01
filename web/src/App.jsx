@@ -47,7 +47,7 @@ function App() {
     fetch('/api/v1/version')
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setAppVersion(data.version) })
-      .catch(() => {})
+      .catch(err => console.warn('[version] fetch failed:', err))
   }, [])
 
   useEffect(() => {

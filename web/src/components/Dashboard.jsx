@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { fetchJSON } from '@/lib/fetchJSON'
 
 function Dashboard({ onViewService }) {
   const [stats, setStats] = useState(null)
@@ -14,10 +15,10 @@ function Dashboard({ onViewService }) {
   useEffect(() => {
     // First: Load just counts for quick initial render
     Promise.all([
-      fetch('/api/v1/metrics?limit=1').then(r => r.json()),
-      fetch('/api/v1/spans?limit=1').then(r => r.json()),
-      fetch('/api/v1/logs?limit=1').then(r => r.json()),
-      fetch('/api/v1/services').then(r => r.json()),
+      fetchJSON('/api/v1/metrics?limit=1'),
+      fetchJSON('/api/v1/spans?limit=1'),
+      fetchJSON('/api/v1/logs?limit=1'),
+      fetchJSON('/api/v1/services'),
     ])
       .then(([metrics, spans, logs, services]) => {
         setStats({
@@ -41,9 +42,9 @@ function Dashboard({ onViewService }) {
     try {
       // Load in smaller batches with pagination to avoid overwhelming the API
       const [allMetrics, allSpans, allLogs] = await Promise.all([
-        fetch('/api/v1/metrics?limit=1000').then(r => r.json()),
-        fetch('/api/v1/spans?limit=1000').then(r => r.json()),
-        fetch('/api/v1/logs?limit=1000').then(r => r.json()),
+        fetchJSON('/api/v1/metrics?limit=1000'),
+        fetchJSON('/api/v1/spans?limit=1000'),
+        fetchJSON('/api/v1/logs?limit=1000'),
       ])
       
       // Calculate service statistics
