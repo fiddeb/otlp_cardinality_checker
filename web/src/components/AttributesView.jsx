@@ -215,7 +215,7 @@ function AttributesView() {
               Attribute Key {sortField === 'key' && (sortDirection === 'asc' ? '↑' : '↓')}
             </TableHead>
             <TableHead className="cursor-pointer" onClick={() => handleSort('cardinality')}>
-              Cardinality {sortField === 'cardinality' && (sortDirection === 'asc' ? '↑' : '↓')}
+              Cardinality (est.) {sortField === 'cardinality' && (sortDirection === 'asc' ? '↑' : '↓')}
             </TableHead>
             <TableHead className="cursor-pointer" onClick={() => handleSort('count')}>
               Count {sortField === 'count' && (sortDirection === 'asc' ? '↑' : '↓')}

@@ -258,8 +258,9 @@ type KeyMetadata struct {
 	// Uses HyperLogLog for memory-efficient estimation
 	EstimatedCardinality int64 `json:"estimated_cardinality"`
 
-	// ValueSamples contains a sample of observed values (first N unique)
-	// Limited to MaxSamples to prevent memory issues
+	// ValueSamples holds the first N unique values observed (insertion-order, not random).
+	// Once MaxSamples is reached, new unique values are silently discarded.
+	// For high-cardinality keys this is biased toward early observations.
 	ValueSamples []string `json:"value_samples,omitempty"`
 
 	// HasInvalidUTF8 is true when at least one observed value for this key
