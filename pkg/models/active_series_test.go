@@ -172,7 +172,44 @@ func TestEstimatePrometheusActiveSeries(t *testing.T) {
 			data: &ExponentialHistogramMetric{
 				Scales: []int32{1, 2},
 			},
-			expectedSeries: 66,
+			// maxScale=2, buckets=2^(2+1)=8, series=3*(8+2)=30
+			expectedSeries: 30,
+		},
+		{
+			name:       "exponential histogram high scale capped at 160",
+			otlpSeries: 2,
+			data: &ExponentialHistogramMetric{
+				Scales: []int32{10},
+			},
+			// maxScale=10, 2^11=2048 > 160, capped to 160, series=2*(160+2)=324
+			expectedSeries: 324,
+		},
+		{
+			name:       "exponential histogram scale 0",
+			otlpSeries: 5,
+			data: &ExponentialHistogramMetric{
+				Scales: []int32{0},
+			},
+			// maxScale=0, buckets=1, series=5*(1+2)=15
+			expectedSeries: 15,
+		},
+		{
+			name:       "exponential histogram negative scale",
+			otlpSeries: 4,
+			data: &ExponentialHistogramMetric{
+				Scales: []int32{-1},
+			},
+			// maxScale=-1, buckets=1, series=4*(1+2)=12
+			expectedSeries: 12,
+		},
+		{
+			name:       "exponential histogram no scales",
+			otlpSeries: 3,
+			data: &ExponentialHistogramMetric{
+				Scales: []int32{},
+			},
+			// no scales, buckets=1, series=3*(1+2)=9
+			expectedSeries: 9,
 		},
 	}
 
