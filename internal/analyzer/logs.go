@@ -219,13 +219,11 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 					analyzer.AddMessage(body)
 				}
 
-				// Extract log record attributes
-				logAttrs := extractAttributes(logRecord.Attributes)
-				
-				// Feed log attributes to catalog
-				extractAttributesToCatalog(ctx, batch, logAttrs, "log", "attribute")
-				
-				for attrKey, attrValue := range logAttrs {
+				// Process log record attributes directly from proto (avoids map allocation)
+				forEachAttribute(logRecord.Attributes, func(attrKey, attrValue string) {
+					// Feed to catalog
+					_ = batch.StoreAttributeValue(ctx, attrKey, attrValue, "log", "attribute")
+
 					// Track event.name separately
 					if attrKey == "event.name" && attrValue != "" {
 						if !contains(metadata.EventNames, attrValue) {
@@ -237,7 +235,7 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 						metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
 					}
 					metadata.AttributeKeys[attrKey].AddValue(attrValue)
-				}
+				})
 				
 				// Update resource key counts
 				for resKey, resValue := range resourceAttrs {

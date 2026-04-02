@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -38,30 +39,29 @@ func TestKeyMetadata_AddValue_Integration(t *testing.T) {
 func TestKeyMetadata_Merge_HLL(t *testing.T) {
 	km1 := NewKeyMetadata()
 	km2 := NewKeyMetadata()
-	
-	// Add different values to each
-	for i := 0; i < 100; i++ {
-		km1.AddValue("A")
-		km1.AddValue("B")
+
+	// Add >MaxSamples unique values to each so HLL is initialized lazily.
+	for i := 0; i < 15; i++ {
+		km1.AddValue(fmt.Sprintf("km1-val-%d", i))
 	}
-	
-	for i := 0; i < 100; i++ {
-		km2.AddValue("C")
-		km2.AddValue("D")
+
+	for i := 0; i < 15; i++ {
+		km2.AddValue(fmt.Sprintf("km2-val-%d", i))
 	}
-	
-	t.Logf("Before merge: km1.Card=%d, km2.Card=%d", km1.EstimatedCardinality, km2.EstimatedCardinality)
-	
-	// Simulate merge logic from MergeMetricMetadata
-	km1.mu.Lock()
-	km1.Count += km2.Count
-	km1.hll.Merge(km2.hll)
-	km1.EstimatedCardinality = int64(km1.hll.Count())
-	km1.mu.Unlock()
-	
-	t.Logf("After merge: km1.Card=%d (should be ~4)", km1.EstimatedCardinality)
-	
-	if km1.EstimatedCardinality < 3 || km1.EstimatedCardinality > 5 {
-		t.Errorf("After merge, EstimatedCardinality = %d, want 4 (±1)", km1.EstimatedCardinality)
+
+	t.Logf("Before merge: km1.Card=%d, km2.Card=%d", km1.Cardinality(), km2.Cardinality())
+
+	// Use MergeMetricMetadata via a MetricMetadata wrapper to test merge logic
+	// without accessing internal hll fields directly.
+	m1 := &MetricMetadata{LabelKeys: map[string]*KeyMetadata{"key": km1}}
+	m2 := &MetricMetadata{LabelKeys: map[string]*KeyMetadata{"key": km2}}
+	m1.MergeMetricMetadata(m2)
+
+	merged := m1.LabelKeys["key"]
+	got := merged.Cardinality()
+	t.Logf("After merge: Card=%d (should be ~30)", got)
+
+	if got < 25 || got > 35 {
+		t.Errorf("After merge, Cardinality() = %d, want ~30 (±5)", got)
 	}
 }

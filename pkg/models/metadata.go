@@ -370,37 +370,49 @@ func NewLogMetadata(severity string) *LogMetadata {
 func NewKeyMetadata() *KeyMetadata {
 	return &KeyMetadata{
 		ValueSamples: []string{},
-		hll:          hyperloglog.New(10), // Precision 10 = ~1.6% standard error
-		MaxSamples:   10,                  // Default: keep first 10 unique values (enough for sampling)
+		// hll is nil until cardinality exceeds MaxSamples (lazy init in AddValue)
+		MaxSamples: 10, // Default: keep first 10 unique values (enough for sampling)
 	}
 }
 
 // AddValue adds a value observation to the key metadata.
-// It updates cardinality estimation using HyperLogLog and value samples.
+// HLL is initialized lazily: the sample list handles the first MaxSamples
+// unique values at zero allocation cost. The HLL is only allocated when a
+// value is observed that does not fit in the sample list (cardinality > MaxSamples).
 func (k *KeyMetadata) AddValue(value string) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
 	k.Count++
 
-	// Add to HyperLogLog for cardinality estimation.
-	// EstimatedCardinality is NOT updated here — it is computed lazily in
-	// MarshalJSON, which is the only place the value is ever read. Calling
-	// hll.Count() on every write iterated 16 384 registers per call and was
-	// the dominant CPU cost under load.
-	k.hll.Add(value)
-
-	// Add to sample list if not full and value is new
-	if len(k.ValueSamples) < k.MaxSamples {
-		exists := false
-		for _, sample := range k.ValueSamples {
-			if sample == value {
-				exists = true
-				break
-			}
+	// Fast path: HLL already initialized — add and return.
+	if k.hll != nil {
+		k.hll.Add(value)
+		if strings.ContainsRune(value, '\uFFFD') {
+			k.HasInvalidUTF8 = true
 		}
-		if !exists {
+		return
+	}
+
+	// Slow path: HLL not yet needed — check uniqueness via sample list (O(MaxSamples)).
+	isNew := true
+	for _, sample := range k.ValueSamples {
+		if sample == value {
+			isNew = false
+			break
+		}
+	}
+
+	if isNew {
+		if len(k.ValueSamples) < k.MaxSamples {
 			k.ValueSamples = append(k.ValueSamples, value)
+		} else {
+			// Samples full and new value observed — initialize HLL and backfill.
+			k.hll = hyperloglog.New(10)
+			for _, s := range k.ValueSamples {
+				k.hll.Add(s)
+			}
+			k.hll.Add(value)
 		}
 	}
 
@@ -431,7 +443,8 @@ func (k *KeyMetadata) Cardinality() int64 {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 	if k.hll == nil {
-		return 0
+		// HLL not yet allocated — exact count from sample list.
+		return int64(len(k.ValueSamples))
 	}
 	return int64(k.hll.Count())
 }
@@ -450,6 +463,9 @@ func (k *KeyMetadata) MarshalJSON() ([]byte, error) {
 	var estCardinality int64
 	if k.hll != nil {
 		estCardinality = int64(k.hll.Count())
+	} else {
+		// Lazy HLL not yet allocated — exact count from sample list.
+		estCardinality = int64(len(k.ValueSamples))
 	}
 
 	type wire struct {
@@ -478,6 +494,15 @@ func (k *KeyMetadata) UpdatePercentage(totalSamples int64) {
 	}
 }
 
+// releaseHLL returns the HLL register slice to the pool.
+// Must be called with k.mu held or when sole owner.
+func (k *KeyMetadata) releaseHLL() {
+	if k.hll != nil {
+		k.hll.Release()
+		k.hll = nil
+	}
+}
+
 // MergeMetricMetadata merges another MetricMetadata into this one.
 // This is used when observing the same metric with different label sets.
 func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
@@ -493,9 +518,25 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
 
-			// Merge HLL sketches for accurate cardinality
-			existing.hll.Merge(otherKeyMeta.hll)
-			existing.EstimatedCardinality = int64(existing.hll.Count())
+			// Merge HLL sketches, handling lazy initialization on either side.
+			if otherKeyMeta.hll != nil {
+				if existing.hll == nil {
+					// Lazy-init from existing samples before merging.
+					existing.hll = hyperloglog.New(10)
+					for _, s := range existing.ValueSamples {
+						existing.hll.Add(s)
+					}
+				}
+				existing.hll.Merge(otherKeyMeta.hll) //nolint:errcheck
+				existing.EstimatedCardinality = int64(existing.hll.Count())
+			} else if existing.hll != nil {
+				// Other has no HLL — add its samples to existing HLL.
+				for _, s := range otherKeyMeta.ValueSamples {
+					existing.hll.Add(s)
+				}
+				existing.EstimatedCardinality = int64(existing.hll.Count())
+			}
+			// Both nil: cardinality tracked exactly via ValueSamples — no HLL update needed.
 
 			// Propagate invalid-UTF-8 flag (sticky: once tainted, stays tainted)
 			if otherKeyMeta.HasInvalidUTF8 {
@@ -520,6 +561,8 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 				}
 			}
 			existing.mu.Unlock()
+			// Release the merged-from HLL back to pool.
+			otherKeyMeta.releaseHLL()
 		} else {
 			m.LabelKeys[key] = otherKeyMeta
 		}
@@ -531,9 +574,25 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 			existing.mu.Lock()
 			existing.Count += otherKeyMeta.Count
 
-			// Merge HLL sketches for accurate cardinality
-			existing.hll.Merge(otherKeyMeta.hll)
-			existing.EstimatedCardinality = int64(existing.hll.Count())
+			// Merge HLL sketches, handling lazy initialization on either side.
+			if otherKeyMeta.hll != nil {
+				if existing.hll == nil {
+					// Lazy-init from existing samples before merging.
+					existing.hll = hyperloglog.New(10)
+					for _, s := range existing.ValueSamples {
+						existing.hll.Add(s)
+					}
+				}
+				existing.hll.Merge(otherKeyMeta.hll) //nolint:errcheck
+				existing.EstimatedCardinality = int64(existing.hll.Count())
+			} else if existing.hll != nil {
+				// Other has no HLL — add its samples to existing HLL.
+				for _, s := range otherKeyMeta.ValueSamples {
+					existing.hll.Add(s)
+				}
+				existing.EstimatedCardinality = int64(existing.hll.Count())
+			}
+			// Both nil: cardinality tracked exactly via ValueSamples — no HLL update needed.
 
 			// Propagate invalid-UTF-8 flag
 			if otherKeyMeta.HasInvalidUTF8 {
@@ -558,6 +617,8 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 				}
 			}
 			existing.mu.Unlock()
+			// Release the merged-from HLL back to pool.
+			otherKeyMeta.releaseHLL()
 		} else {
 			m.ResourceKeys[key] = otherKeyMeta
 		}
@@ -575,6 +636,8 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 		}
 		m.seriesHLL.Merge(other.seriesHLL)
 		m.ActiveSeries = int64(m.seriesHLL.Count())
+		other.seriesHLL.Release()
+		other.seriesHLL = nil
 	}
 
 	// Update percentages
