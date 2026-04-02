@@ -152,18 +152,16 @@ func (a *TracesAnalyzer) AnalyzeWithContext(ctx context.Context, req *coltracepb
 				}
 			}
 
-			// Extract span attributes
-			spanAttrs := extractAttributes(span.Attributes)
-			
-			// Feed span attributes to catalog
-			extractAttributesToCatalog(ctx, batch, spanAttrs, "span", "attribute")
-			
-			for attrKey, attrValue := range spanAttrs {
+			// Process span attributes directly from proto (avoids map allocation)
+			forEachAttribute(span.Attributes, func(attrKey, attrValue string) {
+				// Feed to catalog
+				_ = batch.StoreAttributeValue(ctx, attrKey, attrValue, "span", "attribute")
+
 				if metadata.AttributeKeys[attrKey] == nil {
 					metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
 				}
 				metadata.AttributeKeys[attrKey].AddValue(attrValue)
-			}				// Extract event names and attributes
+			})				// Extract event names and attributes
 				for _, event := range span.Events {
 					// Track event name
 					found := false

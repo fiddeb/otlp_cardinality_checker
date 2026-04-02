@@ -2,6 +2,9 @@ package analyzer
 
 import (
 	"context"
+	"hash/fnv"
+
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 )
 
 // AttributeCatalog defines the interface for storing attribute values.
@@ -54,13 +57,13 @@ func extractAttributesToCatalog(ctx context.Context, catalog AttributeCatalog, a
 // lock acquisitions on storage.attributesmu down to O(unique tuples), which
 // is the dominant contention source under load (50 VUs × ~9k records/req).
 type batchCatalog struct {
-	seen    map[string]struct{} // compound key: signalType\0scope\0attrKey\0value
+	seen    map[uint64]struct{} // FNV-64a hash of compound key
 	catalog AttributeCatalog
 }
 
 func newBatchCatalog(catalog AttributeCatalog) *batchCatalog {
 	return &batchCatalog{
-		seen:    make(map[string]struct{}),
+		seen:    make(map[uint64]struct{}),
 		catalog: catalog,
 	}
 }
@@ -69,11 +72,28 @@ func (b *batchCatalog) StoreAttributeValue(ctx context.Context, key, value, sign
 	if b.catalog == nil {
 		return nil
 	}
-	// Use a separator that cannot appear in normal attribute keys/values.
-	k := signalType + "\x00" + scope + "\x00" + key + "\x00" + value
+	// Hash the compound key on stack — no heap allocation.
+	h := fnv.New64a()
+	h.Write([]byte(signalType))
+	h.Write([]byte{0})
+	h.Write([]byte(scope))
+	h.Write([]byte{0})
+	h.Write([]byte(key))
+	h.Write([]byte{0})
+	h.Write([]byte(value))
+	k := h.Sum64()
 	if _, ok := b.seen[k]; ok {
 		return nil
 	}
 	b.seen[k] = struct{}{}
 	return b.catalog.StoreAttributeValue(ctx, key, value, signalType, scope)
+}
+
+// forEachAttribute iterates OTLP KeyValue attributes directly, calling fn
+// for each key-value pair. This avoids allocating an intermediate map[string]string
+// when the caller only needs to iterate once.
+func forEachAttribute(attrs []*commonpb.KeyValue, fn func(key, value string)) {
+	for _, attr := range attrs {
+		fn(attr.Key, attributeValueToString(attr.Value))
+	}
 }

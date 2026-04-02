@@ -162,10 +162,8 @@ func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, catalog Attribut
 		fingerprint := models.CreateSeriesFingerprintFast(attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
-		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
-		
 		for key, value := range attrs {
+			_ = catalog.StoreAttributeValue(ctx, key, value, "metric", "attribute")
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
 			}
@@ -199,10 +197,8 @@ func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, catalog AttributeC
 		fingerprint := models.CreateSeriesFingerprintFast(attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
-		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
-		
 		for key, value := range attrs {
+			_ = catalog.StoreAttributeValue(ctx, key, value, "metric", "attribute")
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
 			}
@@ -236,10 +232,8 @@ func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, catalog Attr
 		fingerprint := models.CreateSeriesFingerprintFast(attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
-		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
-		
 		for key, value := range attrs {
+			_ = catalog.StoreAttributeValue(ctx, key, value, "metric", "attribute")
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
 			}
@@ -273,10 +267,8 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, c
 		fingerprint := models.CreateSeriesFingerprintFast(attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
-		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
-		
 		for key, value := range attrs {
+			_ = catalog.StoreAttributeValue(ctx, key, value, "metric", "attribute")
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
 			}
@@ -310,10 +302,8 @@ func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, catalog Attrib
 		fingerprint := models.CreateSeriesFingerprintFast(attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
-		// Feed attributes to catalog
-		extractAttributesToCatalog(ctx, catalog, attrs, "metric", "attribute")
-		
 		for key, value := range attrs {
+			_ = catalog.StoreAttributeValue(ctx, key, value, "metric", "attribute")
 			if metadata.LabelKeys[key] == nil {
 				metadata.LabelKeys[key] = models.NewKeyMetadata()
 			}

@@ -4,7 +4,24 @@ import (
 	"hash/fnv"
 	"math"
 	"math/bits"
+	"sync"
 )
+
+// registerPools holds per-precision sync.Pools for register slices.
+// Only precision 10 (1 KB) and 14 (16 KB) are commonly used.
+var registerPools [19]sync.Pool
+
+func init() {
+	for p := uint8(4); p <= 18; p++ {
+		size := 1 << p
+		registerPools[p] = sync.Pool{
+			New: func() any {
+				buf := make([]uint8, size)
+				return &buf
+			},
+		}
+	}
+}
 
 // HyperLogLog implements the HyperLogLog cardinality estimation algorithm.
 // It provides memory-efficient approximate counting of unique elements.
@@ -16,6 +33,7 @@ type HyperLogLog struct {
 	precision uint8    // Number of bits for register index (4-18)
 	m         uint32   // Number of registers (2^precision)
 	registers []uint8  // Register array
+	regPtr    *[]uint8 // Pool pointer for Release()
 	alpha     float64  // Bias correction constant
 }
 
@@ -48,11 +66,28 @@ func New(precision uint8) *HyperLogLog {
 		alpha = 0.7213 / (1 + 1.079/float64(m))
 	}
 
+	// Get register slice from pool (already zeroed on first use;
+	// Clear() is called by Release before returning to pool).
+	bp := registerPools[precision].Get().(*[]uint8)
+	regs := *bp
+
 	return &HyperLogLog{
 		precision: precision,
 		m:         m,
-		registers: make([]uint8, m),
+		registers: regs,
+		regPtr:    bp,
 		alpha:     alpha,
+	}
+}
+
+// Release returns the register slice to the pool for reuse.
+// The HyperLogLog must not be used after calling Release.
+func (h *HyperLogLog) Release() {
+	if h.regPtr != nil {
+		h.Clear()
+		registerPools[h.precision].Put(h.regPtr)
+		h.regPtr = nil
+		h.registers = nil
 	}
 }
 
