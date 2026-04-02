@@ -20,7 +20,7 @@ function LogsView({ onViewServiceDetails }) {
   const itemsPerPage = 100
 
   useEffect(() => {
-    fetch('/api/v1/logs/by-service?limit=1000')
+    fetch('/api/v1/logs/by-service?limit=0')
       .then(r => r.json())
       .then(result => {
         const servicesData = result.data || []

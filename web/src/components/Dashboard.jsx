@@ -42,9 +42,9 @@ function Dashboard({ onViewService }) {
     try {
       // Load in smaller batches with pagination to avoid overwhelming the API
       const [allMetrics, allSpans, allLogs] = await Promise.all([
-        fetchJSON('/api/v1/metrics?limit=1000'),
-        fetchJSON('/api/v1/spans?limit=1000'),
-        fetchJSON('/api/v1/logs?limit=1000'),
+        fetchJSON('/api/v1/metrics?limit=0'),
+        fetchJSON('/api/v1/spans?limit=0'),
+        fetchJSON('/api/v1/logs?limit=0'),
       ])
       
       // Calculate service statistics

@@ -22,7 +22,7 @@ function TracesView({ onViewDetails }) {
   const itemsPerPage = 100
 
   useEffect(() => {
-    fetch('/api/v1/spans?limit=1000')
+    fetch('/api/v1/spans?limit=0')
       .then(r => r.json())
       .then(result => {
         setSpans(result.data || [])
@@ -36,7 +36,9 @@ function TracesView({ onViewDetails }) {
 
   const getMaxCardinality = (span) => {
     if (!span.attribute_keys) return 0
-    return Math.max(...Object.values(span.attribute_keys).map(k => k.estimated_cardinality || 0))
+    const values = Object.values(span.attribute_keys)
+    if (values.length === 0) return 0
+    return Math.max(...values.map(k => k.estimated_cardinality || 0))
   }
 
   const filteredSpans = spans.filter(span => {

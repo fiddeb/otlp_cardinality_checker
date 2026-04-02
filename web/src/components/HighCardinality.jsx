@@ -18,7 +18,7 @@ function HighCardinality({ onViewDetails }) {
                      signalType === 'spans' ? '/api/v1/spans' :
                      '/api/v1/logs'
 
-    fetch(`${endpoint}?limit=1000`)
+    fetch(`${endpoint}?limit=0`)
       .then(r => r.json())
       .then(result => {
         const items = []
