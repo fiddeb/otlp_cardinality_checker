@@ -216,10 +216,7 @@ func (s *MinerShard) add(tokens []string, originalMessage string) (string, bool)
 		
 		// Generalize template if needed (in training mode)
 		if s.cfg.Training {
-			generalized := generalizeTokens(bestCluster.tokens, tokens)
-			if !tokensEqual(generalized, bestCluster.tokens) {
-				bestCluster.tokens = generalized
-			}
+			generalizeTokens(bestCluster.tokens, tokens)
 		}
 		
 		return tokensToString(bestCluster.tokens), true
@@ -405,9 +402,35 @@ func similarity(a, b []string) float64 {
 	return float64(matched) / float64(len(a))
 }
 
-// tokensToString joins tokens with space
+// builderPool holds reusable strings.Builder instances for tokensToString.
+var builderPool = sync.Pool{
+	New: func() any {
+		b := &strings.Builder{}
+		b.Grow(128)
+		return b
+	},
+}
+
+// tokensToString joins tokens with space using a pooled builder.
 func tokensToString(tokens []string) string {
-	return strings.Join(tokens, " ")
+	if len(tokens) == 0 {
+		return ""
+	}
+	if len(tokens) == 1 {
+		return tokens[0]
+	}
+
+	b := builderPool.Get().(*strings.Builder)
+	b.Reset()
+
+	b.WriteString(tokens[0])
+	for _, t := range tokens[1:] {
+		b.WriteByte(' ')
+		b.WriteString(t)
+	}
+	s := b.String()
+	builderPool.Put(b)
+	return s
 }
 
 // tokensEqual checks if two token slices are equal
@@ -423,24 +446,19 @@ func tokensEqual(a, b []string) bool {
 	return true
 }
 
-// generalizeTokens creates a generalized template from two token sequences
+// generalizeTokens updates template in-place by replacing divergent positions
+// with "<*>". Returns the same slice (no allocation when lengths match).
 func generalizeTokens(template, tokens []string) []string {
 	if len(template) != len(tokens) {
 		return template
 	}
-	
-	result := make([]string, len(template))
-	for i := 0; i < len(template); i++ {
-		switch template[i] {
-		case tokens[i]:
-			result[i] = template[i]
-		case "<*>":
-			result[i] = "<*>"
-		default:
-			result[i] = "<*>"
+
+	for i := range template {
+		if template[i] != tokens[i] && template[i] != "<*>" {
+			template[i] = "<*>"
 		}
 	}
-	return result
+	return template
 }
 
 // SetTraining switches between training and inference modes
