@@ -14,8 +14,14 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Build OCC
-        run: go build -o bin/occ ./cmd/server
+        run: |
+          cd web && npm ci && npm run build && cd ..
+          go build -o bin/occ ./cmd/server
 
       - name: Start OCC in minimal mode
         run: |
