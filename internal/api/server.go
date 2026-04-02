@@ -122,8 +122,19 @@ func paginateSlice[T any](items []T, params PaginationParams) ([]T, PaginatedRes
 	}
 }
 
+// ServerOptions configures optional server behavior.
+type ServerOptions struct {
+	// DisableUI skips embedded static file serving (for --minimal mode).
+	DisableUI bool
+}
+
 // NewServer creates a new API server.
-func NewServer(addr string, store storage.Storage) *Server {
+func NewServer(addr string, store storage.Storage, opts ...ServerOptions) *Server {
+	var opt ServerOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
 	s := &Server{
 		store:  store,
 		router: chi.NewRouter(),
@@ -219,40 +230,42 @@ func NewServer(addr string, store storage.Storage) *Server {
 		}
 	})
 
-	// Serve embedded static files with SPA fallback
-	staticFS, err := web.NewStaticFileSystem()
-	if err != nil {
-		log.Printf("Warning: Could not load embedded UI: %v", err)
-	} else {
-		// Serve static files from embedded filesystem
-		fileServer := http.FileServer(staticFS)
+	// Serve embedded static files with SPA fallback (skip in minimal mode)
+	if !opt.DisableUI {
+		staticFS, err := web.NewStaticFileSystem()
+		if err != nil {
+			log.Printf("Warning: Could not load embedded UI: %v", err)
+		} else {
+			// Serve static files from embedded filesystem
+			fileServer := http.FileServer(staticFS)
 
-		s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-			// Check if file exists in embedded FS
-			if staticFS.Exists("", r.URL.Path) {
-				fileServer.ServeHTTP(w, r)
-				return
-			}
+			s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+				// Check if file exists in embedded FS
+				if staticFS.Exists("", r.URL.Path) {
+					fileServer.ServeHTTP(w, r)
+					return
+				}
 
-			// SPA fallback: serve index.html for routes not matching static files
-			f, err := staticFS.Open("/index.html")
-			if err != nil {
-				http.Error(w, "UI not available", http.StatusNotFound)
-				return
-			}
-			defer f.Close()
+				// SPA fallback: serve index.html for routes not matching static files
+				f, err := staticFS.Open("/index.html")
+				if err != nil {
+					http.Error(w, "UI not available", http.StatusNotFound)
+					return
+				}
+				defer f.Close()
 
-			// Get file info for http.ServeContent
-			stat, err := f.Stat()
-			if err != nil {
-				http.Error(w, "UI not available", http.StatusInternalServerError)
-				return
-			}
+				// Get file info for http.ServeContent
+				stat, err := f.Stat()
+				if err != nil {
+					http.Error(w, "UI not available", http.StatusInternalServerError)
+					return
+				}
 
-			http.ServeContent(w, r, "index.html", stat.ModTime(), f.(interface {
-				Seek(int64, int) (int64, error)
-			}).(http.File))
-		})
+				http.ServeContent(w, r, "index.html", stat.ModTime(), f.(interface {
+					Seek(int64, int) (int64, error)
+				}).(http.File))
+			})
+		}
 	}
 
 	s.server = &http.Server{

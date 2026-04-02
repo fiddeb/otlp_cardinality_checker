@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,8 +17,11 @@ import (
 
 	"github.com/fidde/otlp_cardinality_checker/internal/api"
 	"github.com/fidde/otlp_cardinality_checker/internal/receiver"
+	"github.com/fidde/otlp_cardinality_checker/internal/report"
 	"github.com/fidde/otlp_cardinality_checker/internal/storage"
+	"github.com/fidde/otlp_cardinality_checker/internal/storage/sessions"
 	"github.com/fidde/otlp_cardinality_checker/internal/version"
+	"github.com/fidde/otlp_cardinality_checker/pkg/models"
 )
 
 func main() {
@@ -42,6 +46,36 @@ func main() {
 				watchFields = append(watchFields, k)
 			}
 		}
+	}
+
+	// Parse CI/CD mode flags.
+	minimal := parseBoolFlag("--minimal", "OCC_MINIMAL")
+	durationStr := parseStringFlag("--duration", "OCC_DURATION")
+	reportOutput := parseStringFlag("--report-output", "OCC_REPORT_OUTPUT")
+	reportFormat := parseStringFlag("--report-format", "OCC_REPORT_FORMAT")
+	exitOnThreshold := parseBoolFlag("--exit-on-threshold", "OCC_EXIT_ON_THRESHOLD")
+	sessionExport := parseStringFlag("--session-export", "OCC_SESSION_EXPORT")
+
+	if reportFormat == "" {
+		reportFormat = "text"
+	}
+	if reportFormat != "json" && reportFormat != "text" {
+		log.Fatalf("Invalid --report-format %q: must be 'json' or 'text'", reportFormat)
+	}
+
+	var duration time.Duration
+	if durationStr != "" {
+		var err error
+		duration, err = time.ParseDuration(durationStr)
+		if err != nil {
+			log.Fatalf("Invalid --duration %q: %v", durationStr, err)
+		}
+	}
+
+	if minimal {
+		log.Println("Running in minimal mode (UI disabled)")
+	} else {
+		log.Println("Running in normal mode")
 	}
 
 	log.Printf("Starting OTLP Cardinality Checker %s (commit: %s, built: %s)", version.Version, version.Commit, version.BuildDate)
@@ -108,7 +142,7 @@ func main() {
 
 	// Create REST API server
 	apiAddr := getEnv("API_ADDR", "0.0.0.0:8090")
-	apiServer := api.NewServer(apiAddr, store)
+	apiServer := api.NewServer(apiAddr, store, api.ServerOptions{DisableUI: minimal})
 
 	// Start pprof server for profiling (separate port)
 	pprofAddr := getEnv("PPROF_ADDR", "localhost:6060")
@@ -164,11 +198,25 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
+	// Start duration timer if set.
+	var durationTimer *time.Timer
+	if duration > 0 {
+		log.Printf("Auto-shutdown scheduled after %s", duration)
+		durationTimer = time.AfterFunc(duration, func() {
+			log.Printf("Duration %s elapsed, initiating shutdown...", duration)
+			sigChan <- syscall.SIGTERM
+		})
+	}
+
 	select {
 	case err := <-errChan:
 		log.Fatalf("Server error: %v", err)
 	case sig := <-sigChan:
 		log.Printf("Received signal: %v, shutting down...", sig)
+	}
+
+	if durationTimer != nil {
+		durationTimer.Stop()
 	}
 
 	// Graceful shutdown
@@ -186,12 +234,67 @@ func main() {
 		log.Printf("Error shutting down API server: %v", err)
 	}
 
+	// Generate report on shutdown if requested.
+	exitCode := 0
+	if reportOutput != "" || duration > 0 {
+		gen := report.NewGenerator(store)
+		rpt, err := gen.Generate(shutdownCtx, duration)
+		if err != nil {
+			log.Printf("Error generating report: %v", err)
+		} else {
+			var formatted []byte
+			switch reportFormat {
+			case "json":
+				formatted, err = report.FormatJSON(rpt)
+			default:
+				formatted, err = report.FormatText(rpt)
+			}
+			if err != nil {
+				log.Printf("Error formatting report: %v", err)
+			} else if reportOutput != "" {
+				if err := os.WriteFile(reportOutput, formatted, 0644); err != nil {
+					log.Printf("Error writing report to %s: %v", reportOutput, err)
+				} else {
+					log.Printf("Report written to %s", reportOutput)
+				}
+			} else {
+				fmt.Println(string(formatted))
+			}
+
+			// Calculate exit code from severity if requested.
+			if exitOnThreshold {
+				exitCode = rpt.MaxExitCode()
+			}
+		}
+	} else if exitOnThreshold {
+		// No report requested but exit-on-threshold set: still calculate.
+		gen := report.NewGenerator(store)
+		rpt, err := gen.Generate(shutdownCtx, 0)
+		if err != nil {
+			log.Printf("Error generating report for threshold check: %v", err)
+		} else {
+			exitCode = rpt.MaxExitCode()
+		}
+	}
+
+	// Session export on shutdown if requested.
+	if sessionExport != "" {
+		if err := exportSession(shutdownCtx, store, sessionExport); err != nil {
+			log.Printf("Error exporting session: %v", err)
+		} else {
+			log.Printf("Session exported to %s", sessionExport)
+		}
+	}
+
 	log.Println("Closing storage...")
 	if err := store.Close(); err != nil {
 		log.Printf("Error closing storage: %v", err)
 	}
 
 	log.Println("Shutdown complete")
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
 }
 
 // getEnv gets an environment variable with a default fallback.
@@ -210,4 +313,85 @@ func getEnvBool(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+// parseBoolFlag checks os.Args for a boolean flag and falls back to an env var.
+func parseBoolFlag(flag, envKey string) bool {
+	for _, arg := range os.Args[1:] {
+		if arg == flag {
+			return true
+		}
+	}
+	return getEnvBool(envKey, false)
+}
+
+// parseStringFlag checks os.Args for a --key=value flag and falls back to an env var.
+func parseStringFlag(flag, envKey string) string {
+	prefix := flag + "="
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, prefix) {
+			return strings.TrimPrefix(arg, prefix)
+		}
+	}
+	return os.Getenv(envKey)
+}
+
+// exportSession serializes the current storage state to a session JSON file.
+func exportSession(ctx context.Context, store storage.Storage, path string) error {
+	metrics, mErr := store.ListMetrics(ctx, "")
+	spans, sErr := store.ListSpans(ctx, "")
+	logs, lErr := store.ListLogs(ctx, "")
+	attrs, aErr := store.ListAttributes(ctx, nil)
+	services, svErr := store.ListServices(ctx)
+
+	for _, err := range []error{mErr, sErr, lErr, aErr, svErr} {
+		if err != nil {
+			return fmt.Errorf("reading store data: %w", err)
+		}
+	}
+
+	serializer := sessions.NewSerializer()
+	sMetrics, err := serializer.MarshalMetrics(metrics)
+	if err != nil {
+		return fmt.Errorf("serializing metrics: %w", err)
+	}
+	sSpans, err := serializer.MarshalSpans(spans)
+	if err != nil {
+		return fmt.Errorf("serializing spans: %w", err)
+	}
+	sLogs, err := serializer.MarshalLogs(logs)
+	if err != nil {
+		return fmt.Errorf("serializing logs: %w", err)
+	}
+	sAttrs, err := serializer.MarshalAttributes(attrs)
+	if err != nil {
+		return fmt.Errorf("serializing attributes: %w", err)
+	}
+
+	session := &models.Session{
+		Version:     1,
+		ID:          fmt.Sprintf("export-%d", time.Now().Unix()),
+		Description: "Exported on shutdown",
+		Created:     time.Now().UTC(),
+		Signals:     []string{"metrics", "traces", "logs"},
+		Data: models.SessionData{
+			Metrics:    sMetrics,
+			Spans:      sSpans,
+			Logs:       sLogs,
+			Attributes: sAttrs,
+		},
+		Stats: models.SessionStats{
+			MetricsCount:    len(metrics),
+			SpansCount:      len(spans),
+			LogsCount:       len(logs),
+			AttributesCount: len(attrs),
+			Services:        services,
+		},
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("marshaling session: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
 }
