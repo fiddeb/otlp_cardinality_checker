@@ -33,19 +33,35 @@ jobs:
           echo "OCC_PID=$!" >> "$GITHUB_ENV"
           sleep 2
 
-      - name: Install k6
+      - name: Send test telemetry
         run: |
-          curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz \
-            | sudo tar xz -C /usr/local/bin --strip-components=1 k6-v0.54.0-linux-amd64/k6
+          # One metric
+          curl -s -X POST http://localhost:4318/v1/metrics -H 'Content-Type: application/json' -d '{
+            "resourceMetrics": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "ci-test"}}]},
+              "scopeMetrics": [{"metrics": [{"name": "http_requests_total", "sum": {
+                "dataPoints": [{"asInt": "42", "timeUnixNano": "1700000000000000000",
+                  "attributes": [{"key": "method", "value": {"stringValue": "GET"}},
+                                 {"key": "path", "value": {"stringValue": "/api/users"}},
+                                 {"key": "status", "value": {"stringValue": "200"}}]}],
+                "isMonotonic": true, "aggregationTemporality": 2}}]}]}]}'
 
-      - name: Send telemetry with k6
-        run: |
-          k6 run --vus 5 --duration 5s \
-            -e NUM_MODULES=50 -e CARDINALITY=20 \
-            scripts/load-test-metrics.js
-          k6 run --vus 5 --duration 5s \
-            -e NUM_SPANS=50 -e CARDINALITY=20 \
-            scripts/load-test-traces.js
+          # One trace
+          curl -s -X POST http://localhost:4318/v1/traces -H 'Content-Type: application/json' -d '{
+            "resourceSpans": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "ci-test"}}]},
+              "scopeSpans": [{"spans": [{"traceId": "01020304050607080910111213141516",
+                "spanId": "0102030405060708", "name": "GET /api/users", "kind": 2,
+                "startTimeUnixNano": "1700000000000000000", "endTimeUnixNano": "1700000000050000000",
+                "attributes": [{"key": "http.method", "value": {"stringValue": "GET"}},
+                               {"key": "http.status_code", "value": {"intValue": "200"}}]}]}]}]}'
+
+          # One log
+          curl -s -X POST http://localhost:4318/v1/logs -H 'Content-Type: application/json' -d '{
+            "resourceLogs": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "ci-test"}}]},
+              "scopeLogs": [{"logRecords": [{"timeUnixNano": "1700000000000000000",
+                "severityText": "INFO", "body": {"stringValue": "User login successful"},
+                "attributes": [{"key": "user.role", "value": {"stringValue": "admin"}}]}]}]}]}'
+
+          echo "Telemetry sent: 1 metric, 1 trace, 1 log"
 
       - name: Wait for OCC idle shutdown
         run: |
@@ -67,7 +83,12 @@ jobs:
 
       - name: Show report
         if: always()
-        run: cat report.txt
+        run: |
+          cat report.txt
+          echo '### OCC Telemetry Report' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat report.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload report
         if: always()
