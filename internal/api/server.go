@@ -52,19 +52,23 @@ type PaginatedResponse struct {
 }
 
 // parsePaginationParams extracts pagination parameters from request.
-// Defaults: limit=100, offset=0, max_limit=1000
+// Defaults: limit=100, offset=0, max_limit=10000. Use limit=0 to return all results.
 func parsePaginationParams(r *http.Request) PaginationParams {
 	const (
 		defaultLimit = 100
-		maxLimit     = 1000
+		maxLimit     = 10000
 	)
 
 	limit := defaultLimit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-			limit = parsed
-			if limit > maxLimit {
-				limit = maxLimit
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed >= 0 {
+			if parsed == 0 {
+				limit = 0
+			} else {
+				limit = parsed
+				if limit > maxLimit {
+					limit = maxLimit
+				}
 			}
 		}
 	}
@@ -86,7 +90,10 @@ func parsePaginationParams(r *http.Request) PaginationParams {
 func paginateSlice[T any](items []T, params PaginationParams) ([]T, PaginatedResponse) {
 	total := len(items)
 	start := params.Offset
-	end := start + params.Limit
+	end := total // default: return all from offset
+	if params.Limit > 0 {
+		end = start + params.Limit
+	}
 
 	// Bounds check
 	if start >= total {
