@@ -494,6 +494,15 @@ func (k *KeyMetadata) UpdatePercentage(totalSamples int64) {
 	}
 }
 
+// releaseHLL returns the HLL register slice to the pool.
+// Must be called with k.mu held or when sole owner.
+func (k *KeyMetadata) releaseHLL() {
+	if k.hll != nil {
+		k.hll.Release()
+		k.hll = nil
+	}
+}
+
 // MergeMetricMetadata merges another MetricMetadata into this one.
 // This is used when observing the same metric with different label sets.
 func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
@@ -552,6 +561,8 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 				}
 			}
 			existing.mu.Unlock()
+			// Release the merged-from HLL back to pool.
+			otherKeyMeta.releaseHLL()
 		} else {
 			m.LabelKeys[key] = otherKeyMeta
 		}
@@ -606,6 +617,8 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 				}
 			}
 			existing.mu.Unlock()
+			// Release the merged-from HLL back to pool.
+			otherKeyMeta.releaseHLL()
 		} else {
 			m.ResourceKeys[key] = otherKeyMeta
 		}
@@ -623,6 +636,8 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 		}
 		m.seriesHLL.Merge(other.seriesHLL)
 		m.ActiveSeries = int64(m.seriesHLL.Count())
+		other.seriesHLL.Release()
+		other.seriesHLL = nil
 	}
 
 	// Update percentages
