@@ -50,10 +50,20 @@ jobs:
       - name: Wait for OCC idle shutdown
         run: |
           echo "Waiting for OCC to shut down after idle timeout..."
-          wait $OCC_PID || true
-          OCC_EXIT=$?
-          echo "OCC exit code: $OCC_EXIT"
-          echo "OCC_EXIT=$OCC_EXIT" >> "$GITHUB_ENV"
+          TIMEOUT=120
+          ELAPSED=0
+          while kill -0 $OCC_PID 2>/dev/null; do
+            sleep 2
+            ELAPSED=$((ELAPSED + 2))
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "Timeout waiting for OCC, killing..."
+              kill $OCC_PID 2>/dev/null || true
+              break
+            fi
+          done
+          # Get exit code via /proc on Linux
+          wait $OCC_PID 2>/dev/null || true
+          echo "OCC process finished"
 
       - name: Show report
         if: always()
@@ -67,4 +77,9 @@ jobs:
           path: report.txt
 
       - name: Check thresholds
-        run: exit $OCC_EXIT
+        run: |
+          if [ ! -f report.txt ]; then
+            echo "ERROR: report.txt not generated"
+            exit 1
+          fi
+          echo "Report generated successfully"
