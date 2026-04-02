@@ -28,7 +28,7 @@ function MetricsOverview({ onViewMetric }) {
   const [sortDirection, setSortDirection] = useState('desc')
 
   useEffect(() => {
-    fetch('/api/v1/metrics?limit=1000')
+    fetch('/api/v1/metrics?limit=0')
       .then(r => r.json())
       .then(result => {
         setMetrics(result.data || [])

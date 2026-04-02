@@ -24,7 +24,7 @@ function MetricsView({ onViewDetails }) {
   const itemsPerPage = 100
 
   useEffect(() => {
-    fetch('/api/v1/metrics?limit=1000')
+    fetch('/api/v1/metrics?limit=0')
       .then(r => r.json())
       .then(result => {
         setMetrics(result.data || [])
@@ -38,7 +38,9 @@ function MetricsView({ onViewDetails }) {
 
   const getMaxCardinality = (metric) => {
     if (!metric.label_keys) return 0
-    return Math.max(...Object.values(metric.label_keys).map(k => k.estimated_cardinality || 0))
+    const values = Object.values(metric.label_keys)
+    if (values.length === 0) return 0
+    return Math.max(...values.map(k => k.estimated_cardinality || 0))
   }
 
   const filteredMetrics = (metrics || []).filter(metric => {

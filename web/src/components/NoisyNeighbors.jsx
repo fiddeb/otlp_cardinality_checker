@@ -32,9 +32,9 @@ function NoisyNeighbors() {
 
     try {
       const [metricsRes, spansRes, logsRes] = await Promise.all([
-        fetchJSON('/api/v1/metrics?limit=1000'),
-        fetchJSON('/api/v1/spans?limit=1000'),
-        fetchJSON('/api/v1/logs?limit=1000'),
+        fetchJSON('/api/v1/metrics?limit=0'),
+        fetchJSON('/api/v1/spans?limit=0'),
+        fetchJSON('/api/v1/logs?limit=0'),
       ])
 
       // 1. Service volumes

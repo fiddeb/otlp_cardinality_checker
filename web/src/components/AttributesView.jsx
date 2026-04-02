@@ -30,7 +30,7 @@ function AttributesView() {
   const itemsPerPage = 100
 
   const fetchAttributes = () => {
-    let url = '/api/v1/attributes?limit=1000'
+    let url = '/api/v1/attributes?limit=0'
 
     if (filter.signalType !== 'all') url += `&signal_type=${filter.signalType}`
     if (filter.scope !== 'all') url += `&scope=${filter.scope}`
