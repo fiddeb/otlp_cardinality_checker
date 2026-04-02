@@ -644,7 +644,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 		type serviceGetter interface {
 			GetLogByServiceAndSeverity(ctx context.Context, serviceName, severityText string) (*models.LogMetadata, error)
 		}
-		
+
 		if sg, ok := s.store.(serviceGetter); ok {
 			log, err := sg.GetLogByServiceAndSeverity(ctx, decodedService, decodedSeverity)
 			if err != nil {
@@ -678,7 +678,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 			s.respondJSON(w, http.StatusOK, data)
 			return
 		}
-		
+
 		// This shouldn't happen with new memory store, but keep as fallback
 		s.respondError(w, http.StatusInternalServerError, "memory backend does not support service-specific queries")
 		return
@@ -1285,7 +1285,7 @@ func (s *Server) handleGetWatchedAttribute(w http.ResponseWriter, r *http.Reques
 		"total_values":       total,
 		"page":               page,
 		"page_size":          pageSize,
-		"has_invalid_utf8":   func() bool {
+		"has_invalid_utf8": func() bool {
 			if am, err := s.store.GetAttribute(ctx, waKey); err == nil {
 				return am.HasInvalidUTF8
 			}

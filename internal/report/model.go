@@ -6,7 +6,7 @@ import "time"
 // Report is the top-level cardinality report.
 type Report struct {
 	Version     string       `json:"version"`
-	GeneratedAt time.Time   `json:"generated_at"`
+	GeneratedAt time.Time    `json:"generated_at"`
 	Duration    string       `json:"duration,omitempty"`
 	OCCVersion  string       `json:"occ_version"`
 	Summary     Summary      `json:"summary"`

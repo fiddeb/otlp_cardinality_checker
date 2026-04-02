@@ -137,6 +137,7 @@ type HTTPReceiver struct {
 	tracesAnalyzer  *analyzer.TracesAnalyzer
 	logsAnalyzer    *analyzer.LogsAnalyzer
 	server          *http.Server
+	OnActivity      func() // called after successful OTLP ingestion
 }
 
 // NewHTTPReceiver creates a new HTTP receiver.
@@ -292,6 +293,9 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 	// Return success response (always protobuf for OTLP)
 	resp := &colmetricspb.ExportMetricsServiceResponse{}
 	r.writeResponse(w, resp)
+	if r.OnActivity != nil {
+		r.OnActivity()
+	}
 }
 
 // handleTraces handles OTLP traces export requests.
@@ -378,6 +382,9 @@ func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 	// Return success response (always protobuf for OTLP)
 	resp := &coltracepb.ExportTraceServiceResponse{}
 	r.writeResponse(w, resp)
+	if r.OnActivity != nil {
+		r.OnActivity()
+	}
 }
 
 // handleLogs handles OTLP logs export requests.
@@ -464,6 +471,9 @@ func (r *HTTPReceiver) handleLogs(w http.ResponseWriter, req *http.Request) {
 	// Return success response (always protobuf for OTLP)
 	resp := &collogspb.ExportLogsServiceResponse{}
 	r.writeResponse(w, resp)
+	if r.OnActivity != nil {
+		r.OnActivity()
+	}
 }
 
 // handleHealth handles health check requests.

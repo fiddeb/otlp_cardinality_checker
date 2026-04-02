@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -50,7 +51,7 @@ func main() {
 
 	// Parse CI/CD mode flags.
 	minimal := parseBoolFlag("--minimal", "OCC_MINIMAL")
-	durationStr := parseStringFlag("--duration", "OCC_DURATION")
+	idleTimeoutStr := parseStringFlag("--idle-timeout", "OCC_IDLE_TIMEOUT")
 	reportOutput := parseStringFlag("--report-output", "OCC_REPORT_OUTPUT")
 	reportFormat := parseStringFlag("--report-format", "OCC_REPORT_FORMAT")
 	exitOnThreshold := parseBoolFlag("--exit-on-threshold", "OCC_EXIT_ON_THRESHOLD")
@@ -63,12 +64,12 @@ func main() {
 		log.Fatalf("Invalid --report-format %q: must be 'json' or 'text'", reportFormat)
 	}
 
-	var duration time.Duration
-	if durationStr != "" {
+	var idleTimeout time.Duration
+	if idleTimeoutStr != "" {
 		var err error
-		duration, err = time.ParseDuration(durationStr)
+		idleTimeout, err = time.ParseDuration(idleTimeoutStr)
 		if err != nil {
-			log.Fatalf("Invalid --duration %q: %v", durationStr, err)
+			log.Fatalf("Invalid --idle-timeout %q: %v", idleTimeoutStr, err)
 		}
 	}
 
@@ -140,6 +141,13 @@ func main() {
 	httpReceiver := receiver.NewHTTPReceiver(otlpHTTPAddr, store)
 	grpcReceiver := receiver.NewGRPCReceiver(otlpGRPCAddr, store)
 
+	// Wire up activity tracking for idle timeout.
+	var lastActivity atomic.Int64
+	lastActivity.Store(time.Now().UnixNano())
+	notifyActivity := func() { lastActivity.Store(time.Now().UnixNano()) }
+	httpReceiver.OnActivity = notifyActivity
+	grpcReceiver.OnActivity = notifyActivity
+
 	// Create REST API server
 	apiAddr := getEnv("API_ADDR", "0.0.0.0:8090")
 	apiServer := api.NewServer(apiAddr, store, api.ServerOptions{DisableUI: minimal})
@@ -198,14 +206,28 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start duration timer if set.
-	var durationTimer *time.Timer
-	if duration > 0 {
-		log.Printf("Auto-shutdown scheduled after %s", duration)
-		durationTimer = time.AfterFunc(duration, func() {
-			log.Printf("Duration %s elapsed, initiating shutdown...", duration)
-			sigChan <- syscall.SIGTERM
-		})
+	// Start idle timeout checker if set.
+	var idleStop chan struct{}
+	if idleTimeout > 0 {
+		log.Printf("Idle timeout set to %s (shutdown when no OTLP data received)", idleTimeout)
+		idleStop = make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					last := time.Unix(0, lastActivity.Load())
+					if time.Since(last) >= idleTimeout {
+						log.Printf("No OTLP data received for %s, initiating shutdown...", idleTimeout)
+						sigChan <- syscall.SIGTERM
+						return
+					}
+				case <-idleStop:
+					return
+				}
+			}
+		}()
 	}
 
 	select {
@@ -215,8 +237,8 @@ func main() {
 		log.Printf("Received signal: %v, shutting down...", sig)
 	}
 
-	if durationTimer != nil {
-		durationTimer.Stop()
+	if idleStop != nil {
+		close(idleStop)
 	}
 
 	// Graceful shutdown
@@ -234,11 +256,11 @@ func main() {
 		log.Printf("Error shutting down API server: %v", err)
 	}
 
-	// Generate report on shutdown if requested.
+	// Generate report on shutdown if requested, or always on idle timeout.
 	exitCode := 0
-	if reportOutput != "" || duration > 0 {
+	if reportOutput != "" || idleTimeout > 0 {
 		gen := report.NewGenerator(store)
-		rpt, err := gen.Generate(shutdownCtx, duration)
+		rpt, err := gen.Generate(shutdownCtx, idleTimeout)
 		if err != nil {
 			log.Printf("Error generating report: %v", err)
 		} else {
