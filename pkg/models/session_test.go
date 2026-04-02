@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/hyperloglog"
@@ -133,11 +134,10 @@ func TestSerializedHLL_LargeDataset(t *testing.T) {
 }
 
 func TestSerializeKeyMetadata_RoundTrip(t *testing.T) {
-	// Create KeyMetadata with HLL
+	// Create KeyMetadata with HLL — must exceed MaxSamples (10) to trigger lazy HLL init.
 	km := NewKeyMetadata()
-	values := []string{"val1", "val2", "val3", "val4", "val5"}
-	for _, v := range values {
-		km.AddValue(v)
+	for i := 0; i < 15; i++ {
+		km.AddValue(fmt.Sprintf("val%d", i))
 	}
 	km.Count = 100
 	km.Percentage = 50.5
