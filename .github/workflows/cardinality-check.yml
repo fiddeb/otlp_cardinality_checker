@@ -1,0 +1,69 @@
+name: Cardinality Check
+
+on:
+  push:
+    branches: [feature/add-cicd-minimal-mode]
+
+jobs:
+  cardinality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build OCC
+        run: go build -o bin/occ ./cmd/server
+
+      - name: Start OCC in minimal mode
+        run: |
+          bin/occ --minimal \
+            --idle-timeout 15s \
+            --report-format text \
+            --report-output report.txt \
+            --exit-on-threshold &
+          echo "OCC_PID=$!" >> "$GITHUB_ENV"
+          sleep 2
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Send telemetry with k6
+        run: |
+          k6 run --vus 5 --duration 5s \
+            -e NUM_MODULES=50 -e CARDINALITY=20 \
+            scripts/load-test-metrics.js
+          k6 run --vus 5 --duration 5s \
+            -e NUM_SPANS=50 -e CARDINALITY=20 \
+            scripts/load-test-traces.js
+
+      - name: Wait for OCC idle shutdown
+        run: |
+          echo "Waiting for OCC to shut down after idle timeout..."
+          wait $OCC_PID || true
+          OCC_EXIT=$?
+          echo "OCC exit code: $OCC_EXIT"
+          echo "OCC_EXIT=$OCC_EXIT" >> "$GITHUB_ENV"
+
+      - name: Show report
+        if: always()
+        run: cat report.txt
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-report
+          path: report.txt
+
+      - name: Check thresholds
+        run: exit $OCC_EXIT

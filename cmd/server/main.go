@@ -273,14 +273,20 @@ func main() {
 			}
 			if err != nil {
 				log.Printf("Error formatting report: %v", err)
-			} else if reportOutput != "" {
-				if err := os.WriteFile(reportOutput, formatted, 0644); err != nil {
-					log.Printf("Error writing report to %s: %v", reportOutput, err)
-				} else {
-					log.Printf("Report written to %s", reportOutput)
-				}
 			} else {
-				fmt.Println(string(formatted))
+				if reportOutput != "" {
+					if err := os.WriteFile(reportOutput, formatted, 0644); err != nil {
+						log.Printf("Error writing report to %s: %v", reportOutput, err)
+					} else {
+						log.Printf("Report written to %s", reportOutput)
+					}
+				}
+				// Always print text report to stdout.
+				textOut := formatted
+				if reportFormat != "text" {
+					textOut, _ = report.FormatText(rpt)
+				}
+				fmt.Println(string(textOut))
 			}
 
 			// Calculate exit code from severity if requested.
