@@ -325,12 +325,16 @@ func parseBoolFlag(flag, envKey string) bool {
 	return getEnvBool(envKey, false)
 }
 
-// parseStringFlag checks os.Args for a --key=value flag and falls back to an env var.
+// parseStringFlag checks os.Args for --key=value or --key value forms and falls back to an env var.
 func parseStringFlag(flag, envKey string) string {
 	prefix := flag + "="
-	for _, arg := range os.Args[1:] {
+	args := os.Args[1:]
+	for i, arg := range args {
 		if strings.HasPrefix(arg, prefix) {
 			return strings.TrimPrefix(arg, prefix)
+		}
+		if arg == flag && i+1 < len(args) {
+			return args[i+1]
 		}
 	}
 	return os.Getenv(envKey)
