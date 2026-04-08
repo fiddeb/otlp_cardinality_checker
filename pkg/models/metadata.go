@@ -649,6 +649,19 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	}
 }
 
+// MarshalJSON implements json.Marshaler for MetricMetadata.
+// It holds the read lock while the encoder iterates the map fields (Services,
+// LabelKeys, ResourceKeys, Metadata) to prevent a concurrent-map-iteration-and-write
+// panic when MergeMetricMetadata writes to those maps from another goroutine.
+func (m *MetricMetadata) MarshalJSON() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Alias breaks the MarshalJSON recursion while keeping all struct fields.
+	type Alias MetricMetadata
+	return json.Marshal((*Alias)(m))
+}
+
 // GetLabelKeysSorted returns label keys sorted alphabetically.
 func (m *MetricMetadata) GetLabelKeysSorted() []string {
 	m.mu.RLock()

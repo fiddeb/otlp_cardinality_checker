@@ -454,6 +454,20 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 	return logs, nil
 }
 
+// CountLogPatterns returns the number of unique log templates without building the full pattern response.
+func (s *Store) CountLogPatterns(ctx context.Context) (int, error) {
+	s.logsmu.RLock()
+	defer s.logsmu.RUnlock()
+
+	seen := make(map[string]struct{})
+	for _, logMeta := range s.logs {
+		for _, tmpl := range logMeta.BodyTemplates {
+			seen[tmpl.Template] = struct{}{}
+		}
+	}
+	return len(seen), nil
+}
+
 // GetLogPatterns returns an advanced pattern analysis view.
 // Note: In-memory store has limited pattern analysis capabilities compared to SQLite.
 func (s *Store) GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error) {

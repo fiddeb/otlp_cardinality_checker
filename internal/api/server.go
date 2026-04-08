@@ -334,8 +334,10 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 		ActiveSeriesPrometheus int64  `json:"active_series_prometheus"`
 	}
 
+	var totalSampleCount int64
 	metricsWithType := make([]*MetricResponse, len(metrics))
 	for i, m := range metrics {
+		totalSampleCount += m.SampleCount
 		metricType := "Unknown"
 		if m.Data != nil {
 			metricType = m.Data.GetType()
@@ -351,8 +353,15 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply pagination
-	_, response := paginateSlice(metricsWithType, params)
-	s.respondJSON(w, http.StatusOK, response)
+	page, paginated := paginateSlice(metricsWithType, params)
+	s.respondJSON(w, http.StatusOK, metricsListResponse{
+		Data:             page,
+		Total:            paginated.Total,
+		Limit:            paginated.Limit,
+		Offset:           paginated.Offset,
+		HasMore:          paginated.HasMore,
+		TotalSampleCount: totalSampleCount,
+	})
 }
 
 // getMetric returns a specific metric by name.
@@ -408,9 +417,21 @@ func (s *Server) listSpans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var totalSampleCount int64
+	for _, sp := range spans {
+		totalSampleCount += sp.SampleCount
+	}
+
 	// Apply pagination
-	_, response := paginateSlice(spans, params)
-	s.respondJSON(w, http.StatusOK, response)
+	page, paginated := paginateSlice(spans, params)
+	s.respondJSON(w, http.StatusOK, spansListResponse{
+		Data:             page,
+		Total:            paginated.Total,
+		Limit:            paginated.Limit,
+		Offset:           paginated.Offset,
+		HasMore:          paginated.HasMore,
+		TotalSampleCount: totalSampleCount,
+	})
 }
 
 // getSpan returns a specific span by name.
@@ -452,16 +473,37 @@ func (s *Server) getSpanPatterns(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, patterns)
 }
 
+// metricsListResponse extends PaginatedResponse with total_sample_count.
+type metricsListResponse struct {
+	Data             interface{} `json:"data"`
+	Total            int         `json:"total"`
+	Limit            int         `json:"limit"`
+	Offset           int         `json:"offset"`
+	HasMore          bool        `json:"has_more"`
+	TotalSampleCount int64       `json:"total_sample_count"`
+}
+
+// spansListResponse extends PaginatedResponse with total_sample_count.
+type spansListResponse struct {
+	Data             interface{} `json:"data"`
+	Total            int         `json:"total"`
+	Limit            int         `json:"limit"`
+	Offset           int         `json:"offset"`
+	HasMore          bool        `json:"has_more"`
+	TotalSampleCount int64       `json:"total_sample_count"`
+}
+
 // logsListResponse extends PaginatedResponse with total_sample_count so the
 // dashboard can display the real number of ingested log records (not just the
 // count of unique severity types).
 type logsListResponse struct {
-	Data             []*models.LogMetadata `json:"data"`
-	Total            int                   `json:"total"`
-	Limit            int                   `json:"limit"`
-	Offset           int                   `json:"offset"`
-	HasMore          bool                  `json:"has_more"`
-	TotalSampleCount int64                 `json:"total_sample_count"`
+	Data              []*models.LogMetadata `json:"data"`
+	Total             int                   `json:"total"`
+	Limit             int                   `json:"limit"`
+	Offset            int                   `json:"offset"`
+	HasMore           bool                  `json:"has_more"`
+	TotalSampleCount  int64                 `json:"total_sample_count"`
+	TotalLogPatterns  int                   `json:"total_log_patterns"`
 }
 
 // listLogs returns all log metadata, optionally filtered by service.
@@ -483,6 +525,11 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		totalSampleCount += l.SampleCount
 	}
 
+	totalLogPatterns, err := s.store.CountLogPatterns(ctx)
+	if err != nil {
+		totalLogPatterns = 0
+	}
+
 	// Apply pagination
 	page, paginated := paginateSlice(logs, params)
 	s.respondJSON(w, http.StatusOK, logsListResponse{
@@ -492,6 +539,7 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		Offset:           paginated.Offset,
 		HasMore:          paginated.HasMore,
 		TotalSampleCount: totalSampleCount,
+		TotalLogPatterns: totalLogPatterns,
 	})
 }
 

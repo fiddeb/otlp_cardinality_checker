@@ -54,6 +54,10 @@ func (m *mockStorage) GetLogPatterns(_ context.Context, _ int64, _ int) (*models
 	return nil, nil
 }
 
+func (m *mockStorage) CountLogPatterns(_ context.Context) (int, error) {
+	return 0, nil
+}
+
 func (m *mockStorage) GetSpanPatterns(_ context.Context) (*models.SpanPatternResponse, error) {
 	return nil, nil
 }
