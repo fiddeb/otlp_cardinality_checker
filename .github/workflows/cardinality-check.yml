@@ -2,7 +2,7 @@ name: Cardinality Check
 
 on:
   push:
-    branches: [feature/add-cicd-minimal-mode]
+    branches: [main]
 
 jobs:
   cardinality-check:
