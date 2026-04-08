@@ -23,8 +23,11 @@ function Dashboard({ onViewService }) {
       .then(([metrics, spans, logs, services]) => {
         setStats({
           metrics: metrics.total || 0,
+          metricSamples: metrics.total_sample_count || 0,
           spans: spans.total || 0,
-          logs: logs.total_sample_count || 0, // Total log messages, not severity count
+          spanSamples: spans.total_sample_count || 0,
+          logPatterns: logs.total_log_patterns || 0,
+          logSamples: logs.total_sample_count || 0,
         })
         setServices(services.data || [])
         setLoading(false)
@@ -102,17 +105,18 @@ function Dashboard({ onViewService }) {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
-          { label: 'Metrics', value: stats?.metrics || 0 },
-          { label: 'Spans', value: stats?.spans || 0 },
-          { label: 'Total Logs', value: (stats?.logs || 0).toLocaleString() },
-          { label: 'Services', value: services?.length || 0 },
-        ].map(({ label, value }) => (
+          { label: 'Metrics', value: stats?.metrics || 0, sub: `${(stats?.metricSamples || 0).toLocaleString()} samples` },
+          { label: 'Spans', value: stats?.spans || 0, sub: `${(stats?.spanSamples || 0).toLocaleString()} samples` },
+          { label: 'Log Patterns', value: stats?.logPatterns || 0, sub: `${(stats?.logSamples || 0).toLocaleString()} samples` },
+          { label: 'Services', value: services?.length || 0, sub: null },
+        ].map(({ label, value, sub }) => (
           <Card key={label}>
             <CardHeader>
               <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{value}</p>
+              <p className="text-2xl font-bold">{value.toLocaleString()}</p>
+              {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
             </CardContent>
           </Card>
         ))}

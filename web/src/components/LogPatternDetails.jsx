@@ -54,12 +54,16 @@ function LogPatternDetails({ serviceName, severity, template, onBack }) {
           })
         }
         
+        const totalCount = data.total_count || 0
+        const totalSeverityCount = data.total_severity_count || 0
+        const percentage = totalSeverityCount > 0 ? (totalCount / totalSeverityCount) * 100 : 0
+
         setAttributes({
           template: {
             template: data.template,
             example: data.example_body,
-            count: serviceData.sample_count,
-            percentage: 100
+            count: totalCount,
+            percentage: percentage
           },
           resource_keys: resourceKeysMap,
           body_keys: attributeKeysMap

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
@@ -452,6 +453,20 @@ func (s *Store) ListLogs(ctx context.Context, serviceName string) ([]*models.Log
 	})
 
 	return logs, nil
+}
+
+// CountLogPatterns returns the number of unique log templates without building the full pattern response.
+func (s *Store) CountLogPatterns(ctx context.Context) (int, error) {
+	s.logsmu.RLock()
+	defer s.logsmu.RUnlock()
+
+	seen := make(map[string]struct{})
+	for _, logMeta := range s.logs {
+		for _, tmpl := range logMeta.BodyTemplates {
+			seen[tmpl.Template] = struct{}{}
+		}
+	}
+	return len(seen), nil
 }
 
 // GetLogPatterns returns an advanced pattern analysis view.
@@ -1026,7 +1041,7 @@ func (s *Store) ListAttributes(ctx context.Context, filter *models.AttributeFilt
 		case "count":
 			less = attrs[i].Count < attrs[j].Count
 		case "key":
-			less = attrs[i].Key < attrs[j].Key
+			less = strings.ToLower(attrs[i].Key) < strings.ToLower(attrs[j].Key)
 		case "first_seen":
 			less = attrs[i].FirstSeen.Before(attrs[j].FirstSeen)
 		case "last_seen":

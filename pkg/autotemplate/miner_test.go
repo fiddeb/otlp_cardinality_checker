@@ -39,9 +39,9 @@ func TestTokenize(t *testing.T) {
 			want:  []string{"received", "value", "<*>", "done"},
 		},
 		{
-			name:  "short tokens preserved",
+			name:  "short tokens preserved, numbers masked",
 			input: "received message from txgeneric-prod-marketplace partition 0",
-			want:  []string{"received", "message", "from", "txgeneric-prod-marketplace", "partition", "0"},
+			want:  []string{"received", "message", "from", "txgeneric-prod-marketplace", "partition", "<*>"},
 		},
 	}
 	

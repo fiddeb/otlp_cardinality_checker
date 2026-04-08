@@ -68,12 +68,20 @@ func (s *Serializer) marshalMetric(m *models.MetricMetadata) (*models.Serialized
 		sm.ResourceKeys[name] = sk
 	}
 
-	// Serialize histogram-specific data (buckets/scales needed for series estimation)
+	// Serialize type-specific data fields
 	if m.Data != nil {
+		sm.DataPointCount = m.Data.GetDataPointCount()
 		switch d := m.Data.(type) {
+		case *models.GaugeMetric:
+			// DataPointCount already set above
+		case *models.SumMetric:
+			sm.AggregationTemporality = int32(d.AggregationTemporality)
+			sm.IsMonotonic = d.IsMonotonic
 		case *models.HistogramMetric:
+			sm.AggregationTemporality = int32(d.AggregationTemporality)
 			sm.ExplicitBounds = d.ExplicitBounds
 		case *models.ExponentialHistogramMetric:
+			sm.AggregationTemporality = int32(d.AggregationTemporality)
 			sm.Scales = d.Scales
 		}
 	}
@@ -115,19 +123,31 @@ func (s *Serializer) unmarshalMetric(sm *models.SerializedMetric) (*models.Metri
 
 	switch sm.Type {
 	case "Gauge":
-		metricData = &models.GaugeMetric{}
+		metricData = &models.GaugeMetric{
+			DataPointCount: sm.DataPointCount,
+		}
 	case "Sum":
-		metricData = &models.SumMetric{}
+		metricData = &models.SumMetric{
+			DataPointCount:         sm.DataPointCount,
+			AggregationTemporality: models.AggregationTemporality(sm.AggregationTemporality),
+			IsMonotonic:            sm.IsMonotonic,
+		}
 	case "Histogram":
 		metricData = &models.HistogramMetric{
-			ExplicitBounds: sm.ExplicitBounds,
+			DataPointCount:         sm.DataPointCount,
+			AggregationTemporality: models.AggregationTemporality(sm.AggregationTemporality),
+			ExplicitBounds:         sm.ExplicitBounds,
 		}
 	case "ExponentialHistogram":
 		metricData = &models.ExponentialHistogramMetric{
-			Scales: sm.Scales,
+			DataPointCount:         sm.DataPointCount,
+			AggregationTemporality: models.AggregationTemporality(sm.AggregationTemporality),
+			Scales:                 sm.Scales,
 		}
 	case "Summary":
-		metricData = &models.SummaryMetric{}
+		metricData = &models.SummaryMetric{
+			DataPointCount: sm.DataPointCount,
+		}
 	default:
 		metricData = nil
 	}

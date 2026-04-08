@@ -27,6 +27,7 @@ type GRPCReceiver struct {
 	server          *grpc.Server
 	listener        net.Listener
 	addr            string
+	OnActivity      func() // called after successful OTLP ingestion
 }
 
 // NewGRPCReceiver creates a new gRPC receiver.
@@ -112,6 +113,9 @@ func (r *GRPCReceiver) Export(ctx context.Context, req *colmetricspb.ExportMetri
 	}
 
 	// Return success response
+	if r.OnActivity != nil {
+		r.OnActivity()
+	}
 	return &colmetricspb.ExportMetricsServiceResponse{
 		PartialSuccess: &colmetricspb.ExportMetricsPartialSuccess{
 			RejectedDataPoints: 0,
@@ -139,6 +143,9 @@ func (s *traceService) Export(ctx context.Context, req *coltracepb.ExportTraceSe
 	}
 
 	// Return success response
+	if s.OnActivity != nil {
+		s.OnActivity()
+	}
 	return &coltracepb.ExportTraceServiceResponse{
 		PartialSuccess: &coltracepb.ExportTracePartialSuccess{
 			RejectedSpans: 0,
@@ -166,6 +173,9 @@ func (s *logsService) Export(ctx context.Context, req *collogspb.ExportLogsServi
 	}
 
 	// Return success response
+	if s.OnActivity != nil {
+		s.OnActivity()
+	}
 	return &collogspb.ExportLogsServiceResponse{
 		PartialSuccess: &collogspb.ExportLogsPartialSuccess{
 			RejectedLogRecords: 0,

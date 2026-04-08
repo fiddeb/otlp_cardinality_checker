@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import ValueExplorer from './ValueExplorer'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -26,6 +26,8 @@ function AttributesView() {
   const [explorerKey, setExplorerKey] = useState(null) // key for ValueExplorer panel
   const [watchToggling, setWatchToggling] = useState({}) // key -> bool (loading)
   const [expandedSamples, setExpandedSamples] = useState({}) // key -> bool
+  const [expandedServices, setExpandedServices] = useState({}) // key -> service data or 'loading'
+  const [regexMode, setRegexMode] = useState(false)
 
   const itemsPerPage = 100
 
@@ -54,8 +56,25 @@ function AttributesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, sortField, sortDirection])
 
+  let regexError = false
+  let searchRegex = null
+  if (regexMode && filter.search) {
+    try {
+      searchRegex = new RegExp(filter.search, 'i')
+    } catch {
+      regexError = true
+    }
+  }
+
   const filteredAttributes = (attributes || []).filter(attr => {
-    if (filter.search && !attr.key.toLowerCase().includes(filter.search.toLowerCase())) return false
+    if (filter.search) {
+      if (regexMode) {
+        if (regexError || !searchRegex) return false
+        if (!searchRegex.test(attr.key)) return false
+      } else {
+        if (!attr.key.toLowerCase().includes(filter.search.toLowerCase())) return false
+      }
+    }
     return true
   })
 
@@ -112,6 +131,18 @@ function AttributesView() {
     } finally {
       setWatchToggling(prev => ({ ...prev, [key]: false }))
     }
+  }
+
+  const handleToggleServices = (key) => {
+    if (expandedServices[key]) {
+      setExpandedServices(prev => { const n = {...prev}; delete n[key]; return n })
+      return
+    }
+    setExpandedServices(prev => ({ ...prev, [key]: 'loading' }))
+    fetch(`/api/v1/attributes/${encodeURIComponent(key)}/services`)
+      .then(r => r.json())
+      .then(d => setExpandedServices(prev => ({ ...prev, [key]: d })))
+      .catch(() => setExpandedServices(prev => ({ ...prev, [key]: 'error' })))
   }
 
   if (loading) return (
@@ -171,12 +202,24 @@ function AttributesView() {
           />
         </div>
 
-        <Input
-          placeholder="Filter by key..."
-          value={filter.search}
-          onChange={e => setFilter({...filter, search: e.target.value})}
-          className="w-48"
-        />
+        <div className="flex items-center gap-1">
+          <Input
+            placeholder={regexMode ? 'Regex pattern...' : 'Filter by key...'}
+            value={filter.search}
+            onChange={e => setFilter({...filter, search: e.target.value})}
+            className={`w-48${regexError ? ' border-destructive focus-visible:border-destructive' : ''}`}
+            title={regexError ? 'Invalid regular expression' : undefined}
+          />
+          <Button
+            variant={regexMode ? 'default' : 'outline'}
+            size="sm"
+            className="h-9 px-2 font-mono text-xs"
+            onClick={() => setRegexMode(m => !m)}
+            title="Toggle regex mode"
+          >
+            .*
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -223,12 +266,14 @@ function AttributesView() {
             <TableHead className="max-w-[340px] w-[340px]">Sample Values</TableHead>
             <TableHead>Signal Types</TableHead>
             <TableHead>Scope</TableHead>
+            <TableHead>Services</TableHead>
             <TableHead>Watch</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {currentAttributes.map((attr, idx) => (
-            <TableRow key={idx} style={attr.has_invalid_utf8 ? { backgroundColor: 'rgba(220, 38, 38, 0.07)' } : undefined}>
+            <React.Fragment key={idx}>
+            <TableRow style={attr.has_invalid_utf8 ? { backgroundColor: 'rgba(220, 38, 38, 0.07)' } : undefined}>
               <TableCell>
                 {attr.watched ? (
                   <Button
@@ -299,6 +344,24 @@ function AttributesView() {
               </TableCell>
               <TableCell>
                 <button
+                  onClick={() => handleToggleServices(attr.key)}
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: 4,
+                    border: '1px solid',
+                    cursor: 'pointer',
+                    background: expandedServices[attr.key] && expandedServices[attr.key] !== 'loading' ? '#f0f4ff' : 'transparent',
+                    borderColor: expandedServices[attr.key] ? '#1976d2' : '#ccc',
+                    color: expandedServices[attr.key] ? '#1976d2' : '#666',
+                    fontSize: 12,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {expandedServices[attr.key] === 'loading' ? '…' : expandedServices[attr.key] ? `▲ ${expandedServices[attr.key].total}` : '▼ Services'}
+                </button>
+              </TableCell>
+              <TableCell>
+                <button
                   onClick={() => handleWatchToggle(attr)}
                   disabled={watchToggling[attr.key] || (!attr.watched && limitReached)}
                   title={
@@ -326,6 +389,34 @@ function AttributesView() {
                 </button>
               </TableCell>
             </TableRow>
+            {expandedServices[attr.key] && expandedServices[attr.key] !== 'loading' && expandedServices[attr.key] !== 'error' && (
+              <TableRow>
+                <TableCell colSpan={8} style={{ padding: '0 12px 12px 32px', background: 'rgba(0,0,0,0.02)' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 8 }}>
+                    {(expandedServices[attr.key].services || []).slice(0, 50).map((s, i) => (
+                      <span key={i} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 8px', borderRadius: 12,
+                        fontSize: 11, border: '1px solid var(--border)', background: 'var(--secondary)',
+                        fontFamily: 'monospace',
+                      }}>
+                        <span style={{ color: s.signal_type === 'metric' ? '#1976d2' : s.signal_type === 'span' ? '#7b1fa2' : '#388e3c', fontWeight: 600 }}>
+                          {s.signal_type}
+                        </span>
+                        {s.service_name}
+                        <span style={{ color: '#999', fontSize: 10 }}>{s.count.toLocaleString()}</span>
+                      </span>
+                    ))}
+                    {(expandedServices[attr.key].total || 0) > 50 && (
+                      <span style={{ fontSize: 11, color: '#999', alignSelf: 'center' }}>
+                        +{expandedServices[attr.key].total - 50} more
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            </React.Fragment>
           ))}
         </TableBody>
       </Table>
