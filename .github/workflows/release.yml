@@ -26,7 +26,8 @@ jobs:
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: false
+          default_bump: minor
+          major_string_token: "BREAKING CHANGE,feat!,fix!,refactor!,perf!"
           release_branches: main
           pre_release_branches: develop,beta
           tag_prefix: v
