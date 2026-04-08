@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/fidde/otlp_cardinality_checker/pkg/autotemplate"
@@ -1040,7 +1041,7 @@ func (s *Store) ListAttributes(ctx context.Context, filter *models.AttributeFilt
 		case "count":
 			less = attrs[i].Count < attrs[j].Count
 		case "key":
-			less = attrs[i].Key < attrs[j].Key
+			less = strings.ToLower(attrs[i].Key) < strings.ToLower(attrs[j].Key)
 		case "first_seen":
 			less = attrs[i].FirstSeen.Before(attrs[j].FirstSeen)
 		case "last_seen":

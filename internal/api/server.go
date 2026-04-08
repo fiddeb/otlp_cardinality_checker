@@ -930,13 +930,22 @@ func (s *Server) getPatternDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Compute total log count across all patterns for this severity (for percentage calculation)
+	var totalSeverityCount int64
+	for _, pattern := range allPatterns.Patterns {
+		if count, ok := pattern.SeverityBreakdown[decodedSeverity]; ok {
+			totalSeverityCount += count
+		}
+	}
+
 	// Build response with filtered services
 	response := map[string]interface{}{
-		"template":     matchedPattern.Template,
-		"example_body": matchedPattern.ExampleBody,
-		"severity":     decodedSeverity,
-		"total_count":  matchedPattern.SeverityBreakdown[decodedSeverity],
-		"services":     filteredServices,
+		"template":              matchedPattern.Template,
+		"example_body":          matchedPattern.ExampleBody,
+		"severity":              decodedSeverity,
+		"total_count":           matchedPattern.SeverityBreakdown[decodedSeverity],
+		"total_severity_count":  totalSeverityCount,
+		"services":              filteredServices,
 	}
 
 	s.respondJSON(w, http.StatusOK, response)

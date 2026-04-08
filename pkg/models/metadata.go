@@ -653,13 +653,21 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 // It holds the read lock while the encoder iterates the map fields (Services,
 // LabelKeys, ResourceKeys, Metadata) to prevent a concurrent-map-iteration-and-write
 // panic when MergeMetricMetadata writes to those maps from another goroutine.
+// It also emits a top-level "type" field derived from the MetricData interface.
 func (m *MetricMetadata) MarshalJSON() ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	// Alias breaks the MarshalJSON recursion while keeping all struct fields.
 	type Alias MetricMetadata
-	return json.Marshal((*Alias)(m))
+	type withType struct {
+		Type string `json:"type"`
+		*Alias
+	}
+	return json.Marshal(withType{
+		Type:  m.GetType(),
+		Alias: (*Alias)(m),
+	})
 }
 
 // GetLabelKeysSorted returns label keys sorted alphabetically.

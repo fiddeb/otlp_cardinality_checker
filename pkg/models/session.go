@@ -123,6 +123,12 @@ type SerializedMetric struct {
 	Services       map[string]int64             `json:"services"`
 	ActiveSeries   int64                        `json:"active_series"`
 	SeriesHLL      *SerializedHLL               `json:"series_hll,omitempty"`
+	// DataPointCount stores the observed data point count for all metric types
+	DataPointCount int64                        `json:"data_point_count,omitempty"`
+	// AggregationTemporality stores the temporality for Sum/Histogram/ExponentialHistogram
+	AggregationTemporality int32                `json:"aggregation_temporality,omitempty"`
+	// IsMonotonic stores monotonicity for Sum metrics
+	IsMonotonic    bool                         `json:"is_monotonic,omitempty"`
 	// ExplicitBounds stores histogram bucket boundaries (HistogramMetric only)
 	ExplicitBounds []float64                    `json:"explicit_bounds,omitempty"`
 	// Scales stores observed histogram scales (ExponentialHistogramMetric only)
