@@ -207,6 +207,7 @@ func NewServer(addr string, store storage.Storage, opts ...ServerOptions) *Serve
 		// Attribute catalog endpoints
 		r.Get("/attributes", s.listAttributes)
 		r.Get("/attributes/{key}", s.getAttribute)
+		r.Get("/attributes/{key}/services", s.getAttributeServices)
 
 		// Deep watch endpoints — more specific routes before generic {key}
 		r.Post("/attributes/{key}/watch", s.handleWatchAttribute)
@@ -1171,6 +1172,98 @@ func (s *Server) getAttribute(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{
 		"data":    attribute,
 		"watched": watched,
+	})
+}
+
+// getAttributeServices searches across all signals and returns the services that use a given attribute key.
+// GET /api/v1/attributes/{key}/services
+func (s *Server) getAttributeServices(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid key encoding")
+		return
+	}
+
+	type ServiceEntry struct {
+		ServiceName string `json:"service_name"`
+		SignalType  string `json:"signal_type"`
+		Count       int64  `json:"count"`
+	}
+
+	// service+signal -> count
+	seen := make(map[string]*ServiceEntry)
+
+	addServices := func(services map[string]int64, signalType string) {
+		for svcName, count := range services {
+			entryKey := svcName + "|" + signalType
+			if e, ok := seen[entryKey]; ok {
+				e.Count += count
+			} else {
+				seen[entryKey] = &ServiceEntry{
+					ServiceName: svcName,
+					SignalType:  signalType,
+					Count:       count,
+				}
+			}
+		}
+	}
+
+	// Search metrics label keys and resource keys
+	metrics, err := s.store.ListMetrics(ctx, "")
+	if err == nil {
+		for _, m := range metrics {
+			if _, ok := m.LabelKeys[decodedKey]; ok {
+				addServices(m.Services, "metric")
+			}
+			if _, ok := m.ResourceKeys[decodedKey]; ok {
+				addServices(m.Services, "metric")
+			}
+		}
+	}
+
+	// Search spans attribute keys and resource keys
+	spans, err := s.store.ListSpans(ctx, "")
+	if err == nil {
+		for _, sp := range spans {
+			if _, ok := sp.AttributeKeys[decodedKey]; ok {
+				addServices(sp.Services, "span")
+			}
+			if _, ok := sp.ResourceKeys[decodedKey]; ok {
+				addServices(sp.Services, "span")
+			}
+		}
+	}
+
+	// Search logs attribute keys and resource keys
+	logs, err := s.store.ListLogs(ctx, "")
+	if err == nil {
+		for _, l := range logs {
+			if _, ok := l.AttributeKeys[decodedKey]; ok {
+				addServices(l.Services, "log")
+			}
+			if _, ok := l.ResourceKeys[decodedKey]; ok {
+				addServices(l.Services, "log")
+			}
+		}
+	}
+
+	results := make([]*ServiceEntry, 0, len(seen))
+	for _, e := range seen {
+		results = append(results, e)
+	}
+
+	// Sort by count descending
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Count > results[j].Count
+	})
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"key":      decodedKey,
+		"services": results,
+		"total":    len(results),
 	})
 }
 
