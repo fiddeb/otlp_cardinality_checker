@@ -11,6 +11,127 @@ import (
 // count and prevent cluster matching in Drain's length-bucketed tree.
 const longTokenThreshold = 30
 
+// isDigit returns true for ASCII '0'-'9'.
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+// isHexDigit returns true for ASCII hex digits.
+func isHexDigit(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+// isVariableToken applies cheap heuristic checks to decide whether a single
+// token looks like a high-entropy variable that should become "<*>".
+//
+// Recognised patterns (no regexp, pure byte scanning):
+//   - Pure decimal numbers (including negative and decimal point): -123, 3.14
+//   - ISO-8601-ish timestamps: 2025-09-01T05, 2025-09-01, 05:39:27.100Z
+//   - Pure hex strings >= 8 chars: trace IDs, span IDs, UUIDs
+//   - IPv4 addresses: 10.0.0.1
+//   - Tokens that are mostly digits (>60% digit characters, len >= 4)
+func isVariableToken(t string) bool {
+	n := len(t)
+	if n == 0 {
+		return false
+	}
+
+	// --- Pure number (optional leading minus, digits, at most one dot) ---
+	// Examples: "123", "-42", "3.14", "0.001"
+	start := 0
+	if t[0] == '-' {
+		start = 1
+	}
+	if start < n && isDigit(t[start]) {
+		allNum := true
+		dots := 0
+		for i := start; i < n; i++ {
+			if t[i] == '.' {
+				dots++
+				if dots > 1 {
+					allNum = false
+					break
+				}
+			} else if !isDigit(t[i]) {
+				allNum = false
+				break
+			}
+		}
+		if allNum && dots <= 1 && n-start > 0 {
+			return true
+		}
+	}
+
+	// --- ISO-8601-ish date/time fragments ---
+	// Matches: 2025-09-01T05, 2025-09-01, 05:39:27.100Z, 10:55, etc.
+	// Heuristic: starts with digit, contains '-' or ':', and is mostly digits/separators.
+	if n >= 4 && isDigit(t[0]) {
+		hasSep := false
+		varChars := 0  // digits + date/time separators
+		for i := 0; i < n; i++ {
+			c := t[i]
+			if isDigit(c) {
+				varChars++
+			} else if c == '-' || c == ':' || c == '.' || c == 'T' || c == 'Z' {
+				varChars++
+				if c == '-' || c == ':' || c == 'T' {
+					hasSep = true
+				}
+			}
+		}
+		if hasSep && varChars*100/n >= 80 {
+			return true
+		}
+	}
+
+	// --- Pure hex strings >= 8 chars (trace IDs, UUIDs, span IDs) ---
+	if n >= 8 {
+		allHex := true
+		for i := 0; i < n; i++ {
+			c := t[i]
+			if !isHexDigit(c) && c != '-' {
+				allHex = false
+				break
+			}
+		}
+		if allHex {
+			return true
+		}
+	}
+
+	// --- IPv4 addresses: 4 groups of digits separated by dots ---
+	if n >= 7 && isDigit(t[0]) {
+		groups := 1
+		allIPv4 := true
+		for i := 0; i < n; i++ {
+			c := t[i]
+			if c == '.' {
+				groups++
+			} else if !isDigit(c) {
+				allIPv4 = false
+				break
+			}
+		}
+		if allIPv4 && groups == 4 {
+			return true
+		}
+	}
+
+	// --- Mostly-digit tokens (>= 60% digits, at least 4 chars) ---
+	// Catches leftover fragments like "49436Z", "27100Z", combined number+suffix.
+	if n >= 4 {
+		digits := 0
+		for i := 0; i < n; i++ {
+			if isDigit(t[i]) {
+				digits++
+			}
+		}
+		if digits*100/n >= 60 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // tokenPool holds reusable token slices to reduce allocation pressure.
 // Each pooled item is a *[]string that callers append into.
 var tokenPool = sync.Pool{
@@ -174,10 +295,10 @@ func decodeRune(s string) (rune, int) {
 	return r, size
 }
 
-// normalizeTokens replaces long tokens with "<*>" and collapses consecutive
-// wildcards. This ensures base64/protobuf payloads with embedded spaces don't
-// fragment into many tokens and land in a different Drain bucket than their
-// matching template.
+// normalizeTokens replaces long tokens and recognised variable patterns with
+// "<*>" and collapses consecutive wildcards. This ensures timestamps, trace IDs,
+// numbers, and base64/protobuf payloads don't fragment into unique Drain
+// clusters when they are really the same log template.
 //
 // The returned slice is a newly allocated copy (safe to store in clusters).
 // The input slice is NOT modified.
@@ -185,7 +306,7 @@ func normalizeTokens(tokens []string) []string {
 	result := make([]string, 0, len(tokens))
 	prevWild := false
 	for _, t := range tokens {
-		if len(t) > longTokenThreshold {
+		if len(t) > longTokenThreshold || isVariableToken(t) {
 			if prevWild {
 				continue // collapse consecutive wildcards
 			}

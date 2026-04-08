@@ -122,8 +122,19 @@ func paginateSlice[T any](items []T, params PaginationParams) ([]T, PaginatedRes
 	}
 }
 
+// ServerOptions configures optional server behavior.
+type ServerOptions struct {
+	// DisableUI skips embedded static file serving (for --minimal mode).
+	DisableUI bool
+}
+
 // NewServer creates a new API server.
-func NewServer(addr string, store storage.Storage) *Server {
+func NewServer(addr string, store storage.Storage, opts ...ServerOptions) *Server {
+	var opt ServerOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
 	s := &Server{
 		store:  store,
 		router: chi.NewRouter(),
@@ -196,6 +207,7 @@ func NewServer(addr string, store storage.Storage) *Server {
 		// Attribute catalog endpoints
 		r.Get("/attributes", s.listAttributes)
 		r.Get("/attributes/{key}", s.getAttribute)
+		r.Get("/attributes/{key}/services", s.getAttributeServices)
 
 		// Deep watch endpoints — more specific routes before generic {key}
 		r.Post("/attributes/{key}/watch", s.handleWatchAttribute)
@@ -219,40 +231,42 @@ func NewServer(addr string, store storage.Storage) *Server {
 		}
 	})
 
-	// Serve embedded static files with SPA fallback
-	staticFS, err := web.NewStaticFileSystem()
-	if err != nil {
-		log.Printf("Warning: Could not load embedded UI: %v", err)
-	} else {
-		// Serve static files from embedded filesystem
-		fileServer := http.FileServer(staticFS)
+	// Serve embedded static files with SPA fallback (skip in minimal mode)
+	if !opt.DisableUI {
+		staticFS, err := web.NewStaticFileSystem()
+		if err != nil {
+			log.Printf("Warning: Could not load embedded UI: %v", err)
+		} else {
+			// Serve static files from embedded filesystem
+			fileServer := http.FileServer(staticFS)
 
-		s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-			// Check if file exists in embedded FS
-			if staticFS.Exists("", r.URL.Path) {
-				fileServer.ServeHTTP(w, r)
-				return
-			}
+			s.router.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+				// Check if file exists in embedded FS
+				if staticFS.Exists("", r.URL.Path) {
+					fileServer.ServeHTTP(w, r)
+					return
+				}
 
-			// SPA fallback: serve index.html for routes not matching static files
-			f, err := staticFS.Open("/index.html")
-			if err != nil {
-				http.Error(w, "UI not available", http.StatusNotFound)
-				return
-			}
-			defer f.Close()
+				// SPA fallback: serve index.html for routes not matching static files
+				f, err := staticFS.Open("/index.html")
+				if err != nil {
+					http.Error(w, "UI not available", http.StatusNotFound)
+					return
+				}
+				defer f.Close()
 
-			// Get file info for http.ServeContent
-			stat, err := f.Stat()
-			if err != nil {
-				http.Error(w, "UI not available", http.StatusInternalServerError)
-				return
-			}
+				// Get file info for http.ServeContent
+				stat, err := f.Stat()
+				if err != nil {
+					http.Error(w, "UI not available", http.StatusInternalServerError)
+					return
+				}
 
-			http.ServeContent(w, r, "index.html", stat.ModTime(), f.(interface {
-				Seek(int64, int) (int64, error)
-			}).(http.File))
-		})
+				http.ServeContent(w, r, "index.html", stat.ModTime(), f.(interface {
+					Seek(int64, int) (int64, error)
+				}).(http.File))
+			})
+		}
 	}
 
 	s.server = &http.Server{
@@ -321,8 +335,10 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 		ActiveSeriesPrometheus int64  `json:"active_series_prometheus"`
 	}
 
+	var totalSampleCount int64
 	metricsWithType := make([]*MetricResponse, len(metrics))
 	for i, m := range metrics {
+		totalSampleCount += m.SampleCount
 		metricType := "Unknown"
 		if m.Data != nil {
 			metricType = m.Data.GetType()
@@ -338,8 +354,15 @@ func (s *Server) listMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply pagination
-	_, response := paginateSlice(metricsWithType, params)
-	s.respondJSON(w, http.StatusOK, response)
+	page, paginated := paginateSlice(metricsWithType, params)
+	s.respondJSON(w, http.StatusOK, metricsListResponse{
+		Data:             page,
+		Total:            paginated.Total,
+		Limit:            paginated.Limit,
+		Offset:           paginated.Offset,
+		HasMore:          paginated.HasMore,
+		TotalSampleCount: totalSampleCount,
+	})
 }
 
 // getMetric returns a specific metric by name.
@@ -395,9 +418,21 @@ func (s *Server) listSpans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var totalSampleCount int64
+	for _, sp := range spans {
+		totalSampleCount += sp.SampleCount
+	}
+
 	// Apply pagination
-	_, response := paginateSlice(spans, params)
-	s.respondJSON(w, http.StatusOK, response)
+	page, paginated := paginateSlice(spans, params)
+	s.respondJSON(w, http.StatusOK, spansListResponse{
+		Data:             page,
+		Total:            paginated.Total,
+		Limit:            paginated.Limit,
+		Offset:           paginated.Offset,
+		HasMore:          paginated.HasMore,
+		TotalSampleCount: totalSampleCount,
+	})
 }
 
 // getSpan returns a specific span by name.
@@ -439,16 +474,37 @@ func (s *Server) getSpanPatterns(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, patterns)
 }
 
+// metricsListResponse extends PaginatedResponse with total_sample_count.
+type metricsListResponse struct {
+	Data             interface{} `json:"data"`
+	Total            int         `json:"total"`
+	Limit            int         `json:"limit"`
+	Offset           int         `json:"offset"`
+	HasMore          bool        `json:"has_more"`
+	TotalSampleCount int64       `json:"total_sample_count"`
+}
+
+// spansListResponse extends PaginatedResponse with total_sample_count.
+type spansListResponse struct {
+	Data             interface{} `json:"data"`
+	Total            int         `json:"total"`
+	Limit            int         `json:"limit"`
+	Offset           int         `json:"offset"`
+	HasMore          bool        `json:"has_more"`
+	TotalSampleCount int64       `json:"total_sample_count"`
+}
+
 // logsListResponse extends PaginatedResponse with total_sample_count so the
 // dashboard can display the real number of ingested log records (not just the
 // count of unique severity types).
 type logsListResponse struct {
-	Data             []*models.LogMetadata `json:"data"`
-	Total            int                   `json:"total"`
-	Limit            int                   `json:"limit"`
-	Offset           int                   `json:"offset"`
-	HasMore          bool                  `json:"has_more"`
-	TotalSampleCount int64                 `json:"total_sample_count"`
+	Data              []*models.LogMetadata `json:"data"`
+	Total             int                   `json:"total"`
+	Limit             int                   `json:"limit"`
+	Offset            int                   `json:"offset"`
+	HasMore           bool                  `json:"has_more"`
+	TotalSampleCount  int64                 `json:"total_sample_count"`
+	TotalLogPatterns  int                   `json:"total_log_patterns"`
 }
 
 // listLogs returns all log metadata, optionally filtered by service.
@@ -470,6 +526,11 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		totalSampleCount += l.SampleCount
 	}
 
+	totalLogPatterns, err := s.store.CountLogPatterns(ctx)
+	if err != nil {
+		totalLogPatterns = 0
+	}
+
 	// Apply pagination
 	page, paginated := paginateSlice(logs, params)
 	s.respondJSON(w, http.StatusOK, logsListResponse{
@@ -479,6 +540,7 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request) {
 		Offset:           paginated.Offset,
 		HasMore:          paginated.HasMore,
 		TotalSampleCount: totalSampleCount,
+		TotalLogPatterns: totalLogPatterns,
 	})
 }
 
@@ -631,7 +693,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 		type serviceGetter interface {
 			GetLogByServiceAndSeverity(ctx context.Context, serviceName, severityText string) (*models.LogMetadata, error)
 		}
-		
+
 		if sg, ok := s.store.(serviceGetter); ok {
 			log, err := sg.GetLogByServiceAndSeverity(ctx, decodedService, decodedSeverity)
 			if err != nil {
@@ -665,7 +727,7 @@ func (s *Server) getLogByServiceAndSeverity(w http.ResponseWriter, r *http.Reque
 			s.respondJSON(w, http.StatusOK, data)
 			return
 		}
-		
+
 		// This shouldn't happen with new memory store, but keep as fallback
 		s.respondError(w, http.StatusInternalServerError, "memory backend does not support service-specific queries")
 		return
@@ -869,13 +931,22 @@ func (s *Server) getPatternDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Compute total log count across all patterns for this severity (for percentage calculation)
+	var totalSeverityCount int64
+	for _, pattern := range allPatterns.Patterns {
+		if count, ok := pattern.SeverityBreakdown[decodedSeverity]; ok {
+			totalSeverityCount += count
+		}
+	}
+
 	// Build response with filtered services
 	response := map[string]interface{}{
-		"template":     matchedPattern.Template,
-		"example_body": matchedPattern.ExampleBody,
-		"severity":     decodedSeverity,
-		"total_count":  matchedPattern.SeverityBreakdown[decodedSeverity],
-		"services":     filteredServices,
+		"template":              matchedPattern.Template,
+		"example_body":          matchedPattern.ExampleBody,
+		"severity":              decodedSeverity,
+		"total_count":           matchedPattern.SeverityBreakdown[decodedSeverity],
+		"total_severity_count":  totalSeverityCount,
+		"services":              filteredServices,
 	}
 
 	s.respondJSON(w, http.StatusOK, response)
@@ -1104,6 +1175,98 @@ func (s *Server) getAttribute(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getAttributeServices searches across all signals and returns the services that use a given attribute key.
+// GET /api/v1/attributes/{key}/services
+func (s *Server) getAttributeServices(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid key encoding")
+		return
+	}
+
+	type ServiceEntry struct {
+		ServiceName string `json:"service_name"`
+		SignalType  string `json:"signal_type"`
+		Count       int64  `json:"count"`
+	}
+
+	// service+signal -> count
+	seen := make(map[string]*ServiceEntry)
+
+	addServices := func(services map[string]int64, signalType string) {
+		for svcName, count := range services {
+			entryKey := svcName + "|" + signalType
+			if e, ok := seen[entryKey]; ok {
+				e.Count += count
+			} else {
+				seen[entryKey] = &ServiceEntry{
+					ServiceName: svcName,
+					SignalType:  signalType,
+					Count:       count,
+				}
+			}
+		}
+	}
+
+	// Search metrics label keys and resource keys
+	metrics, err := s.store.ListMetrics(ctx, "")
+	if err == nil {
+		for _, m := range metrics {
+			if _, ok := m.LabelKeys[decodedKey]; ok {
+				addServices(m.Services, "metric")
+			}
+			if _, ok := m.ResourceKeys[decodedKey]; ok {
+				addServices(m.Services, "metric")
+			}
+		}
+	}
+
+	// Search spans attribute keys and resource keys
+	spans, err := s.store.ListSpans(ctx, "")
+	if err == nil {
+		for _, sp := range spans {
+			if _, ok := sp.AttributeKeys[decodedKey]; ok {
+				addServices(sp.Services, "span")
+			}
+			if _, ok := sp.ResourceKeys[decodedKey]; ok {
+				addServices(sp.Services, "span")
+			}
+		}
+	}
+
+	// Search logs attribute keys and resource keys
+	logs, err := s.store.ListLogs(ctx, "")
+	if err == nil {
+		for _, l := range logs {
+			if _, ok := l.AttributeKeys[decodedKey]; ok {
+				addServices(l.Services, "log")
+			}
+			if _, ok := l.ResourceKeys[decodedKey]; ok {
+				addServices(l.Services, "log")
+			}
+		}
+	}
+
+	results := make([]*ServiceEntry, 0, len(seen))
+	for _, e := range seen {
+		results = append(results, e)
+	}
+
+	// Sort by count descending
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Count > results[j].Count
+	})
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"key":      decodedKey,
+		"services": results,
+		"total":    len(results),
+	})
+}
+
 // handleWatchAttribute enables deep watch for a specific attribute key.
 // POST /api/v1/attributes/{key}/watch
 // Returns 200 with WatchedAttribute JSON on success, 409 if already watched, 429 if limit reached.
@@ -1272,7 +1435,7 @@ func (s *Server) handleGetWatchedAttribute(w http.ResponseWriter, r *http.Reques
 		"total_values":       total,
 		"page":               page,
 		"page_size":          pageSize,
-		"has_invalid_utf8":   func() bool {
+		"has_invalid_utf8": func() bool {
 			if am, err := s.store.GetAttribute(ctx, waKey); err == nil {
 				return am.HasInvalidUTF8
 			}

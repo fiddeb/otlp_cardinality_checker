@@ -28,6 +28,8 @@ type Storage interface {
 	
 	// Pattern explorer - advanced log pattern analysis
 	GetLogPatterns(ctx context.Context, minCount int64, minServices int) (*models.PatternExplorerResponse, error)
+	// CountLogPatterns returns the total number of unique log templates without building the full response.
+	CountLogPatterns(ctx context.Context) (int, error)
 	
 	// Span pattern analysis - aggregate span names into patterns
 	GetSpanPatterns(ctx context.Context) (*models.SpanPatternResponse, error)
