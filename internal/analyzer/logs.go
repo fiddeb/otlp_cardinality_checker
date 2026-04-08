@@ -197,6 +197,17 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				
 				// Extract body template (create analyzer per service+severity if needed)
 				body := logRecord.GetBody().GetStringValue()
+				// Fallback: some loggers (e.g. Envoy) put the message in a "msg" or
+				// "message" attribute instead of the body field.
+				if body == "" {
+					for _, attr := range logRecord.Attributes {
+						k := attr.GetKey()
+						if k == "msg" || k == "message" {
+							body = attr.GetValue().GetStringValue()
+							break
+						}
+					}
+				}
 				if body != "" {
 					analyzerKey := key // Use same key as logMap (service+severity)
 
