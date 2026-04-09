@@ -129,6 +129,25 @@ func isVariableToken(t string) bool {
 		}
 	}
 
+	// --- Number+unit tokens like "45ms", "5s", "500µs", "3m", "2h", "200KB" ---
+	// Starts with at least one digit, ends with a known unit suffix.
+	if n >= 2 && isDigit(t[0]) {
+		i := 0
+		for i < n && isDigit(t[i]) {
+			i++
+		}
+		if i > 0 && i < n {
+			suffix := t[i:]
+			switch suffix {
+			case "ms", "s", "m", "h", "us", "ns",
+				"B", "KB", "MB", "GB", "TB",
+				"b", "kb", "mb", "gb",
+				"k", "K", "M", "G":
+				return true
+			}
+		}
+	}
+
 	return false
 }
 

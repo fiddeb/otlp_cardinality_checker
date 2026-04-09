@@ -12,6 +12,7 @@ import {
   ClipboardListIcon,
   LayoutDashboardIcon,
   SearchCodeIcon,
+  ServerIcon,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -43,6 +44,7 @@ const NAV_GROUPS = [
       { id: 'trace-patterns', label: 'Trace Patterns', icon: GitGraphIcon },
       { id: 'logs', label: 'Logs', icon: FileTextIcon },
       { id: 'attributes', label: 'Attributes', icon: () => <SearchAlertIcon className="scale-x-[-1]" /> },
+      { id: 'services', label: 'Services', icon: ServerIcon },
     ],
   },
   {
