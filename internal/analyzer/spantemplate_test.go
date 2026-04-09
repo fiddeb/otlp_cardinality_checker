@@ -17,12 +17,12 @@ func TestSpanNameAnalyzer_ExtractPattern(t *testing.T) {
 		{
 			name:     "HTTP path with numeric ID",
 			spanName: "GET /users/123",
-			expected: "GET <URL>", // URL pattern matches paths
+			expected: "GET /users/<PATH>", // http_span_path: keep verb + first literal segment
 		},
 		{
 			name:     "HTTP path with multiple IDs",
 			spanName: "POST /orders/456/items/789",
-			expected: "POST <URL>", // URL pattern matches paths
+			expected: "POST /orders/<PATH>", // http_span_path: /456 starts with digit, stop at /orders
 		},
 		{
 			name:     "gRPC method",
