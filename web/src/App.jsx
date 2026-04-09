@@ -14,6 +14,7 @@ import TemplateDetails from './components/TemplateDetails'
 import LogServiceDetails from './components/LogServiceDetails'
 import LogPatternDetails from './components/LogPatternDetails'
 import AttributesView from './components/AttributesView'
+import ServicesView from './components/ServicesView'
 import ActiveSeries from './components/ActiveSeries'
 import SessionsView from './components/SessionsView'
 import DiffView from './components/DiffView'
@@ -209,6 +210,10 @@ function App() {
 
             {activeTab === 'attributes' && (
               <AttributesView />
+            )}
+
+            {activeTab === 'services' && (
+              <ServicesView onViewService={handleViewService} />
             )}
 
             {activeTab === 'noisy-neighbors' && (
