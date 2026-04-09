@@ -21,35 +21,56 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Bump version and push tag
+      - name: Calculate next version
         id: tag_version
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: minor
-          major_string_token: "~~NO_MAJOR_BUMPS~~"
-          release_branches: main
-          pre_release_branches: develop,beta
-          tag_prefix: v
+        run: |
+          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          MAJOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f3)
+
+          COMMITS=$(git log "${LATEST}..HEAD" --pretty=format:"%s" 2>/dev/null || true)
+          if echo "$COMMITS" | grep -qE "^feat(\(.+\))?!?:"; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_tag=${NEW_TAG}" >> "$GITHUB_OUTPUT"
+
+          # Build changelog
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            git log "${LATEST}..HEAD" --pretty=format:"- %s (%h)" 2>/dev/null || true
+            echo ""
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Bumping ${LATEST} -> ${NEW_TAG}"
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.tag_version.outputs.new_tag }}"
+          git push origin "${{ steps.tag_version.outputs.new_tag }}"
 
       - name: Set up Go
-        if: steps.tag_version.outputs.new_tag
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
 
       - name: Set up Node.js
-        if: steps.tag_version.outputs.new_tag
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Build release binaries
-        if: steps.tag_version.outputs.new_tag
         run: make dist VERSION=${{ steps.tag_version.outputs.new_tag }}
 
       - name: Create Release
-        if: steps.tag_version.outputs.new_tag
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag_version.outputs.new_tag }}
