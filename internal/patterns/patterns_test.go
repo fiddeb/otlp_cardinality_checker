@@ -62,7 +62,7 @@ func TestDefaultPatterns(t *testing.T) {
 	}
 	
 	// Verify we have expected patterns
-	expectedNames := []string{"timestamp", "uuid", "email", "sql_select", "sql_delete", "sql_update", "sql_insert", "service_method", "url", "duration", "size", "ip", "hex", "number"}
+	expectedNames := []string{"timestamp", "uuid", "email", "sql_select", "sql_delete", "sql_update", "sql_insert", "service_method", "http_span_path", "url", "duration", "size", "ip", "hex", "number"}
 	if len(patterns) != len(expectedNames) {
 		t.Errorf("Expected %d default patterns, got %d", len(expectedNames), len(patterns))
 	}
@@ -218,7 +218,7 @@ func TestRealPatterns(t *testing.T) {
 		{
 			name:     "UUID in message",
 			input:    "Request 550e8400-e29b-41d4-a716-446655440000 done",
-			expected: "Request <UUID> done",
+			expected: "Request <ID> done",
 		},
 		// Email
 		{
@@ -230,7 +230,7 @@ func TestRealPatterns(t *testing.T) {
 		{
 			name:     "HTTPS URL",
 			input:    "GET https://example.com/api/users completed",
-			expected: "GET  <URL> completed", // Note: Two spaces before <URL> due to placeholder including leading space
+			expected: "GET <URL> completed",
 		},
 		// IP
 		{

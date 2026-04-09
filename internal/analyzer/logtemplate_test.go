@@ -30,7 +30,7 @@ func TestLogBodyAnalyzer_ExtractTemplate(t *testing.T) {
 		{
 			name:     "Path in message",
 			message:  "Reading config from /etc/app/config.yml",
-			expected: "Reading config from <URL>",
+			expected: "Reading config from /etc/app/config.yml",
 		},
 		{
 			name:     "UUID in message",

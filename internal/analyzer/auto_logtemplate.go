@@ -3,6 +3,7 @@ package analyzer
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -11,37 +12,69 @@ import (
 )
 
 // AutoLogBodyAnalyzer uses the autotemplate miner for log template extraction.
-// Pre-masking with regex patterns was removed: Drain generalises variable
-// tokens (IPs, numbers, UUIDs, etc.) to <*> naturally, making the regex
-// pass redundant on the log hot path.
+// Pre-masking with DrainPreMaskPatterns is applied before tokenisation to
+// normalise HTTP paths, query strings, and hex IDs so that structurally
+// identical log lines land in the same Drain cluster rather than being split
+// across multiple clusters.
 type AutoLogBodyAnalyzer struct {
-	mu        sync.RWMutex
-	miner     *autotemplate.ShardedMiner
-	templates map[string]*LogTemplate // template string -> metadata
-	total     int64
+	mu           sync.RWMutex
+	miner        *autotemplate.ShardedMiner
+	templates    map[string]*LogTemplate // template string -> metadata
+	total        int64
+	preMaskPats  []patterns.CompiledPattern
 }
 
-// NewAutoLogBodyAnalyzer creates a new auto-template analyzer
+// NewAutoLogBodyAnalyzer creates a new auto-template analyzer with the default
+// Drain pre-mask patterns.
 func NewAutoLogBodyAnalyzer(minerCfg autotemplate.Config) *AutoLogBodyAnalyzer {
-	return NewAutoLogBodyAnalyzerWithPatterns(minerCfg, nil)
+	return NewAutoLogBodyAnalyzerWithPatterns(minerCfg, patterns.DrainPreMaskPatterns())
 }
 
-// NewAutoLogBodyAnalyzerWithPatterns creates analyzer.
-// The pats parameter is accepted for API compatibility but ignored;
-// Drain generalises variable tokens without regex pre-masking.
-func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, _ []patterns.CompiledPattern) *AutoLogBodyAnalyzer {
+// NewAutoLogBodyAnalyzerWithPatterns creates an analyzer with custom pre-mask
+// patterns. Pass nil to use the default DrainPreMaskPatterns.
+func NewAutoLogBodyAnalyzerWithPatterns(minerCfg autotemplate.Config, pats []patterns.CompiledPattern) *AutoLogBodyAnalyzer {
+	if pats == nil {
+		pats = patterns.DrainPreMaskPatterns()
+	}
 	miner := autotemplate.NewShardedMiner(minerCfg)
 
 	return &AutoLogBodyAnalyzer{
-		miner:     miner,
-		templates: make(map[string]*LogTemplate),
+		miner:       miner,
+		templates:   make(map[string]*LogTemplate),
+		preMaskPats: pats,
 	}
+}
+
+// preMask applies the configured pre-mask patterns to the log body before it
+// is sent to Drain. This normalises structured fields (HTTP paths, hex IDs, etc.)
+// so that they do not fragment Drain clusters.
+func (a *AutoLogBodyAnalyzer) preMask(body string) string {
+	for _, p := range a.preMaskPats {
+		if p.RequiredSubstring != "" && !containsSubstring(body, p.RequiredSubstring) {
+			continue
+		}
+		body = p.Regex.ReplaceAllString(body, p.Placeholder)
+	}
+	return body
+}
+
+// containsSubstring is a fast pre-check used by preMask to skip regex
+// evaluation when the required substring is not present.
+func containsSubstring(s, sub string) bool {
+	if len(sub) == 0 {
+		return true
+	}
+	return strings.Contains(s, sub)
 }
 
 // ProcessMessage processes a single log body and extracts/updates template
 func (a *AutoLogBodyAnalyzer) ProcessMessage(body string) string {
+	// Apply pre-mask patterns to normalise structured fields (HTTP paths,
+	// hex IDs, query strings) before Drain tokenisation.
+	masked := a.preMask(body)
+
 	// Extract template using miner (shard-level locking inside)
-	template, _ := a.miner.Add(body)
+	template, _ := a.miner.Add(masked)
 	
 	atomic.AddInt64(&a.total, 1)
 

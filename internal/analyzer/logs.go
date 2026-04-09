@@ -113,7 +113,7 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 	// Map: service+severity -> LogMetadata
 	// Key format: "service|severity"
 	logMap := make(map[string]*models.LogMetadata)
-	
+
 	// Track which services have which severities for body template processing
 	serviceSeverities := make(map[string]map[string]bool) // service -> {severity -> true}
 
@@ -168,7 +168,7 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				metadata := logMap[key]
 				metadata.SampleCount++
 				metadata.Services[serviceName]++
-				
+
 				// Track trace/span context presence
 				if len(logRecord.TraceId) > 0 && !isEmptyBytes(logRecord.TraceId) {
 					metadata.HasTraceContext = true
@@ -176,7 +176,7 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				if len(logRecord.SpanId) > 0 && !isEmptyBytes(logRecord.SpanId) {
 					metadata.HasSpanContext = true
 				}
-				
+
 				// Track dropped attributes statistics
 				if logRecord.DroppedAttributesCount > 0 {
 					if metadata.DroppedAttributesStats == nil {
@@ -188,13 +188,13 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 						metadata.DroppedAttributesStats.MaxDropped = logRecord.DroppedAttributesCount
 					}
 				}
-				
+
 				// Track service-severity combination
 				if serviceSeverities[serviceName] == nil {
 					serviceSeverities[serviceName] = make(map[string]bool)
 				}
 				serviceSeverities[serviceName][severityText] = true
-				
+
 				// Extract body template (create analyzer per service+severity if needed)
 				body := logRecord.GetBody().GetStringValue()
 				// Fallback: some loggers (e.g. Envoy) put the message in a "msg" or
@@ -241,13 +241,13 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 							metadata.EventNames = append(metadata.EventNames, attrValue)
 						}
 					}
-					
+
 					if metadata.AttributeKeys[attrKey] == nil {
 						metadata.AttributeKeys[attrKey] = models.NewKeyMetadata()
 					}
 					metadata.AttributeKeys[attrKey].AddValue(attrValue)
 				})
-				
+
 				// Update resource key counts
 				for resKey, resValue := range resourceAttrs {
 					if metadata.ResourceKeys[resKey] != nil {
@@ -267,14 +267,14 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
 			}
 		}
-		
+
 		// Calculate percentages for resource keys
 		for _, keyMeta := range metadata.ResourceKeys {
 			if metadata.SampleCount > 0 {
 				keyMeta.Percentage = float64(keyMeta.Count) / float64(metadata.SampleCount) * 100
 			}
 		}
-		
+
 		// Add body templates for this service+severity combination.
 		// Templates are throttled: refreshed at most once per templateSyncInterval
 		// to avoid the expensive GetClusters()/tokensToString work on every batch.
@@ -305,7 +305,7 @@ func (a *LogsAnalyzer) AnalyzeWithContext(ctx context.Context, req *collogspb.Ex
 				}
 			}
 		}
-		
+
 		results = append(results, metadata)
 	}
 
