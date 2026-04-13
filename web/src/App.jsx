@@ -227,7 +227,6 @@ function App() {
                 attributeKey={selectedAttribute}
                 onBack={handleBack}
                 onViewDetails={handleViewDetails}
-                onViewLogDetails={(severity) => handleViewLogService(null, severity)}
                 onViewService={handleViewService}
               />
             )}
