@@ -208,6 +208,7 @@ func NewServer(addr string, store storage.Storage, opts ...ServerOptions) *Serve
 		r.Get("/attributes", s.listAttributes)
 		r.Get("/attributes/{key}", s.getAttribute)
 		r.Get("/attributes/{key}/services", s.getAttributeServices)
+		r.Get("/attributes/{key}/telemetry", s.getAttributeTelemetry)
 
 		// Deep watch endpoints — more specific routes before generic {key}
 		r.Post("/attributes/{key}/watch", s.handleWatchAttribute)
@@ -1335,6 +1336,75 @@ func (s *Server) getAttributeServices(w http.ResponseWriter, r *http.Request) {
 		"key":      decodedKey,
 		"services": results,
 		"total":    len(results),
+	})
+}
+
+// getAttributeTelemetry returns all signals (metrics, spans, logs) that use a given attribute key.
+// GET /api/v1/attributes/{key}/telemetry
+func (s *Server) getAttributeTelemetry(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid key encoding")
+		return
+	}
+
+	attribute, err := s.store.GetAttribute(ctx, decodedKey)
+	if err != nil {
+		s.respondError(w, http.StatusNotFound, fmt.Sprintf("Attribute not found: %v", err))
+		return
+	}
+
+	var matchedMetrics []*models.MetricMetadata
+	if metrics, err := s.store.ListMetrics(ctx, ""); err == nil {
+		for _, m := range metrics {
+			if _, ok := m.LabelKeys[decodedKey]; ok {
+				matchedMetrics = append(matchedMetrics, m)
+				continue
+			}
+			if _, ok := m.ResourceKeys[decodedKey]; ok {
+				matchedMetrics = append(matchedMetrics, m)
+			}
+		}
+	}
+
+	var matchedSpans []*models.SpanMetadata
+	if spans, err := s.store.ListSpans(ctx, ""); err == nil {
+		for _, sp := range spans {
+			if _, ok := sp.AttributeKeys[decodedKey]; ok {
+				matchedSpans = append(matchedSpans, sp)
+				continue
+			}
+			if _, ok := sp.ResourceKeys[decodedKey]; ok {
+				matchedSpans = append(matchedSpans, sp)
+			}
+		}
+	}
+
+	var matchedLogs []*models.LogMetadata
+	if logs, err := s.store.ListLogs(ctx, ""); err == nil {
+		for _, l := range logs {
+			if _, ok := l.AttributeKeys[decodedKey]; ok {
+				matchedLogs = append(matchedLogs, l)
+				continue
+			}
+			if _, ok := l.ResourceKeys[decodedKey]; ok {
+				matchedLogs = append(matchedLogs, l)
+			}
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"key":          decodedKey,
+		"attribute":    attribute,
+		"metrics":      matchedMetrics,
+		"metric_count": len(matchedMetrics),
+		"spans":        matchedSpans,
+		"span_count":   len(matchedSpans),
+		"logs":         matchedLogs,
+		"log_count":    len(matchedLogs),
 	})
 }
 

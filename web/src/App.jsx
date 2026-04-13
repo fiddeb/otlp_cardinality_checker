@@ -14,6 +14,7 @@ import TemplateDetails from './components/TemplateDetails'
 import LogServiceDetails from './components/LogServiceDetails'
 import LogPatternDetails from './components/LogPatternDetails'
 import AttributesView from './components/AttributesView'
+import AttributeExplorer from './components/AttributeExplorer'
 import ServicesView from './components/ServicesView'
 import ActiveSeries from './components/ActiveSeries'
 import SessionsView from './components/SessionsView'
@@ -31,6 +32,7 @@ function App() {
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [selectedLogService, setSelectedLogService] = useState(null)
   const [selectedLogPattern, setSelectedLogPattern] = useState(null)
+  const [selectedAttribute, setSelectedAttribute] = useState(null)
   const [navigationHistory, setNavigationHistory] = useState([])
   const [currentSessionName, setCurrentSessionName] = useState(null)
   const [diffFromSession, setDiffFromSession] = useState(null)
@@ -93,7 +95,8 @@ function App() {
       selectedService,
       selectedTemplate,
       selectedLogService,
-      selectedLogPattern
+      selectedLogPattern,
+      selectedAttribute
     }
     setNavigationHistory(prev => [...prev, currentState])
     
@@ -107,6 +110,7 @@ function App() {
     setSelectedTemplate(state.selectedTemplate || null)
     setSelectedLogService(state.selectedLogService || null)
     setSelectedLogPattern(state.selectedLogPattern || null)
+    setSelectedAttribute(state.selectedAttribute || null)
   }
 
   const handleViewDetails = (type, name) => {
@@ -129,6 +133,10 @@ function App() {
     pushNavigation('log-pattern-details', { selectedLogPattern: { serviceName, severity, template } })
   }
 
+  const handleViewAttribute = (attributeKey) => {
+    pushNavigation('attribute-explorer', { selectedAttribute: attributeKey })
+  }
+
   const handleBack = () => {
     if (navigationHistory.length === 0) {
       // No history, go to dashboard
@@ -137,6 +145,7 @@ function App() {
       setSelectedTemplate(null)
       setSelectedLogService(null)
       setSelectedLogPattern(null)
+      setSelectedAttribute(null)
       setActiveTab('dashboard')
       return
     }
@@ -152,6 +161,7 @@ function App() {
     setSelectedTemplate(previousState.selectedTemplate)
     setSelectedLogService(previousState.selectedLogService)
     setSelectedLogPattern(previousState.selectedLogPattern)
+    setSelectedAttribute(previousState.selectedAttribute)
   }
 
   const handleBackToServiceDetails = () => {
@@ -209,7 +219,17 @@ function App() {
             )}
 
             {activeTab === 'attributes' && (
-              <AttributesView />
+              <AttributesView onViewAttribute={handleViewAttribute} />
+            )}
+
+            {activeTab === 'attribute-explorer' && selectedAttribute && (
+              <AttributeExplorer
+                attributeKey={selectedAttribute}
+                onBack={handleBack}
+                onViewDetails={handleViewDetails}
+                onViewLogDetails={(severity) => handleViewLogService(null, severity)}
+                onViewService={handleViewService}
+              />
             )}
 
             {activeTab === 'services' && (
