@@ -134,22 +134,22 @@ func (a *MetricsAnalyzer) analyzeMetricWithContext(
 	// Extract data point attributes based on metric type
 	switch data := metric.Data.(type) {
 	case *metricspb.Metric_Gauge:
-		a.extractGaugeKeys(ctx, catalog, data.Gauge, metadata, serviceName)
+		a.extractGaugeKeys(ctx, catalog, data.Gauge, metadata, resourceAttrs, serviceName)
 	case *metricspb.Metric_Sum:
-		a.extractSumKeys(ctx, catalog, data.Sum, metadata, serviceName)
+		a.extractSumKeys(ctx, catalog, data.Sum, metadata, resourceAttrs, serviceName)
 	case *metricspb.Metric_Histogram:
-		a.extractHistogramKeys(ctx, catalog, data.Histogram, metadata, serviceName)
+		a.extractHistogramKeys(ctx, catalog, data.Histogram, metadata, resourceAttrs, serviceName)
 	case *metricspb.Metric_ExponentialHistogram:
-		a.extractExponentialHistogramKeys(ctx, catalog, data.ExponentialHistogram, metadata, serviceName)
+		a.extractExponentialHistogramKeys(ctx, catalog, data.ExponentialHistogram, metadata, resourceAttrs, serviceName)
 	case *metricspb.Metric_Summary:
-		a.extractSummaryKeys(ctx, catalog, data.Summary, metadata, serviceName)
+		a.extractSummaryKeys(ctx, catalog, data.Summary, metadata, resourceAttrs, serviceName)
 	}
 
 	return metadata
 }
 
 // extractGaugeKeys extracts label keys from gauge data points.
-func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, catalog AttributeCatalog, gauge *metricspb.Gauge, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, catalog AttributeCatalog, gauge *metricspb.Gauge, metadata *models.MetricMetadata, resourceAttrs map[string]string, serviceName string) {
 	for _, dp := range gauge.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -158,8 +158,8 @@ func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, catalog Attribut
 
 		attrs := extractAttributes(dp.Attributes)
 		
-		// Track unique series combination
-		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		// Track unique series combination (resource attrs included for correct identity)
+		fingerprint := models.CreateSeriesFingerprintWithResource(resourceAttrs, attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		for key, value := range attrs {
@@ -184,7 +184,7 @@ func (a *MetricsAnalyzer) extractGaugeKeys(ctx context.Context, catalog Attribut
 }
 
 // extractSumKeys extracts label keys from sum data points.
-func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, catalog AttributeCatalog, sum *metricspb.Sum, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, catalog AttributeCatalog, sum *metricspb.Sum, metadata *models.MetricMetadata, resourceAttrs map[string]string, serviceName string) {
 	for _, dp := range sum.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -193,8 +193,8 @@ func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, catalog AttributeC
 
 		attrs := extractAttributes(dp.Attributes)
 		
-		// Track unique series combination
-		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		// Track unique series combination (resource attrs included for correct identity)
+		fingerprint := models.CreateSeriesFingerprintWithResource(resourceAttrs, attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		for key, value := range attrs {
@@ -219,7 +219,7 @@ func (a *MetricsAnalyzer) extractSumKeys(ctx context.Context, catalog AttributeC
 }
 
 // extractHistogramKeys extracts label keys from histogram data points.
-func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, catalog AttributeCatalog, histogram *metricspb.Histogram, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, catalog AttributeCatalog, histogram *metricspb.Histogram, metadata *models.MetricMetadata, resourceAttrs map[string]string, serviceName string) {
 	for _, dp := range histogram.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -228,8 +228,8 @@ func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, catalog Attr
 
 		attrs := extractAttributes(dp.Attributes)
 		
-		// Track unique series combination
-		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		// Track unique series combination (resource attrs included for correct identity)
+		fingerprint := models.CreateSeriesFingerprintWithResource(resourceAttrs, attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		for key, value := range attrs {
@@ -254,7 +254,7 @@ func (a *MetricsAnalyzer) extractHistogramKeys(ctx context.Context, catalog Attr
 }
 
 // extractExponentialHistogramKeys extracts label keys from exponential histogram data points.
-func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, catalog AttributeCatalog, histogram *metricspb.ExponentialHistogram, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, catalog AttributeCatalog, histogram *metricspb.ExponentialHistogram, metadata *models.MetricMetadata, resourceAttrs map[string]string, serviceName string) {
 	for _, dp := range histogram.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -263,8 +263,8 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, c
 
 		attrs := extractAttributes(dp.Attributes)
 		
-		// Track unique series combination
-		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		// Track unique series combination (resource attrs included for correct identity)
+		fingerprint := models.CreateSeriesFingerprintWithResource(resourceAttrs, attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		for key, value := range attrs {
@@ -289,7 +289,7 @@ func (a *MetricsAnalyzer) extractExponentialHistogramKeys(ctx context.Context, c
 }
 
 // extractSummaryKeys extracts label keys from summary data points.
-func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, catalog AttributeCatalog, summary *metricspb.Summary, metadata *models.MetricMetadata, serviceName string) {
+func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, catalog AttributeCatalog, summary *metricspb.Summary, metadata *models.MetricMetadata, resourceAttrs map[string]string, serviceName string) {
 	for _, dp := range summary.DataPoints {
 		metadata.SampleCount++
 		if serviceName != "" {
@@ -298,8 +298,8 @@ func (a *MetricsAnalyzer) extractSummaryKeys(ctx context.Context, catalog Attrib
 
 		attrs := extractAttributes(dp.Attributes)
 		
-		// Track unique series combination
-		fingerprint := models.CreateSeriesFingerprintFast(attrs)
+		// Track unique series combination (resource attrs included for correct identity)
+		fingerprint := models.CreateSeriesFingerprintWithResource(resourceAttrs, attrs)
 		metadata.AddSeriesFingerprint(fingerprint)
 		
 		for key, value := range attrs {
