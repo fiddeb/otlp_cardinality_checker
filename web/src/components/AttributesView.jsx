@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 const MAX_WATCHED_FIELDS = 10
 
-function AttributesView() {
+function AttributesView({ onViewAttribute }) {
   const [attributes, setAttributes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -306,23 +306,16 @@ function AttributesView() {
             <React.Fragment key={idx}>
             <TableRow style={attr.has_invalid_utf8 ? { backgroundColor: 'rgba(220, 38, 38, 0.07)' } : undefined}>
               <TableCell>
-                {attr.watched ? (
-                  <Button
-                    variant="link"
-                    className="h-auto p-0 font-mono font-normal"
-                    style={attr.has_invalid_utf8 ? { color: 'var(--destructive)' } : undefined}
-                    onClick={() => setExplorerKey(explorerKey === attr.key ? null : attr.key)}
-                    title="Open Value Explorer"
-                  >
-                    {attr.key}
-                    {attr.has_invalid_utf8 && <span className="ml-1" title="One or more values contained invalid UTF-8 bytes (replaced with \uFFFD)">⚠</span>}
-                  </Button>
-                ) : (
-                  <code className="attribute-key" style={attr.has_invalid_utf8 ? { color: 'var(--destructive)' } : undefined}>
-                    {attr.key}
-                    {attr.has_invalid_utf8 && <span className="ml-1" title="One or more values contained invalid UTF-8 bytes (replaced with \uFFFD)">⚠</span>}
-                  </code>
-                )}
+                <Button
+                  variant="link"
+                  className="h-auto p-0 font-mono font-normal"
+                  style={attr.has_invalid_utf8 ? { color: 'var(--destructive)' } : undefined}
+                  onClick={() => onViewAttribute?.(attr.key)}
+                  title="View attribute telemetry overview"
+                >
+                  {attr.key}
+                  {attr.has_invalid_utf8 && <span className="ml-1" title="One or more values contained invalid UTF-8 bytes (replaced with \uFFFD)">⚠</span>}
+                </Button>
               </TableCell>
               <TableCell>
                 <Badge variant={getCardinalityBadge(attr.estimated_cardinality) === 'high' ? 'destructive' : getCardinalityBadge(attr.estimated_cardinality) === 'medium' ? 'secondary' : 'outline'}>

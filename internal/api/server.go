@@ -208,6 +208,7 @@ func NewServer(addr string, store storage.Storage, opts ...ServerOptions) *Serve
 		r.Get("/attributes", s.listAttributes)
 		r.Get("/attributes/{key}", s.getAttribute)
 		r.Get("/attributes/{key}/services", s.getAttributeServices)
+		r.Get("/attributes/{key}/telemetry", s.getAttributeTelemetry)
 
 		// Deep watch endpoints — more specific routes before generic {key}
 		r.Post("/attributes/{key}/watch", s.handleWatchAttribute)
@@ -1335,6 +1336,122 @@ func (s *Server) getAttributeServices(w http.ResponseWriter, r *http.Request) {
 		"key":      decodedKey,
 		"services": results,
 		"total":    len(results),
+	})
+}
+
+// getAttributeTelemetry returns all signals (metrics, spans, logs) that use a given attribute key.
+// GET /api/v1/attributes/{key}/telemetry
+func (s *Server) getAttributeTelemetry(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := chi.URLParam(r, "key")
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid key encoding")
+		return
+	}
+
+	attribute, err := s.store.GetAttribute(ctx, decodedKey)
+	if err != nil {
+		s.respondError(w, http.StatusNotFound, fmt.Sprintf("Attribute not found: %v", err))
+		return
+	}
+
+	// Helper to pick the KeyMetadata for our attribute from a signal.
+	// Returns the combined count and max cardinality when the key appears
+	// in both data and resource scopes for the same signal.
+	pickKeyMeta := func(dataKeys, resourceKeys map[string]*models.KeyMetadata) (count int64, cardinality int64) {
+		dkm, inData := dataKeys[decodedKey]
+		rkm, inResource := resourceKeys[decodedKey]
+		if inData {
+			count += dkm.Count
+			cardinality = dkm.EstimatedCardinality
+		}
+		if inResource {
+			count += rkm.Count
+			if rkm.EstimatedCardinality > cardinality {
+				cardinality = rkm.EstimatedCardinality
+			}
+		}
+		return count, cardinality
+	}
+
+	type metricEntry struct {
+		Name                 string           `json:"name"`
+		Type                 string           `json:"type"`
+		Services             map[string]int64 `json:"services"`
+		AttributeCount       int64            `json:"attribute_count"`
+		AttributeCardinality int64            `json:"attribute_cardinality"`
+	}
+
+	type spanEntry struct {
+		Name                 string           `json:"name"`
+		Kind                 string           `json:"kind"`
+		Services             map[string]int64 `json:"services"`
+		AttributeCount       int64            `json:"attribute_count"`
+		AttributeCardinality int64            `json:"attribute_cardinality"`
+	}
+
+	type logEntry struct {
+		Severity             string           `json:"severity"`
+		Services             map[string]int64 `json:"services"`
+		AttributeCount       int64            `json:"attribute_count"`
+		AttributeCardinality int64            `json:"attribute_cardinality"`
+	}
+
+	var matchedMetrics []metricEntry
+	if metrics, err := s.store.ListMetrics(ctx, ""); err == nil {
+		for _, m := range metrics {
+			if cnt, card := pickKeyMeta(m.LabelKeys, m.ResourceKeys); cnt > 0 {
+				matchedMetrics = append(matchedMetrics, metricEntry{
+					Name:                 m.Name,
+					Type:                 m.GetType(),
+					Services:             m.Services,
+					AttributeCount:       cnt,
+					AttributeCardinality: card,
+				})
+			}
+		}
+	}
+
+	var matchedSpans []spanEntry
+	if spans, err := s.store.ListSpans(ctx, ""); err == nil {
+		for _, sp := range spans {
+			if cnt, card := pickKeyMeta(sp.AttributeKeys, sp.ResourceKeys); cnt > 0 {
+				matchedSpans = append(matchedSpans, spanEntry{
+					Name:                 sp.Name,
+					Kind:                 sp.KindName,
+					Services:             sp.Services,
+					AttributeCount:       cnt,
+					AttributeCardinality: card,
+				})
+			}
+		}
+	}
+
+	var matchedLogs []logEntry
+	if logs, err := s.store.ListLogs(ctx, ""); err == nil {
+		for _, l := range logs {
+			if cnt, card := pickKeyMeta(l.AttributeKeys, l.ResourceKeys); cnt > 0 {
+				matchedLogs = append(matchedLogs, logEntry{
+					Severity:             l.Severity,
+					Services:             l.Services,
+					AttributeCount:       cnt,
+					AttributeCardinality: card,
+				})
+			}
+		}
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"key":          decodedKey,
+		"attribute":    attribute,
+		"metrics":      matchedMetrics,
+		"metric_count": len(matchedMetrics),
+		"spans":        matchedSpans,
+		"span_count":   len(matchedSpans),
+		"logs":         matchedLogs,
+		"log_count":    len(matchedLogs),
 	})
 }
 
