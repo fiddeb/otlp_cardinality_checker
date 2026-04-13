@@ -54,31 +54,29 @@ jobs:
 
           echo "Releasing ${LATEST} -> ${NEW_TAG}"
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build release binaries
+        run: make dist VERSION=${{ steps.tag_version.outputs.new_tag }}
+
       - name: Create and push tag
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ steps.tag_version.outputs.new_tag }}"
           git push origin "${{ steps.tag_version.outputs.new_tag }}"
 
-      - name: Set up Go
-        if: steps.tag_version.outputs.new_tag
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-
-      - name: Set up Node.js
-        if: steps.tag_version.outputs.new_tag
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Build release binaries
-        if: steps.tag_version.outputs.new_tag
-        run: make dist VERSION=${{ steps.tag_version.outputs.new_tag }}
-
       - name: Create Release
-        if: steps.tag_version.outputs.new_tag
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag_version.outputs.new_tag }}

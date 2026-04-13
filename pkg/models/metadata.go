@@ -503,6 +503,58 @@ func (k *KeyMetadata) releaseHLL() {
 	}
 }
 
+// MergeKeyMetadata merges other into existing, unioning HLL sketches, value
+// samples, and taint flags. Caller must NOT hold existing.mu. After the call
+// the other KeyMetadata's HLL (if any) has been released back to the pool and
+// must not be used.
+func MergeKeyMetadata(existing, other *KeyMetadata) {
+	existing.mu.Lock()
+	existing.Count += other.Count
+
+	// Merge HLL sketches, handling lazy initialization on either side.
+	if other.hll != nil {
+		if existing.hll == nil {
+			existing.hll = hyperloglog.New(10)
+			for _, s := range existing.ValueSamples {
+				existing.hll.Add(s)
+			}
+		}
+		existing.hll.Merge(other.hll) //nolint:errcheck
+		existing.EstimatedCardinality = int64(existing.hll.Count())
+	} else if existing.hll != nil {
+		for _, s := range other.ValueSamples {
+			existing.hll.Add(s)
+		}
+		existing.EstimatedCardinality = int64(existing.hll.Count())
+	}
+
+	// Propagate invalid-UTF-8 flag (sticky: once tainted, stays tainted).
+	if other.HasInvalidUTF8 {
+		existing.HasInvalidUTF8 = true
+	}
+
+	// Merge value samples (keep first N unique).
+	for _, sample := range other.ValueSamples {
+		if len(existing.ValueSamples) >= existing.MaxSamples {
+			break
+		}
+		found := false
+		for _, existingSample := range existing.ValueSamples {
+			if existingSample == sample {
+				found = true
+				break
+			}
+		}
+		if !found {
+			existing.ValueSamples = append(existing.ValueSamples, sample)
+		}
+	}
+	existing.mu.Unlock()
+
+	// Release the merged-from HLL back to pool.
+	other.releaseHLL()
+}
+
 // MergeMetricMetadata merges another MetricMetadata into this one.
 // This is used when observing the same metric with different label sets.
 func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
@@ -515,54 +567,7 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	// Merge label keys
 	for key, otherKeyMeta := range other.LabelKeys {
 		if existing, exists := m.LabelKeys[key]; exists {
-			existing.mu.Lock()
-			existing.Count += otherKeyMeta.Count
-
-			// Merge HLL sketches, handling lazy initialization on either side.
-			if otherKeyMeta.hll != nil {
-				if existing.hll == nil {
-					// Lazy-init from existing samples before merging.
-					existing.hll = hyperloglog.New(10)
-					for _, s := range existing.ValueSamples {
-						existing.hll.Add(s)
-					}
-				}
-				existing.hll.Merge(otherKeyMeta.hll) //nolint:errcheck
-				existing.EstimatedCardinality = int64(existing.hll.Count())
-			} else if existing.hll != nil {
-				// Other has no HLL — add its samples to existing HLL.
-				for _, s := range otherKeyMeta.ValueSamples {
-					existing.hll.Add(s)
-				}
-				existing.EstimatedCardinality = int64(existing.hll.Count())
-			}
-			// Both nil: cardinality tracked exactly via ValueSamples — no HLL update needed.
-
-			// Propagate invalid-UTF-8 flag (sticky: once tainted, stays tainted)
-			if otherKeyMeta.HasInvalidUTF8 {
-				existing.HasInvalidUTF8 = true
-			}
-
-			// Merge value samples (keep first N unique)
-			for _, sample := range otherKeyMeta.ValueSamples {
-				if len(existing.ValueSamples) >= existing.MaxSamples {
-					break
-				}
-				// Check if sample already exists
-				found := false
-				for _, existingSample := range existing.ValueSamples {
-					if existingSample == sample {
-						found = true
-						break
-					}
-				}
-				if !found {
-					existing.ValueSamples = append(existing.ValueSamples, sample)
-				}
-			}
-			existing.mu.Unlock()
-			// Release the merged-from HLL back to pool.
-			otherKeyMeta.releaseHLL()
+			MergeKeyMetadata(existing, otherKeyMeta)
 		} else {
 			m.LabelKeys[key] = otherKeyMeta
 		}
@@ -571,54 +576,7 @@ func (m *MetricMetadata) MergeMetricMetadata(other *MetricMetadata) {
 	// Merge resource keys
 	for key, otherKeyMeta := range other.ResourceKeys {
 		if existing, exists := m.ResourceKeys[key]; exists {
-			existing.mu.Lock()
-			existing.Count += otherKeyMeta.Count
-
-			// Merge HLL sketches, handling lazy initialization on either side.
-			if otherKeyMeta.hll != nil {
-				if existing.hll == nil {
-					// Lazy-init from existing samples before merging.
-					existing.hll = hyperloglog.New(10)
-					for _, s := range existing.ValueSamples {
-						existing.hll.Add(s)
-					}
-				}
-				existing.hll.Merge(otherKeyMeta.hll) //nolint:errcheck
-				existing.EstimatedCardinality = int64(existing.hll.Count())
-			} else if existing.hll != nil {
-				// Other has no HLL — add its samples to existing HLL.
-				for _, s := range otherKeyMeta.ValueSamples {
-					existing.hll.Add(s)
-				}
-				existing.EstimatedCardinality = int64(existing.hll.Count())
-			}
-			// Both nil: cardinality tracked exactly via ValueSamples — no HLL update needed.
-
-			// Propagate invalid-UTF-8 flag
-			if otherKeyMeta.HasInvalidUTF8 {
-				existing.HasInvalidUTF8 = true
-			}
-
-			// Merge value samples (keep first N unique)
-			for _, sample := range otherKeyMeta.ValueSamples {
-				if len(existing.ValueSamples) >= existing.MaxSamples {
-					break
-				}
-				// Check if sample already exists
-				found := false
-				for _, existingSample := range existing.ValueSamples {
-					if existingSample == sample {
-						found = true
-						break
-					}
-				}
-				if !found {
-					existing.ValueSamples = append(existing.ValueSamples, sample)
-				}
-			}
-			existing.mu.Unlock()
-			// Release the merged-from HLL back to pool.
-			otherKeyMeta.releaseHLL()
+			MergeKeyMetadata(existing, otherKeyMeta)
 		} else {
 			m.ResourceKeys[key] = otherKeyMeta
 		}

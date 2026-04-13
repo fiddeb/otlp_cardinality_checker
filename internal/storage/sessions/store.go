@@ -314,22 +314,45 @@ func (s *Store) listMetadataLocked() ([]*models.SessionMetadata, error) {
 	return sessions, nil
 }
 
-// writeGzip writes data to a gzip-compressed file.
+// writeGzip writes data to a gzip-compressed file atomically.
+// It writes to a temporary file in the same directory and renames on success,
+// so a crash mid-write cannot corrupt the target file.
 func (s *Store) writeGzip(path string, data []byte) error {
-	file, err := os.Create(path)
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-session-*")
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	tmpPath := tmp.Name()
 
-	gw := gzip.NewWriter(file)
-	defer gw.Close()
+	// Clean up temp file on any error path.
+	success := false
+	defer func() {
+		if !success {
+			tmp.Close()
+			os.Remove(tmpPath)
+		}
+	}()
 
+	gw := gzip.NewWriter(tmp)
 	if _, err := gw.Write(data); err != nil {
 		return err
 	}
+	if err := gw.Close(); err != nil {
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
 
-	return gw.Close()
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	success = true
+	return nil
 }
 
 // readGzip reads data from a gzip-compressed file.
