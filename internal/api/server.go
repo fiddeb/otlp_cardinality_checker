@@ -1357,41 +1357,81 @@ func (s *Server) getAttributeTelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var matchedMetrics []*models.MetricMetadata
+	// Helper to pick the KeyMetadata for our attribute from a signal.
+	// Returns the count and cardinality specific to this attribute in this signal.
+	pickKeyMeta := func(dataKeys, resourceKeys map[string]*models.KeyMetadata) (count int64, cardinality int64) {
+		if km, ok := dataKeys[decodedKey]; ok {
+			return km.Count, km.EstimatedCardinality
+		}
+		if km, ok := resourceKeys[decodedKey]; ok {
+			return km.Count, km.EstimatedCardinality
+		}
+		return 0, 0
+	}
+
+	type metricEntry struct {
+		Name                 string           `json:"name"`
+		Type                 string           `json:"type"`
+		Services             map[string]int64 `json:"services"`
+		AttributeCount       int64            `json:"attribute_count"`
+		AttributeCardinality int64            `json:"attribute_cardinality"`
+	}
+
+	type spanEntry struct {
+		Name                 string           `json:"name"`
+		Kind                 string           `json:"kind"`
+		Services             map[string]int64 `json:"services"`
+		AttributeCount       int64            `json:"attribute_count"`
+		AttributeCardinality int64            `json:"attribute_cardinality"`
+	}
+
+	type logEntry struct {
+		Severity             string           `json:"severity"`
+		Services             map[string]int64 `json:"services"`
+		AttributeCount       int64            `json:"attribute_count"`
+		AttributeCardinality int64            `json:"attribute_cardinality"`
+	}
+
+	var matchedMetrics []metricEntry
 	if metrics, err := s.store.ListMetrics(ctx, ""); err == nil {
 		for _, m := range metrics {
-			if _, ok := m.LabelKeys[decodedKey]; ok {
-				matchedMetrics = append(matchedMetrics, m)
-				continue
-			}
-			if _, ok := m.ResourceKeys[decodedKey]; ok {
-				matchedMetrics = append(matchedMetrics, m)
+			if cnt, card := pickKeyMeta(m.LabelKeys, m.ResourceKeys); cnt > 0 {
+				matchedMetrics = append(matchedMetrics, metricEntry{
+					Name:                 m.Name,
+					Type:                 m.GetType(),
+					Services:             m.Services,
+					AttributeCount:       cnt,
+					AttributeCardinality: card,
+				})
 			}
 		}
 	}
 
-	var matchedSpans []*models.SpanMetadata
+	var matchedSpans []spanEntry
 	if spans, err := s.store.ListSpans(ctx, ""); err == nil {
 		for _, sp := range spans {
-			if _, ok := sp.AttributeKeys[decodedKey]; ok {
-				matchedSpans = append(matchedSpans, sp)
-				continue
-			}
-			if _, ok := sp.ResourceKeys[decodedKey]; ok {
-				matchedSpans = append(matchedSpans, sp)
+			if cnt, card := pickKeyMeta(sp.AttributeKeys, sp.ResourceKeys); cnt > 0 {
+				matchedSpans = append(matchedSpans, spanEntry{
+					Name:                 sp.Name,
+					Kind:                 sp.KindName,
+					Services:             sp.Services,
+					AttributeCount:       cnt,
+					AttributeCardinality: card,
+				})
 			}
 		}
 	}
 
-	var matchedLogs []*models.LogMetadata
+	var matchedLogs []logEntry
 	if logs, err := s.store.ListLogs(ctx, ""); err == nil {
 		for _, l := range logs {
-			if _, ok := l.AttributeKeys[decodedKey]; ok {
-				matchedLogs = append(matchedLogs, l)
-				continue
-			}
-			if _, ok := l.ResourceKeys[decodedKey]; ok {
-				matchedLogs = append(matchedLogs, l)
+			if cnt, card := pickKeyMeta(l.AttributeKeys, l.ResourceKeys); cnt > 0 {
+				matchedLogs = append(matchedLogs, logEntry{
+					Severity:             l.Severity,
+					Services:             l.Services,
+					AttributeCount:       cnt,
+					AttributeCardinality: card,
+				})
 			}
 		}
 	}

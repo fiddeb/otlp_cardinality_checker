@@ -246,7 +246,7 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">{m.sample_count?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{m.attribute_count?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -291,7 +291,7 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">{sp.sample_count?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{sp.attribute_count?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -334,7 +334,7 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">{l.sample_count?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{l.attribute_count?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               )}
