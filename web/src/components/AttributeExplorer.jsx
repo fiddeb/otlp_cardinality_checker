@@ -225,19 +225,27 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Services</TableHead>
                 <TableHead className="text-right">Samples</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedMetrics.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">No metrics use this attribute</TableCell>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">No metrics use this attribute</TableCell>
                 </TableRow>
               ) : (
                 paginatedMetrics.map(m => (
                   <TableRow key={m.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails?.('metrics', m.name)}>
                     <TableCell className="font-mono text-sm text-primary">{m.name}</TableCell>
                     <TableCell><Badge variant="outline">{m.type}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.keys(m.services || {}).sort().map(svc => (
+                          <Badge key={svc} variant="outline" className="text-xs font-mono font-normal">{svc}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{m.sample_count?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
@@ -262,19 +270,27 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Kind</TableHead>
+                <TableHead>Services</TableHead>
                 <TableHead className="text-right">Samples</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedSpans.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">No spans use this attribute</TableCell>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">No spans use this attribute</TableCell>
                 </TableRow>
               ) : (
                 paginatedSpans.map(sp => (
                   <TableRow key={sp.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails?.('spans', sp.name)}>
                     <TableCell className="font-mono text-sm text-primary">{sp.name}</TableCell>
                     <TableCell><Badge variant="outline">{sp.kind}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.keys(sp.services || {}).sort().map(svc => (
+                          <Badge key={svc} variant="outline" className="text-xs font-mono font-normal">{svc}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{sp.sample_count?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
@@ -298,18 +314,26 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
             <TableHeader>
               <TableRow>
                 <TableHead>Severity</TableHead>
+                <TableHead>Services</TableHead>
                 <TableHead className="text-right">Samples</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center text-muted-foreground">No logs use this attribute</TableCell>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">No logs use this attribute</TableCell>
                 </TableRow>
               ) : (
                 paginatedLogs.map(l => (
                   <TableRow key={l.severity} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewLogDetails ? onViewLogDetails(l.severity) : onViewDetails?.('logs', l.severity)}>
                     <TableCell className="font-medium text-primary">{l.severity}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.keys(l.services || {}).sort().map(svc => (
+                          <Badge key={svc} variant="outline" className="text-xs font-mono font-normal">{svc}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{l.sample_count?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
