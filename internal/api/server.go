@@ -995,35 +995,47 @@ func (s *Server) getServiceAttributes(w http.ResponseWriter, r *http.Request) {
 
 	seen := make(map[string]struct{})
 
-	if metrics, err := s.store.ListMetrics(ctx, decodedName); err == nil {
+	// Scan ALL signals unfiltered. Resource keys on a signal are only populated
+	// from the first resource that created it in memory (first-writer-wins), so
+	// filtering by service before looking at ResourceKeys would miss resource
+	// attributes for services that weren't the first to send a given signal name.
+	// Instead we collect: label/attribute keys from service-filtered signals, and
+	// resource keys from ALL signals that list the service in their Services map.
+	if metrics, err := s.store.ListMetrics(ctx, ""); err == nil {
 		for _, m := range metrics {
-			for k := range m.LabelKeys {
-				seen[k] = struct{}{}
-			}
-			for k := range m.ResourceKeys {
-				seen[k] = struct{}{}
+			if _, hasService := m.Services[decodedName]; hasService {
+				for k := range m.LabelKeys {
+					seen[k] = struct{}{}
+				}
+				for k := range m.ResourceKeys {
+					seen[k] = struct{}{}
+				}
 			}
 		}
 	}
 
-	if spans, err := s.store.ListSpans(ctx, decodedName); err == nil {
+	if spans, err := s.store.ListSpans(ctx, ""); err == nil {
 		for _, sp := range spans {
-			for k := range sp.AttributeKeys {
-				seen[k] = struct{}{}
-			}
-			for k := range sp.ResourceKeys {
-				seen[k] = struct{}{}
+			if _, hasService := sp.Services[decodedName]; hasService {
+				for k := range sp.AttributeKeys {
+					seen[k] = struct{}{}
+				}
+				for k := range sp.ResourceKeys {
+					seen[k] = struct{}{}
+				}
 			}
 		}
 	}
 
-	if logs, err := s.store.ListLogs(ctx, decodedName); err == nil {
+	if logs, err := s.store.ListLogs(ctx, ""); err == nil {
 		for _, l := range logs {
-			for k := range l.AttributeKeys {
-				seen[k] = struct{}{}
-			}
-			for k := range l.ResourceKeys {
-				seen[k] = struct{}{}
+			if _, hasService := l.Services[decodedName]; hasService {
+				for k := range l.AttributeKeys {
+					seen[k] = struct{}{}
+				}
+				for k := range l.ResourceKeys {
+					seen[k] = struct{}{}
+				}
 			}
 		}
 	}
