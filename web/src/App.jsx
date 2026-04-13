@@ -226,7 +226,6 @@ function App() {
               <AttributeExplorer
                 attributeKey={selectedAttribute}
                 onBack={handleBack}
-                onViewDetails={handleViewDetails}
                 onViewService={handleViewService}
               />
             )}

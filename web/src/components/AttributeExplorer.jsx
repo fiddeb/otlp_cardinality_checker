@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ArrowLeftIcon } from 'lucide-react'
 
-function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetails, onViewService }) {
+function AttributeExplorer({ attributeKey, onBack, onViewService }) {
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -226,7 +226,7 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Services</TableHead>
-                <TableHead className="text-right">Samples</TableHead>
+                <TableHead className="text-right">Observations</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -236,8 +236,8 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                 </TableRow>
               ) : (
                 paginatedMetrics.map(m => (
-                  <TableRow key={m.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails?.('metrics', m.name)}>
-                    <TableCell className="font-mono text-sm text-primary">{m.name}</TableCell>
+                  <TableRow key={m.name}>
+                    <TableCell className="font-mono text-sm">{m.name}</TableCell>
                     <TableCell><Badge variant="outline">{m.type}</Badge></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -271,7 +271,7 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                 <TableHead>Name</TableHead>
                 <TableHead>Kind</TableHead>
                 <TableHead>Services</TableHead>
-                <TableHead className="text-right">Samples</TableHead>
+                <TableHead className="text-right">Observations</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -281,8 +281,8 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                 </TableRow>
               ) : (
                 paginatedSpans.map(sp => (
-                  <TableRow key={sp.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails?.('spans', sp.name)}>
-                    <TableCell className="font-mono text-sm text-primary">{sp.name}</TableCell>
+                  <TableRow key={sp.name}>
+                    <TableCell className="font-mono text-sm">{sp.name}</TableCell>
                     <TableCell><Badge variant="outline">{sp.kind}</Badge></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -315,7 +315,7 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
               <TableRow>
                 <TableHead>Severity</TableHead>
                 <TableHead>Services</TableHead>
-                <TableHead className="text-right">Samples</TableHead>
+                <TableHead className="text-right">Observations</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -325,8 +325,8 @@ function AttributeExplorer({ attributeKey, onBack, onViewDetails, onViewLogDetai
                 </TableRow>
               ) : (
                 paginatedLogs.map(l => (
-                  <TableRow key={l.severity} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewLogDetails ? onViewLogDetails(l.severity) : onViewDetails?.('logs', l.severity)}>
-                    <TableCell className="font-medium text-primary">{l.severity}</TableCell>
+                  <TableRow key={l.severity}>
+                    <TableCell className="font-medium">{l.severity}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {Object.keys(l.services || {}).sort().map(svc => (
