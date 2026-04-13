@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -266,14 +267,22 @@ func (h *SessionHandler) LoadSession(w http.ResponseWriter, r *http.Request) {
 
 	// If we have store access, perform actual load (clear + merge)
 	if h.storeAccess != nil {
-		// Clear existing data
+		// Phase 1: Unmarshal all session data BEFORE clearing.
+		// If deserialization fails the store remains untouched.
+		unmarshaled, err := h.unmarshalSession(session)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to deserialize session: "+err.Error())
+			return
+		}
+
+		// Phase 2: Clear existing data.
 		if err := h.storeAccess.Clear(ctx); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to clear store: "+err.Error())
 			return
 		}
 
-		// Merge session data into store
-		loadedCounts, err := h.performMerge(ctx, session)
+		// Phase 3: Merge pre-validated data into store.
+		loadedCounts, err := h.mergeUnmarshaled(ctx, unmarshaled)
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to load session data: "+err.Error())
 			return
@@ -354,8 +363,57 @@ func (h *SessionHandler) MergeSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// performMerge merges session data into the main store.
-func (h *SessionHandler) performMerge(ctx context.Context, session *models.Session) (map[string]int, error) {
+// unmarshaledSession holds pre-deserialized session data ready for store merge.
+type unmarshaledSession struct {
+	metrics    []*models.MetricMetadata
+	spans      []*models.SpanMetadata
+	logs       []*models.LogMetadata
+	attributes []*models.AttributeMetadata
+	watched    []*models.WatchedAttribute
+}
+
+// unmarshalSession deserializes all signal data from a session without
+// touching the store. If any deserialization fails the error is returned
+// and the store remains untouched.
+func (h *SessionHandler) unmarshalSession(session *models.Session) (*unmarshaledSession, error) {
+	u := &unmarshaledSession{}
+	var err error
+
+	if len(session.Data.Metrics) > 0 {
+		u.metrics, err = h.serializer.UnmarshalMetrics(session.Data.Metrics)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal metrics: %w", err)
+		}
+	}
+	if len(session.Data.Spans) > 0 {
+		u.spans, err = h.serializer.UnmarshalSpans(session.Data.Spans)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal spans: %w", err)
+		}
+	}
+	if len(session.Data.Logs) > 0 {
+		u.logs, err = h.serializer.UnmarshalLogs(session.Data.Logs)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal logs: %w", err)
+		}
+	}
+	if len(session.Data.Attributes) > 0 {
+		u.attributes, err = h.serializer.UnmarshalAttributes(session.Data.Attributes)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal attributes: %w", err)
+		}
+	}
+	if len(session.Data.WatchedAttributes) > 0 {
+		u.watched, err = h.serializer.UnmarshalWatchedAttributes(session.Data.WatchedAttributes)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal watched attributes: %w", err)
+		}
+	}
+	return u, nil
+}
+
+// mergeUnmarshaled writes pre-deserialized session data into the store.
+func (h *SessionHandler) mergeUnmarshaled(ctx context.Context, u *unmarshaledSession) (map[string]int, error) {
 	counts := map[string]int{
 		"metrics":            0,
 		"spans":              0,
@@ -364,77 +422,47 @@ func (h *SessionHandler) performMerge(ctx context.Context, session *models.Sessi
 		"watched_attributes": 0,
 	}
 
-	// Merge metrics
-	if len(session.Data.Metrics) > 0 {
-		metrics, err := h.serializer.UnmarshalMetrics(session.Data.Metrics)
-		if err != nil {
+	for _, m := range u.metrics {
+		if err := h.storeAccess.MergeMetric(ctx, m); err != nil {
 			return nil, err
 		}
-		for _, m := range metrics {
-			if err := h.storeAccess.MergeMetric(ctx, m); err != nil {
-				return nil, err
-			}
-			counts["metrics"]++
-		}
+		counts["metrics"]++
 	}
-
-	// Merge spans
-	if len(session.Data.Spans) > 0 {
-		spans, err := h.serializer.UnmarshalSpans(session.Data.Spans)
-		if err != nil {
+	for _, s := range u.spans {
+		if err := h.storeAccess.MergeSpan(ctx, s); err != nil {
 			return nil, err
 		}
-		for _, s := range spans {
-			if err := h.storeAccess.MergeSpan(ctx, s); err != nil {
-				return nil, err
-			}
-			counts["spans"]++
-		}
+		counts["spans"]++
 	}
-
-	// Merge logs
-	if len(session.Data.Logs) > 0 {
-		logs, err := h.serializer.UnmarshalLogs(session.Data.Logs)
-		if err != nil {
+	for _, l := range u.logs {
+		if err := h.storeAccess.MergeLog(ctx, l); err != nil {
 			return nil, err
 		}
-		for _, l := range logs {
-			if err := h.storeAccess.MergeLog(ctx, l); err != nil {
-				return nil, err
-			}
-			counts["logs"]++
-		}
+		counts["logs"]++
 	}
-
-	// Merge attributes
-	if len(session.Data.Attributes) > 0 {
-		attrs, err := h.serializer.UnmarshalAttributes(session.Data.Attributes)
-		if err != nil {
+	for _, a := range u.attributes {
+		if err := h.storeAccess.MergeAttribute(ctx, a); err != nil {
 			return nil, err
 		}
-		for _, a := range attrs {
-			if err := h.storeAccess.MergeAttribute(ctx, a); err != nil {
-				return nil, err
-			}
-			counts["attributes"]++
-		}
+		counts["attributes"]++
 	}
-
-	// Restore watched attributes as read-only.
-	if len(session.Data.WatchedAttributes) > 0 {
-		watchedAttrs, err := h.serializer.UnmarshalWatchedAttributes(session.Data.WatchedAttributes)
-		if err != nil {
+	for _, wa := range u.watched {
+		if err := h.storeAccess.MergeWatchedAttribute(ctx, wa); err != nil {
 			return nil, err
 		}
-		for _, wa := range watchedAttrs {
-			if err := h.storeAccess.MergeWatchedAttribute(ctx, wa); err != nil {
-				return nil, err
-			}
-			counts["watched_attributes"]++
-		}
+		counts["watched_attributes"]++
 	}
 
 	return counts, nil
+}
+
+// performMerge unmarshals and merges session data into the main store.
+func (h *SessionHandler) performMerge(ctx context.Context, session *models.Session) (map[string]int, error) {
+	u, err := h.unmarshalSession(session)
+	if err != nil {
+		return nil, err
+	}
+	return h.mergeUnmarshaled(ctx, u)
 }
 
 // ExportSession downloads a session as JSON.
