@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ArrowLeftIcon } from 'lucide-react'
 
-function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
+function ServiceExplorer({ serviceName, onBack, onViewDetails, onViewLogDetails }) {
+
+  const serviceCount = (item) => item?.services?.[serviceName] ?? item?.sample_count
   const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -125,7 +127,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
                   <TableRow key={m.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails('metrics', m.name)}>
                     <TableCell className="font-mono text-sm text-primary">{m.name}</TableCell>
                     <TableCell><Badge variant="outline">{m.type}</Badge></TableCell>
-                    <TableCell className="text-right">{m.sample_count?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{serviceCount(m)?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -162,7 +164,7 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
                   <TableRow key={s.name} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails('spans', s.name)}>
                     <TableCell className="font-mono text-sm text-primary">{s.name}</TableCell>
                     <TableCell><Badge variant="outline">{s.kind}</Badge></TableCell>
-                    <TableCell className="text-right">{s.sample_count?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{serviceCount(s)?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -195,9 +197,9 @@ function ServiceExplorer({ serviceName, onBack, onViewDetails }) {
                 </TableRow>
               ) : (
                 paginatedLogs.map(l => (
-                  <TableRow key={l.severity} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewDetails('logs', l.severity)}>
+                  <TableRow key={l.severity} className="cursor-pointer hover:bg-muted/50" onClick={() => onViewLogDetails ? onViewLogDetails(l.severity) : onViewDetails('logs', l.severity)}>
                     <TableCell className="font-medium text-primary">{l.severity}</TableCell>
-                    <TableCell className="text-right">{l.sample_count?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{(l.services?.[serviceName] ?? l.sample_count)?.toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               )}
