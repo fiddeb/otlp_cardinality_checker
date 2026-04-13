@@ -180,19 +180,19 @@ func (s *Store) StoreSpan(ctx context.Context, span *models.SpanMetadata) error 
 		// Update sample count
 		existing.SampleCount += span.SampleCount
 
-		// Merge attribute keys
+		// Merge attribute keys (full HLL/samples/taint merge)
 		for key, keyMeta := range span.AttributeKeys {
 			if existingKey, exists := existing.AttributeKeys[key]; exists {
-				existingKey.Count += keyMeta.Count
+				models.MergeKeyMetadata(existingKey, keyMeta)
 			} else {
 				existing.AttributeKeys[key] = keyMeta
 			}
 		}
 
-		// Merge resource keys
+		// Merge resource keys (full HLL/samples/taint merge)
 		for key, keyMeta := range span.ResourceKeys {
 			if existingKey, exists := existing.ResourceKeys[key]; exists {
-				existingKey.Count += keyMeta.Count
+				models.MergeKeyMetadata(existingKey, keyMeta)
 			} else {
 				existing.ResourceKeys[key] = keyMeta
 			}
@@ -280,19 +280,19 @@ func (s *Store) StoreLog(ctx context.Context, log *models.LogMetadata) error {
 		// Update sample count
 		existing.SampleCount += log.SampleCount
 
-		// Merge attribute keys
+		// Merge attribute keys (full HLL/samples/taint merge)
 		for key, keyMeta := range log.AttributeKeys {
 			if existingKey, exists := existing.AttributeKeys[key]; exists {
-				existingKey.Count += keyMeta.Count
+				models.MergeKeyMetadata(existingKey, keyMeta)
 			} else {
 				existing.AttributeKeys[key] = keyMeta
 			}
 		}
 
-		// Merge resource keys
+		// Merge resource keys (full HLL/samples/taint merge)
 		for key, keyMeta := range log.ResourceKeys {
 			if existingKey, exists := existing.ResourceKeys[key]; exists {
-				existingKey.Count += keyMeta.Count
+				models.MergeKeyMetadata(existingKey, keyMeta)
 			} else {
 				existing.ResourceKeys[key] = keyMeta
 			}
@@ -350,21 +350,33 @@ func (s *Store) GetLog(ctx context.Context, severityText string) (*models.LogMet
 				aggregated.Services[svc] += count
 			}
 			
-			// Merge attribute keys
+			// Merge attribute keys (clone to avoid mutating stored data under RLock)
 			for attrKey, keyMeta := range log.AttributeKeys {
 				if existing, exists := aggregated.AttributeKeys[attrKey]; exists {
 					existing.Count += keyMeta.Count
 				} else {
-					aggregated.AttributeKeys[attrKey] = keyMeta
+					aggregated.AttributeKeys[attrKey] = &models.KeyMetadata{
+						Count:                keyMeta.Count,
+						Percentage:           keyMeta.Percentage,
+						EstimatedCardinality: keyMeta.Cardinality(),
+						ValueSamples:         keyMeta.GetSortedSamples(),
+						HasInvalidUTF8:       keyMeta.HasInvalidUTF8,
+					}
 				}
 			}
 			
-			// Merge resource keys
+			// Merge resource keys (clone to avoid mutating stored data under RLock)
 			for resKey, keyMeta := range log.ResourceKeys {
 				if existing, exists := aggregated.ResourceKeys[resKey]; exists {
 					existing.Count += keyMeta.Count
 				} else {
-					aggregated.ResourceKeys[resKey] = keyMeta
+					aggregated.ResourceKeys[resKey] = &models.KeyMetadata{
+						Count:                keyMeta.Count,
+						Percentage:           keyMeta.Percentage,
+						EstimatedCardinality: keyMeta.Cardinality(),
+						ValueSamples:         keyMeta.GetSortedSamples(),
+						HasInvalidUTF8:       keyMeta.HasInvalidUTF8,
+					}
 				}
 			}
 			
