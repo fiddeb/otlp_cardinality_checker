@@ -199,7 +199,7 @@ func NewServer(addr string, store storage.Storage, opts ...ServerOptions) *Serve
 		// Services endpoints
 		r.Get("/services", s.listServices)
 		r.Get("/services/{name}/overview", s.getServiceOverview)
-
+				r.Get("/services/{name}/attributes", s.getServiceAttributes)
 		// Cardinality analysis endpoints
 		r.Get("/cardinality/high", s.getHighCardinalityKeys)
 		r.Get("/cardinality/complexity", s.getMetadataComplexity)
@@ -980,6 +980,65 @@ func (s *Server) getServiceOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.respondJSON(w, http.StatusOK, overview)
+}
+
+// getServiceAttributes returns all attribute keys observed for a given service.
+func (s *Server) getServiceAttributes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+
+	decodedName, err := url.QueryUnescape(name)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid service name encoding")
+		return
+	}
+
+	seen := make(map[string]struct{})
+
+	if metrics, err := s.store.ListMetrics(ctx, decodedName); err == nil {
+		for _, m := range metrics {
+			for k := range m.LabelKeys {
+				seen[k] = struct{}{}
+			}
+			for k := range m.ResourceKeys {
+				seen[k] = struct{}{}
+			}
+		}
+	}
+
+	if spans, err := s.store.ListSpans(ctx, decodedName); err == nil {
+		for _, sp := range spans {
+			for k := range sp.AttributeKeys {
+				seen[k] = struct{}{}
+			}
+			for k := range sp.ResourceKeys {
+				seen[k] = struct{}{}
+			}
+		}
+	}
+
+	if logs, err := s.store.ListLogs(ctx, decodedName); err == nil {
+		for _, l := range logs {
+			for k := range l.AttributeKeys {
+				seen[k] = struct{}{}
+			}
+			for k := range l.ResourceKeys {
+				seen[k] = struct{}{}
+			}
+		}
+	}
+
+	keys := make([]string, 0, len(seen))
+	for k := range seen {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"service": decodedName,
+		"keys":    keys,
+		"total":   len(keys),
+	})
 }
 
 // getHighCardinalityKeys returns keys with high cardinality across all signal types.
