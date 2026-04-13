@@ -1358,15 +1358,22 @@ func (s *Server) getAttributeTelemetry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Helper to pick the KeyMetadata for our attribute from a signal.
-	// Returns the count and cardinality specific to this attribute in this signal.
+	// Returns the combined count and max cardinality when the key appears
+	// in both data and resource scopes for the same signal.
 	pickKeyMeta := func(dataKeys, resourceKeys map[string]*models.KeyMetadata) (count int64, cardinality int64) {
-		if km, ok := dataKeys[decodedKey]; ok {
-			return km.Count, km.EstimatedCardinality
+		dkm, inData := dataKeys[decodedKey]
+		rkm, inResource := resourceKeys[decodedKey]
+		if inData {
+			count += dkm.Count
+			cardinality = dkm.EstimatedCardinality
 		}
-		if km, ok := resourceKeys[decodedKey]; ok {
-			return km.Count, km.EstimatedCardinality
+		if inResource {
+			count += rkm.Count
+			if rkm.EstimatedCardinality > cardinality {
+				cardinality = rkm.EstimatedCardinality
+			}
 		}
-		return 0, 0
+		return count, cardinality
 	}
 
 	type metricEntry struct {
