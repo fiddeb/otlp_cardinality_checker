@@ -15,6 +15,7 @@ function LogsView({ onViewServiceDetails }) {
   const [sort, setSort] = useState({ field: 'name', dir: 'asc' })
   const [filter, setFilter] = useState({
     minSamples: 0,
+    search: '',
   })
 
   const itemsPerPage = 100
@@ -91,7 +92,12 @@ function LogsView({ onViewServiceDetails }) {
     serviceGroups[svc.service_name].push(svc)
   })
 
-  const uniqueServices = Object.keys(serviceGroups).sort((a, b) => {
+  const searchLower = filter.search.toLowerCase()
+  const filteredBySearch = searchLower
+    ? Object.keys(serviceGroups).filter(name => name.toLowerCase().includes(searchLower))
+    : Object.keys(serviceGroups)
+
+  const uniqueServices = filteredBySearch.sort((a, b) => {
     if (sort.field === 'name') {
       return sort.dir === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
     }
@@ -138,8 +144,12 @@ function LogsView({ onViewServiceDetails }) {
       <div>
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <h3 className="text-base font-medium">Services</h3>
-          <div className="flex items-center gap-1 ml-auto">
-            <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 ml-auto">            <Input
+              placeholder="Search services…"
+              value={filter.search}
+              onChange={(e) => setFilter({...filter, search: e.target.value})}
+              className="w-48"
+            />            <div className="flex items-center gap-1">
               <label className="text-sm text-muted-foreground whitespace-nowrap">Min:</label>
               <Input
                 type="number"

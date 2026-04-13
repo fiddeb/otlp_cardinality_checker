@@ -276,6 +276,7 @@ function App() {
                 serviceName={selectedService}
                 onBack={handleBack}
                 onViewDetails={handleViewDetails}
+                onViewLogDetails={(severity) => handleViewLogService(selectedService, severity)}
               />
             )}
 

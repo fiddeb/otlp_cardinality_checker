@@ -27,6 +27,8 @@ function AttributesView() {
   const [watchToggling, setWatchToggling] = useState({}) // key -> bool (loading)
   const [expandedSamples, setExpandedSamples] = useState({}) // key -> bool
   const [expandedServices, setExpandedServices] = useState({}) // key -> service data or 'loading'
+  const [serviceFilter, setServiceFilter] = useState(null) // active service filter
+  const [serviceKeys, setServiceKeys] = useState(null) // Set of keys for active service filter
   const [regexMode, setRegexMode] = useState(false)
 
   const itemsPerPage = 100
@@ -67,6 +69,7 @@ function AttributesView() {
   }
 
   const filteredAttributes = (attributes || []).filter(attr => {
+    if (serviceKeys && !serviceKeys.has(attr.key)) return false
     if (filter.search) {
       if (regexMode) {
         if (regexError || !searchRegex) return false
@@ -89,6 +92,17 @@ function AttributesView() {
   useEffect(() => {
     setCurrentPage(1)
   }, [filter])
+
+  useEffect(() => {
+    if (!serviceFilter) {
+      setServiceKeys(null)
+      return
+    }
+    fetch(`/api/v1/services/${encodeURIComponent(serviceFilter)}/attributes`)
+      .then(r => r.json())
+      .then(d => setServiceKeys(new Set(d.keys || [])))
+      .catch(() => setServiceKeys(new Set()))
+  }, [serviceFilter])
 
   const getCardinalityBadge = (card) => {
     if (card > 1000) return 'high'
@@ -158,6 +172,23 @@ function AttributesView() {
           Global attribute cardinality tracking across all signals (metrics, spans, logs)
         </p>
       </div>
+
+      {serviceFilter && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Filtered by service:</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-mono font-medium text-primary">
+            {serviceFilter}
+            <button
+              onClick={() => { setServiceFilter(null); setServiceKeys(null) }}
+              className="ml-1 rounded-full hover:text-destructive"
+              title="Clear service filter"
+            >
+              ✕
+            </button>
+          </span>
+          <span className="text-xs text-muted-foreground">({filteredAttributes.length} attributes)</span>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex items-center gap-1">
@@ -394,18 +425,25 @@ function AttributesView() {
                 <TableCell colSpan={8} style={{ padding: '0 12px 12px 32px', background: 'rgba(0,0,0,0.02)' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 8 }}>
                     {(expandedServices[attr.key].services || []).slice(0, 50).map((s, i) => (
-                      <span key={i} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '2px 8px', borderRadius: 12,
-                        fontSize: 11, border: '1px solid var(--border)', background: 'var(--secondary)',
-                        fontFamily: 'monospace',
-                      }}>
+                      <button
+                        key={i}
+                        onClick={() => { setServiceFilter(s.service_name); setCurrentPage(1) }}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 8px', borderRadius: 12,
+                          fontSize: 11, border: `1px solid ${serviceFilter === s.service_name ? 'var(--primary)' : 'var(--border)'}`,
+                          background: serviceFilter === s.service_name ? 'color-mix(in oklab, var(--primary) 15%, transparent)' : 'var(--secondary)',
+                          fontFamily: 'monospace', cursor: 'pointer',
+                          color: 'inherit',
+                        }}
+                        title={`Filter by service: ${s.service_name}`}
+                      >
                         <span style={{ color: s.signal_type === 'metric' ? '#1976d2' : s.signal_type === 'span' ? '#7b1fa2' : '#388e3c', fontWeight: 600 }}>
                           {s.signal_type}
                         </span>
                         {s.service_name}
                         <span style={{ color: '#999', fontSize: 10 }}>{s.count.toLocaleString()}</span>
-                      </span>
+                      </button>
                     ))}
                     {(expandedServices[attr.key].total || 0) > 50 && (
                       <span style={{ fontSize: 11, color: '#999', alignSelf: 'center' }}>

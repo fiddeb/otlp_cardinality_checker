@@ -373,6 +373,9 @@ type AttributeFilter struct {
 	// SortOrder specifies sort direction (asc, desc)
 	SortOrder string
 
+	// ServiceName filters attributes to those observed for a specific service
+	ServiceName string
+
 	// Limit specifies maximum number of results
 	Limit int
 
