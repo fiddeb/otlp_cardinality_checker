@@ -76,6 +76,105 @@ func TestCreateSeriesFingerprintOrdering(t *testing.T) {
 	}
 }
 
+func TestCreateSeriesFingerprintWithResource(t *testing.T) {
+	tests := []struct {
+		name          string
+		resourceAttrs map[string]string
+		dpAttrs       map[string]string
+		expectConst   bool
+	}{
+		{
+			name:          "both empty",
+			resourceAttrs: map[string]string{},
+			dpAttrs:       map[string]string{},
+			expectConst:   true,
+		},
+		{
+			name:          "resource only",
+			resourceAttrs: map[string]string{"service.name": "svc-a"},
+			dpAttrs:       map[string]string{},
+			expectConst:   false,
+		},
+		{
+			name:          "dp only",
+			resourceAttrs: map[string]string{},
+			dpAttrs:       map[string]string{"method": "GET"},
+			expectConst:   false,
+		},
+		{
+			name:          "both",
+			resourceAttrs: map[string]string{"service.name": "svc-a"},
+			dpAttrs:       map[string]string{"method": "GET"},
+			expectConst:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fp := CreateSeriesFingerprintWithResource(tt.resourceAttrs, tt.dpAttrs)
+			if tt.expectConst && fp != "constant" {
+				t.Errorf("Expected 'constant', got %s", fp)
+			}
+			if !tt.expectConst && fp == "constant" {
+				t.Errorf("Expected non-constant fingerprint, got 'constant'")
+			}
+		})
+	}
+}
+
+func TestFingerprintWithResourceDifferentiatesServices(t *testing.T) {
+	dpAttrs := map[string]string{"method": "GET", "status": "200"}
+
+	fpA := CreateSeriesFingerprintWithResource(
+		map[string]string{"service.name": "service-a"}, dpAttrs,
+	)
+	fpB := CreateSeriesFingerprintWithResource(
+		map[string]string{"service.name": "service-b"}, dpAttrs,
+	)
+
+	if fpA == fpB {
+		t.Errorf("Fingerprints should differ for different resources, both got: %s", fpA)
+	}
+}
+
+func TestFingerprintWithResourceNamespaceCollision(t *testing.T) {
+	// Same key appearing in both resource and dp attrs must produce different fingerprints
+	fp1 := CreateSeriesFingerprintWithResource(
+		map[string]string{"env": "prod"}, map[string]string{},
+	)
+	fp2 := CreateSeriesFingerprintWithResource(
+		map[string]string{}, map[string]string{"env": "prod"},
+	)
+
+	if fp1 == fp2 {
+		t.Errorf("R:env=prod and D:env=prod should produce different fingerprints")
+	}
+}
+
+func TestActiveSeriesCountsAcrossResources(t *testing.T) {
+	// Simulate two services sending the same metric with same dp attributes.
+	// After merge, active series should be 2, not 1.
+	m1 := NewMetricMetadata("http_requests", &SumMetric{})
+	m2 := NewMetricMetadata("http_requests", &SumMetric{})
+
+	fp1 := CreateSeriesFingerprintWithResource(
+		map[string]string{"service.name": "svc-a"}, map[string]string{"method": "GET"},
+	)
+	fp2 := CreateSeriesFingerprintWithResource(
+		map[string]string{"service.name": "svc-b"}, map[string]string{"method": "GET"},
+	)
+
+	m1.AddSeriesFingerprint(fp1)
+	m2.AddSeriesFingerprint(fp2)
+
+	m1.MergeMetricMetadata(m2)
+
+	series := m1.GetActiveSeries()
+	if series != 2 {
+		t.Errorf("Expected 2 active series for 2 different resources, got %d", series)
+	}
+}
+
 func TestGetActiveSeries(t *testing.T) {
 	tests := []struct {
 		name               string
